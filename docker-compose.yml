@@ -1,0 +1,21 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: memobox-db
+    environment:
+      POSTGRES_USER: memobox
+      POSTGRES_PASSWORD: memobox
+      POSTGRES_DB: memobox
+    # 5433 on the host to avoid clashing with any local postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - memobox_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memobox"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  memobox_pgdata:
