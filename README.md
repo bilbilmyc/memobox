@@ -93,6 +93,22 @@ args = ['D:/path/to/memobox/scripts/stdio-bridge.ts']
 MEMOBOX_URL = "http://your-server:3100"
 ```
 
+
+Codex / other agents won't use memory on their own — paste this into your
+`AGENTS.md` (or system prompt) to activate it:
+
+```markdown
+## Long-term memory (memobox)
+
+The `memobox` MCP server gives you persistent memory across sessions.
+
+- When project context or past decisions would help, call `memory_search`
+  with task keywords first.
+- When you learn a durable fact — a user preference, a project decision, a
+  pitfall you hit — save it with `memory_save` (tag entities when possible).
+- Don't save one-off trivia; save what a future session would want to know.
+```
+
 ### Backup & migration
 
 The console ships a **备份 (backup)** page: export every memory to a single

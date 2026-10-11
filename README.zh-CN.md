@@ -87,6 +87,20 @@ args = ['D:/path/to/memobox/scripts/stdio-bridge.ts']
 MEMOBOX_URL = "http://your-server:3100"
 ```
 
+
+Codex / 其他 agent 不会自觉用记忆——把下面这段贴进 `AGENTS.md`（或系统提示）激活：
+
+```markdown
+## 长期记忆（memobox）
+
+`memobox` MCP 服务给你跨会话的持久记忆。
+
+- 需要项目上下文或过往决策时，先用关键词调 `memory_search` 检索。
+- 学到持久事实——用户偏好、项目决定、踩过的坑——用 `memory_save` 存下
+  （尽量带 entities 标签）。
+- 别存一次性的琐事；存「未来会话会想知道」的东西。
+```
+
 ### 备份与迁移
 
 后台自带「备份」页：一键把全部记忆导出成单个 JSON 文件（向量不进备份——
