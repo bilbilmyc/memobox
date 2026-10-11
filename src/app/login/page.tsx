@@ -13,8 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getAuth, signupEnabled } from "@/lib/auth";
 
-// 登录页读运行时数据（seeding/cookie），阻塞渲染而非流式占位
-export const instant = false;
+// 登录页读运行时数据（seeding/cookie）——读了 headers() 即按请求时渲染
 
 async function login(formData: FormData) {
   "use server";

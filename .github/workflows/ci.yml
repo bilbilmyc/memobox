@@ -1,0 +1,64 @@
+# CI：依赖安装 → 单测 → 构建。
+# 单测覆盖纯逻辑 + 内存桩存储 + SQLite（bun:sqlite）认证，无需外部服务；
+# 构建走 standalone 输出（与容器一致），能抓到 next build 期的回归。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 钉版本：bun:sqlite 的多语句 exec 在 patch 版本间有漂移，
+      # 本地与容器都固定 1.4.2，CI 保持同一条基线
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run tests
+        run: bun test
+
+      - name: Build
+        run: bun run build
+        env:
+          # 构建容器里没有 .env，构建期走 SQLite 分支且不播种——
+          # CI 显式复现同一条件，确保 build 永远可离线复现
+          MEMOBOX_DB_PATH: ":memory:"
+
+  docker:
+    # 主分支才构建镜像，PR 只跑测试——Docker 构建慢，没必要每次都烧
+    runs-on: ubuntu-latest
+    needs: test-and-build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # ghcr.io/<owner>/memobox —— 推到 GitHub 后无需改任何东西
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/memobox:latest
+            ghcr.io/${{ github.repository_owner }}/memobox:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

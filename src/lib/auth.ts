@@ -13,6 +13,8 @@
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { mkdirSync } from "node:fs";
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
@@ -108,6 +110,9 @@ export async function seedInitialAdmin(
   auth: ReturnType<typeof createAuth>,
   countUsers: () => Promise<number>
 ) {
+  // next build 收集页面数据时会真执行一次 route handler（触发 cookies()
+  // 拒绝）——构建期不播种，运行时首次登录页渲染会补上
+  if (process.env.NEXT_PHASE === "phase-production-build") return;
   try {
     if ((await countUsers()) === 0 && process.env.ADMIN_PASSWORD) {
       const email = process.env.ADMIN_EMAIL ?? "admin@memobox.local";
@@ -128,3 +133,20 @@ export async function seedInitialAdmin(
 
 /** 注册开关：公网部署想关闭自助注册时设 MEMOBOX_DISABLE_SIGNUP=1 */
 export const signupEnabled = () => !process.env.MEMOBOX_DISABLE_SIGNUP;
+
+/**
+ * admin 页面/动作的会话守卫：无有效会话即跳登录页。
+ *
+ * 必须在「每个」admin 页面组件的第一行调用，不能只靠 layout——App Router
+ * 里 layout 和 page 并行渲染，layout 的 redirect() 抢得到响应状态码，却拦
+ * 不住 page 已经流出去的 RSC 数据块（v1.5 容器实测：307 的响应体里带出了
+ * 记忆内容）。同理，页面里定义的 server action 是独立的 POST 入口，也要
+ * 先过这道守卫再碰数据。
+ */
+export async function requireAdmin() {
+  const { auth, ready } = getAuth();
+  await ready;
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) redirect("/login");
+  return session;
+}

@@ -28,12 +28,13 @@ SQLite / 服务端一条 docker compose）、图谱质量检索、治理后台�
 - v0.2 ✅ Postgres 接线：DrizzleStore（save/search/list/stats）+ query_log 逐查记录 + 关键词窗口检索（近 500 条打分）+ 协议逻辑抽离 `src/lib/mcp.ts`（13 测试全绿）
 - v0.3 ✅ 可插拔 embedding（OpenAI 兼容 `/embeddings` 通吃：OpenAI/SiliconFlow bge-m3/Ollama；env `EMBEDDING_API_BASE/KEY/MODEL`，不配=关键词模式）+ pgvector cosine 语义检索（provider 挂了自动回退关键词、未嵌入行兜底关键词）+ /admin「最近检索」台账卡片（查询/命中/延迟）+ 版本 0.3.0（21 测试全绿）。**维度首次迁移已锁定 1536，改维度=破坏性迁移**，旋钮 `EMBEDDING_DIM` 留给全新部署
 - v0.4 评测集报表（query_log → 标注 → 检索质量基准）
-- v1.0 ✅ 发布闭环：Dockerfile 多阶段（bun standalone，启动自动迁移 `scripts/migrate.ts`）+ compose `app` 服务（depends_on db healthy、restart、healthcheck）+ README.md / README.zh-CN.md 双语。剩余：MCP 注册表提交（需 Soren 本人操作）、LICENSE 待定名
+- v1.0 ✅ 发布闭环：Dockerfile 多阶段（bun standalone，启动自动迁移 `scripts/migrate.ts`）+ compose `app` 服务（depends_on db healthy、restart、healthcheck）+ README.md / README.zh-CN.md 双语。剩余：MCP 注册表提交（需 Soren 本人操作，见 docs/mcp-registry.md）
 - v1.1 ✅ SQLite 本地模式（2026-10-11 Soren 提议）：`bun:sqlite` 零依赖 + JS 余弦（本地规模全表扫即可）+ 双模式选择（`DATABASE_URL` 有=Postgres 服务端模式，无=SQLite 本地模式，默认 `data/memobox.db`，`MEMOBOX_DB_PATH` 可改，`MEMOBOX_BACKEND=stub` 兜底）+ 内联幂等 DDL（无 drizzle-kit sqlite 迁移负担）（25 测试全绿，sqlite e2e 过）
 - v1.2 ✅ 图谱检索 + 治理 + 评测：实体图谱扩展（save 同步 entity_nodes/edges，检索按「共享实体数」补满名额，直接落空时实体即检索入口）、新 MCP 工具 `memory_entities`、search 输出带实体标签、后台 `/admin/memories/[id]` 编辑/遗忘（改内容重算向量、改实体同步边、遗忘级联+清孤儿）、`/admin/eval` 评测报表（总量/零召回/p50/p95 + 实体 Top + 零召回清单 + CSV 导出）（34 测试全绿，全页面 e2e 过）
 - v1.3 ✅ 标注式检索基准：`eval_labels` 表（查询×记忆×相关性）、后台 `/admin/eval/[id]` 标注视图（核对召回 + 补标漏检，走 `scoreMemories` 而非 `search()` 以免污染 query_log）、评测页 recall@k / precision 均值（recall 分母含漏检）、待标注队列、CSV `relevant_ids` 列（38 测试全绿，e2e 含 server action 真实标注往返）。踩坑：drizzle 在 select 列表把 `${col}` 渲染成裸列名，被相关子查询的内表同名列遮蔽（`eval_labels.id`），须显式写 `query_log.id`
 - v1.4 ✅ stdio 桥：`scripts/stdio-bridge.ts` 零依赖单文件适配器（stdin 逐行 JSON-RPC → POST 转发 /mcp → stdout 回写；批量拆分重组、通知沉默、网络失败合成 -32603、坏行 -32700）；刻意自包含方便单文件分发，`import.meta.main` 守卫让单测可直接 import；`MEMOBOX_URL` 指向服务（45 测试全绿，e2e 真管道往返 + 断连路径过）
 - v1.5 ✅ 多管理员 + MCP 令牌：引入开源 **Better Auth**（「先引入开源的别人的，再考虑自研」——2026-10-11 Soren 拍板），邮箱+密码、账号与记忆同库（pg 迁移 0002 / sqlite AUTH_TABLES_SQL）；ADMIN_PASSWORD 首启播种初始管理员（admin@memobox.local，老部署口令无缝迁移）；`MEMOBOX_DISABLE_SIGNUP=1` 关自助注册；`MCP_TOKEN` 可选 Bearer 令牌护 /mcp（桥用同名 MEMOBOX_TOKEN）；registry 物料 `server.json` + `docs/mcp-registry.md`（51 测试全绿，e2e：播种→登录→新用户注册→CSV 401→令牌 401/200→桥降级）
+- 发布就绪 ✅（v1.5 后的加固，协议版本不动）：容器链路全量复验（迁移自动应用→播种→登录→注册→CSV 鉴权→MCP 令牌→桥降级，全绿）+ **认证旁路封堵**（详见已知事项的 PPR 泄漏条目）+ store 惰性单例（Proxy，next build 收集页面数据不再真建库）+ Dockerfile 钉 `oven/bun:1.4.2` + LICENSE(MIT，版权行占位 your-name) + `.github/workflows/ci.yml`（bun test/build + main 分支推 GHCR）。52 测试全绿
 - v1.6+ 候选：听用户反馈（可能方向：记忆压缩/摘要、更多检索策略、备份导出）
 
 ## 约定
@@ -67,3 +68,6 @@ MCP 接入：`claude mcp add --transport http memobox http://localhost:3100/mcp`
 - Better Auth 的坑：① drizzle schema 自检要求四张表（user/session/account/verification）都传给 drizzle 实例，缺 verification 直接 SchemaMismatchError；② sqlite 时间列必须 `integer(..., { mode: "timestamp" })`，否则它传 Date 进 bun:sqlite 绑定报错；③ cookie 值是 `裸token.URL编码签名`，测试拿会话要 `asResponse: true` 从 set-cookie 取，不能直接用返回的 token
 - Better Auth 兜底密钥顺序：BETTER_AUTH_SECRET → ADMIN_PASSWORD → 开发默认值；公网部署必须显式设 BETTER_AUTH_SECRET（README/.env.example 已注明）
 - pg 的认证表名就叫 "user"/"session" 等（Better Auth 约定），drizzle 全程带引号没问题，别改名
+- **layout 守卫拦不住数据泄漏（发布就绪期实测的严重坑）**：① 开 `cacheComponents`（PPR）时静态壳先流出去，layout 的 redirect 拿得到状态码却拦不住已发出的页面 RSC 数据块——匿名请求 200 拿到完整后台数据；② 即使关掉 PPR，App Router 的 layout 和 page 并行渲染，307 响应体仍带页面 flight chunk。**约定：每个 admin 页面组件第一行 `await requireAdmin()`，页面内每个 server action 也第一行过守卫**（action 是独立 POST 入口，progressive enhancement 下无需 JS 即可调用）。当前 next.config.ts 不开 cacheComponents/partialPrefetching（后者依赖前者），页面也不写 `export const instant`（同样依赖它）
+- **store 单例必须惰性**：next build「Collecting page data」会真执行一次模块顶层代码，顶层 `new SQLiteStore()` 在无 .env 的构建容器里建库→首查崩。现用 ES Proxy 惰性代理 globalThis 上的实例；播种逻辑再加 NEXT_PHASE==="phase-production-build" 守卫（构建期 route handler 真跑一次，cookies() 会拒绝）
+- **Dockerfile 钉 oven/bun:1.4.2 不是随手写的**：bun:sqlite 的多语句 exec 行为在 patch 版本间漂移（1.4.3 容器构建即触发 `no such table: main.eval_labels`），本地/容器/CI 三处必须同一条基线

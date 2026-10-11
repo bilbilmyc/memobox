@@ -3,11 +3,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { memoryStore } from "@/lib/memory-store";
+import { requireAdmin } from "@/lib/auth";
 import { scoreMemories } from "@/lib/memory";
 
-/** 标注：把某条召回记忆标为相关/无关（幂等 upsert） */
+/** 标注：把某条召回记忆标为相关/无关（幂等 upsert）。action 是独立 POST 入口，先验会话 */
 async function setLabel(formData: FormData) {
   "use server";
+  await requireAdmin();
   const queryId = String(formData.get("queryId"));
   const memoryId = String(formData.get("memoryId"));
   const relevant = formData.get("relevant") === "1";
@@ -18,6 +20,7 @@ async function setLabel(formData: FormData) {
 /** 撤销一条标注 */
 async function clearLabel(formData: FormData) {
   "use server";
+  await requireAdmin();
   const queryId = String(formData.get("queryId"));
   const memoryId = String(formData.get("memoryId"));
   await memoryStore.unlabel(queryId, memoryId);
@@ -35,6 +38,7 @@ export default async function LabelPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ q?: string }>;
 }) {
+  await requireAdmin(); // 页面级守卫：别只信 layout（并行渲染拦不住数据块）
   const { id } = await params;
   const { q } = await searchParams;
   const data = await memoryStore.getQuery(id);

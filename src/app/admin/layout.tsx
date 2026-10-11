@@ -4,9 +4,8 @@ import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { getAuth } from "@/lib/auth";
 
-// 布局读会话 cookie 做登录守卫，整组 /admin 路由按请求时渲染
-export const instant = false;
-
+// 布局读会话 cookie 做登录守卫——读了 headers() 即按请求时渲染，
+// 不需要（也不能）再声明 cacheComponents 时代的 instant 选项
 async function logout() {
   "use server";
   const { auth } = getAuth();

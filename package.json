@@ -2,6 +2,7 @@
   "name": "memobox",
   "version": "1.5.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "dev": "bun --bun next dev -p 3100",
     "build": "bun --bun next build",

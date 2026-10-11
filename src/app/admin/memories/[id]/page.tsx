@@ -1,16 +1,17 @@
 import { notFound, redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { memoryStore } from "@/lib/memory-store";
+import { requireAdmin } from "@/lib/auth";
 
 const KINDS = ["fact", "preference", "event", "decision"] as const;
 
-/** 保存编辑：改内容会重新算 embedding，改实体会同步图谱边 */
+/** 保存编辑：改内容会重新算 embedding，改实体会同步图谱边。action 是独立 POST 入口，先验会话 */
 async function saveMemory(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   const content = String(formData.get("content") ?? "").trim();
   const kind = String(formData.get("kind") ?? "fact");
@@ -27,6 +28,7 @@ async function saveMemory(formData: FormData) {
 /** 遗忘：删除该条记忆并级联清理图谱边与孤儿实体 */
 async function forgetMemory(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   await memoryStore.forget(id);
   redirect("/admin");
@@ -39,9 +41,7 @@ export default async function MemoryEditPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ saved?: string; e?: string }>;
 }) {
-  // 双保险：布局已有 cookie 守卫，这里再校验一次写操作的前提
-  const granted = (await cookies()).get("memobox_admin")?.value === "granted";
-  if (!granted) redirect("/login");
+  await requireAdmin(); // 页面级守卫：别只信 layout（并行渲染拦不住数据块）
 
   const { id } = await params;
   const { saved, e } = await searchParams;

@@ -14,8 +14,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { memoryStore } from "@/lib/memory-store";
+import { requireAdmin } from "@/lib/auth";
 
 export default async function AdminDashboard() {
+  await requireAdmin(); // 页面级守卫：别只信 layout（并行渲染拦不住数据块）
   const [{ total, searches }, recent, queries] = await Promise.all([
     memoryStore.stats(),
     memoryStore.list(20),

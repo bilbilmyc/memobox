@@ -2,20 +2,21 @@
 # 多阶段构建 → Next.js standalone 产物跑在 Bun 上
 
 # 依赖层：只拷 lockfile 相关文件，命中缓存最快
-FROM oven/bun:1 AS deps
+# bun 版本钉死：bun:sqlite 多语句 exec 在补丁版本间也有行为差异（v1.5 踩过）
+FROM oven/bun:1.4.2 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile
 
 # 构建层：跑 next build 产出 .next/standalone
-FROM oven/bun:1 AS build
+FROM oven/bun:1.4.2 AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN bun run build
 
 # 运行层：slim 基础镜像 + standalone 产物
-FROM oven/bun:1-slim AS runtime
+FROM oven/bun:1.4.2-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \

@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { memoryStore } from "@/lib/memory-store";
+import { requireAdmin } from "@/lib/auth";
 
 /**
  * 检索评测报表：query_log 的聚合视图 + 标注式基准（v1.3）。
@@ -21,6 +22,7 @@ import { memoryStore } from "@/lib/memory-store";
  * 标注的样本）；CSV 可导出离线分析。
  */
 export default async function EvalPage() {
+  await requireAdmin(); // 页面级守卫：别只信 layout（并行渲染拦不住数据块）
   const [stats, bench, entities, queries, unlabeled] = await Promise.all([
     memoryStore.evalStats(),
     memoryStore.benchmark(),

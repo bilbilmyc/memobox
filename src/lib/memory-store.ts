@@ -132,5 +132,17 @@ export function createStore(): MemoryStore {
 // 挂到全局上保证进程内只有一个连接池（代价：改 store 类形状后需重启 dev）
 const g = globalThis as unknown as { __memoboxStore?: MemoryStore };
 
-export const memoryStore: MemoryStore = (g.__memoboxStore ??=
-  createStore());
+/**
+ * 惰性单例：`next build` 收集页面数据时会求值所有路由模块——如果在模块
+ * 顶层就 createStore()，构建容器（无 .env）会走 SQLite 分支、在构建期真的
+ * 建库跑 DDL（v1.5 在 Docker 里就栽在这）。Proxy 把构造推迟到第一次真正
+ * 调用方法时——那一定是请求处理，环境变量已就位。
+ */
+export const memoryStore: MemoryStore = new Proxy({} as MemoryStore, {
+  get(_target, prop) {
+    if (!g.__memoboxStore) g.__memoboxStore = createStore();
+    const value = Reflect.get(g.__memoboxStore as object, prop);
+    // 方法绑回实例，避免解构/单独调用时丢 this
+    return typeof value === "function" ? (value as Function).bind(g.__memoboxStore) : value;
+  },
+});
