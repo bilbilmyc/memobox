@@ -42,6 +42,10 @@ memobox install pi       # merges mcpServers.memobox into ~/.pi/agent/mcp.json
 The entry written for every client is the same: `bun <path>/src/cli.ts`
 with no arguments — that runs the stdio MCP server.
 
+Any other stdio MCP client (Cursor, Windsurf, opencode…): run `memobox install`
+with no arguments — it prints the universal command + args to paste into that
+client's MCP config.
+
 <details>
 <summary>Manual snippets (if you prefer editing configs yourself)</summary>
 
@@ -99,7 +103,7 @@ memobox help / memobox <command> --help
 memobox save "prefer tabs in this repo" --entities style
 memobox search "tabs"
 memobox list / forget <id> / entities / stats / path
-memobox doctor                       # health check: db, retrieval, client wiring
+memobox doctor                       # health check: db, retrieval, wiring (also detects local Ollama)
 
 # structured filter (AND-combined), terminal table or --json
 memobox query "port" --kind preference --entity ports --since 7d
@@ -123,15 +127,21 @@ memobox import-codex
   (`MEMOBOX_DB_PATH` to move it). No daemon, no port, no Postgres.
 - **Retrieval**: entity-graph expansion always on; semantic search (cosine
   over embeddings) when an OpenAI-compatible endpoint is configured, keyword
-  scoring as the zero-config fallback.
-- **Semantic mode (optional)**: set `EMBEDDING_API_BASE` / `_KEY` / `_MODEL`
-  (OpenAI, SiliconFlow, Ollama…). `memobox install` passes them through to
-  the client config automatically.
+  scoring as the zero-config fallback (Chinese full-sentence queries work).
+- **Semantic mode (optional upgrade)**: set `EMBEDDING_API_BASE` and
+  `EMBEDDING_MODEL` to enable (OpenAI, SiliconFlow, Ollama…; `_KEY` is
+  optional — local endpoints need none). `memobox install` passes them
+  through to the client config automatically.
+- **Why can't it reuse the agent's own model?** An MCP server is a child
+  process spawned by the client; the protocol has no channel to call back
+  into the client's model. Semantic search only needs text→vector math — a
+  local Ollama covers it at zero cost (`memobox doctor` auto-detects it and
+  prints the exact settings).
 
 ## Development
 
 ```bash
-bun test          # 59 tests
+bun test          # 94 tests
 bun run typecheck
 ```
 

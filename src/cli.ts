@@ -26,10 +26,11 @@ import { buildBackup, parseBackup } from "@/lib/backup";
 import { parseCodexMemoryMd, parseCodexSummary } from "@/lib/codex-import";
 import { defaultDbPath } from "@/lib/paths";
 import type { Memory, MemoryStore } from "@/lib/memory-store";
-import { detectClaude, detectCodex, detectPi, installClient, type ClientKind } from "@/install";
+import { probeOllama } from "@/lib/embeddings";
+import { detectClaude, detectCodex, detectPi, installClient, serverEntry, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
-export const VERSION = "2.3.0";
+export const VERSION = "2.3.1";
 
 /** 子命令规格表：--help / help <命令> / 总帮助都从这里渲染 */
 type CmdSpec = { name: string; usage: string; desc: string };
@@ -50,7 +51,7 @@ const COMMANDS: CmdSpec[] = [
   { name: "export", usage: "memobox export <file.json>", desc: "全量备份（memobox-backup v1 格式，向量不入备份可重算）" },
   { name: "import", usage: "memobox import <file.json>", desc: "导入备份（幂等：相同 id 跳过）" },
   { name: "import-codex", usage: "memobox import-codex [--file <MEMORY.md路径>] [--dry-run]", desc: "迁移 Codex 原生记忆（~/.codex/memories/，任务+用户画像；重复导入幂等）" },
-  { name: "install", usage: "memobox install <claude|codex|pi>", desc: "接入 MCP 客户端（幂等，自动透传 EMBEDDING_API_*）" },
+  { name: "install", usage: "memobox install [claude|codex|pi]", desc: "接入 MCP 客户端（无参数打印任意客户端的通用接法；幂等，自动透传 EMBEDDING_API_*）" },
   { name: "version", usage: "memobox version", desc: "打印版本号" },
   { name: "help", usage: "memobox help [命令]", desc: "总帮助，或某条命令的详细用法" },
 ];
@@ -64,7 +65,7 @@ export const USAGE =
   `\n\n环境变量：\n` +
   `  MEMOBOX_DB_PATH    库文件位置（默认 ~/.memobox/memobox.db）\n` +
   `  EMBEDDING_API_*    OpenAI 兼容 /embeddings 端点，配了走语义检索\n` +
-  `                     （不配 = 关键词模式，中文已支持）`;
+  `                     （不配 = 关键词模式，中文已支持；本地端点免 KEY）`;
 
 /** 单条命令的帮助；未知命令返回 null */
 export function cmdHelp(name: string): string | null {
@@ -135,7 +136,9 @@ export type CliIo = {
 export async function runCli(
   argv: string[],
   io: CliIo,
-  makeStore: () => MemoryStore
+  makeStore: () => MemoryStore,
+  /** doctor 用的 Ollama 探测（默认真探测；测试注入假实现保持确定性） */
+  probeOllamaFn: () => Promise<string | null> = probeOllama
 ): Promise<number> {
   const { pos, flags } = parseArgs(argv);
   const cmd = pos[0] ?? "serve";
@@ -225,6 +228,15 @@ export async function runCli(
       }
       for (const d of [detectCodex(), detectPi(), detectClaude()]) {
         io.out(`${d.client}:     ${d.configured ? "已接线" : "未接线"}  ${d.detail}`);
+      }
+      // keyword 模式下探测本机 Ollama：装了就提示零成本升级语义检索（只提示，不自动启用）
+      if (!process.env.EMBEDDING_API_BASE) {
+        const model = await probeOllamaFn();
+        if (model) {
+          io.out(`提示：    检测到本机 Ollama（推荐模型 ${model}）——语义检索可零成本启用：`);
+          io.out(`         设 EMBEDDING_API_BASE=http://localhost:11434/v1 与 EMBEDDING_MODEL=${model}，`);
+          io.out(`         然后重跑 memobox install <client>（本地端点无需 EMBEDDING_API_KEY）`);
+        }
       }
       return 0;
     }
@@ -380,8 +392,21 @@ export async function runCli(
     case "install": {
       const client = pos[1] as ClientKind | undefined;
       if (client !== "claude" && client !== "codex" && client !== "pi") {
-        io.err("用法：memobox install <claude|codex|pi>");
-        return 1;
+        if (client) {
+          io.err("用法：memobox install <claude|codex|pi>");
+          return 1;
+        }
+        // 通用接法：任何 stdio MCP 客户端（Cursor / Windsurf / opencode…）
+        // 把同一对 command/args 填进它的 MCP 配置即可。env 只列键名不回显值（KEY 是敏感的）
+        const entry = serverEntry();
+        io.out("任意 stdio MCP 客户端通用接法（command + args）：");
+        io.out(`  command: ${entry.command}`);
+        io.out(`  args:    ${entry.args.join(" ")}`);
+        if (entry.env) {
+          io.out(`  env:     ${Object.keys(entry.env).join(" ")}（值取自当前环境，一并透传）`);
+        }
+        io.out("内置一键接入：memobox install <claude|codex|pi>");
+        return 0;
       }
       const result = await installClient(client);
       io[result.ok ? "out" : "err"](result.message);

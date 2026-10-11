@@ -138,13 +138,39 @@ describe("runCli 基础命令", () => {
     expect(h.err[0]).toContain("claude|codex|pi");
   });
 
+  test("install 无参数：打印任意客户端的通用接法", async () => {
+    const h = harness();
+    expect(await runCli(["install"], h.io, h.store)).toBe(0);
+    const text = h.text();
+    expect(text).toContain("command:");
+    expect(text).toContain("args:");
+    expect(text).toContain("一键接入");
+  });
+
   test("doctor 输出库/检索模式/三家客户端状态", async () => {
     const h = harness();
-    expect(await runCli(["doctor"], h.io, h.store)).toBe(0);
+    // 注入「没探测到 Ollama」保持输出确定（否则真探测要碰网络）
+    expect(await runCli(["doctor"], h.io, h.store, async () => null)).toBe(0);
     const text = h.text();
     expect(text).toContain("库文件：");
     expect(text).toContain("检索模式：");
     for (const c of ["codex:", "pi:", "claude:"]) expect(text).toContain(c);
+    expect(text).not.toContain("Ollama");
+  });
+
+  test("doctor：keyword 模式探测到本机 Ollama 时给升级提示", async () => {
+    const h = harness();
+    const prev = process.env.EMBEDDING_API_BASE;
+    delete process.env.EMBEDDING_API_BASE;
+    try {
+      await runCli(["doctor"], h.io, h.store, async () => "bge-m3");
+      const text = h.text();
+      expect(text).toContain("检测到本机 Ollama");
+      expect(text).toContain("EMBEDDING_MODEL=bge-m3");
+      expect(text).toContain("无需 EMBEDDING_API_KEY");
+    } finally {
+      if (prev !== undefined) process.env.EMBEDDING_API_BASE = prev;
+    }
   });
 });
 
