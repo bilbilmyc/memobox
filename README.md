@@ -82,6 +82,17 @@ MEMOBOX_URL=... MEMOBOX_TOKEN=... bun stdio-bridge.ts
 claude mcp add memobox --env MEMOBOX_URL=http://your-server:3100 -- bun /path/to/stdio-bridge.ts
 ```
 
+Codex CLI users: add this to `~/.codex/config.toml` —
+
+```toml
+[mcp_servers.memobox]
+command = 'C:\Users\you\.bun\bin\bun.exe'
+args = ['D:/path/to/memobox/scripts/stdio-bridge.ts']
+
+[mcp_servers.memobox.env]
+MEMOBOX_URL = "http://your-server:3100"
+```
+
 ### Backup & migration
 
 The console ships a **备份 (backup)** page: export every memory to a single

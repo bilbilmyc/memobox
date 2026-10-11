@@ -76,6 +76,17 @@ MEMOBOX_URL=... MEMOBOX_TOKEN=... bun stdio-bridge.ts
 claude mcp add memobox --env MEMOBOX_URL=http://your-server:3100 -- bun /path/to/stdio-bridge.ts
 ```
 
+Codex CLI 用户：在 `~/.codex/config.toml` 里加——
+
+```toml
+[mcp_servers.memobox]
+command = 'C:/Users/you/.bun/bin/bun.exe'
+args = ['D:/path/to/memobox/scripts/stdio-bridge.ts']
+
+[mcp_servers.memobox.env]
+MEMOBOX_URL = "http://your-server:3100"
+```
+
 ### 备份与迁移
 
 后台自带「备份」页：一键把全部记忆导出成单个 JSON 文件（向量不进备份——
