@@ -50,6 +50,17 @@ describe("postRpc", () => {
     expect(body.error.code).toBe(-32603);
     expect(body.error.message).toContain("cannot reach");
   });
+
+  test("non-JSON response (e.g. plain-text 401) → synthetic error, no crash", async () => {
+    // 服务端开了 MCP_TOKEN 而桥没配令牌时会拿到 401 纯文本
+    const fn = (async () =>
+      new Response("unauthorized", { status: 401 })) as unknown as typeof fetch;
+    const r = await postRpc("http://x/mcp", '{"jsonrpc":"2.0","id":7}', fn);
+    expect(r.skip).toBe(false);
+    const body = r.body as { id: unknown; error: { code: number; message: string } };
+    expect(body.id).toBe(7);
+    expect(body.error.message).toContain("HTTP 401");
+  });
 });
 
 describe("handleLine", () => {

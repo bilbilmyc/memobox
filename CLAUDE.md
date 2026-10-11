@@ -33,7 +33,8 @@ SQLite / 服务端一条 docker compose）、图谱质量检索、治理后台�
 - v1.2 ✅ 图谱检索 + 治理 + 评测：实体图谱扩展（save 同步 entity_nodes/edges，检索按「共享实体数」补满名额，直接落空时实体即检索入口）、新 MCP 工具 `memory_entities`、search 输出带实体标签、后台 `/admin/memories/[id]` 编辑/遗忘（改内容重算向量、改实体同步边、遗忘级联+清孤儿）、`/admin/eval` 评测报表（总量/零召回/p50/p95 + 实体 Top + 零召回清单 + CSV 导出）（34 测试全绿，全页面 e2e 过）
 - v1.3 ✅ 标注式检索基准：`eval_labels` 表（查询×记忆×相关性）、后台 `/admin/eval/[id]` 标注视图（核对召回 + 补标漏检，走 `scoreMemories` 而非 `search()` 以免污染 query_log）、评测页 recall@k / precision 均值（recall 分母含漏检）、待标注队列、CSV `relevant_ids` 列（38 测试全绿，e2e 含 server action 真实标注往返）。踩坑：drizzle 在 select 列表把 `${col}` 渲染成裸列名，被相关子查询的内表同名列遮蔽（`eval_labels.id`），须显式写 `query_log.id`
 - v1.4 ✅ stdio 桥：`scripts/stdio-bridge.ts` 零依赖单文件适配器（stdin 逐行 JSON-RPC → POST 转发 /mcp → stdout 回写；批量拆分重组、通知沉默、网络失败合成 -32603、坏行 -32700）；刻意自包含方便单文件分发，`import.meta.main` 守卫让单测可直接 import；`MEMOBOX_URL` 指向服务（45 测试全绿，e2e 真管道往返 + 断连路径过）
-- v1.5+ 候选：多管理员
+- v1.5 ✅ 多管理员 + MCP 令牌：引入开源 **Better Auth**（「先引入开源的别人的，再考虑自研」——2026-10-11 Soren 拍板），邮箱+密码、账号与记忆同库（pg 迁移 0002 / sqlite AUTH_TABLES_SQL）；ADMIN_PASSWORD 首启播种初始管理员（admin@memobox.local，老部署口令无缝迁移）；`MEMOBOX_DISABLE_SIGNUP=1` 关自助注册；`MCP_TOKEN` 可选 Bearer 令牌护 /mcp（桥用同名 MEMOBOX_TOKEN）；registry 物料 `server.json` + `docs/mcp-registry.md`（51 测试全绿，e2e：播种→登录→新用户注册→CSV 401→令牌 401/200→桥降级）
+- v1.6+ 候选：听用户反馈（可能方向：记忆压缩/摘要、更多检索策略、备份导出）
 
 ## 约定
 
@@ -62,3 +63,7 @@ MCP 接入：`claude mcp add --transport http memobox http://localhost:3100/mcp`
 - **Turbopack standalone 会把服务端依赖打进 bundle**——`.next/standalone/node_modules` 里没有 drizzle-orm/postgres.js 可解析副本，Dockerfile 里从 deps 阶段 COPY 这两个包给 migrator 用（两者零运行时依赖）。踩过：容器 crash-loop `Cannot find module 'drizzle-orm/postgres-js'`
 - dev server 和 compose app 共用宿主机 3100（APP_PORT 可改）——两者别同时起；当前姿势：`docker compose stop app` 后跑 `bun run dev`
 - 本地想临时切 SQLite 模式 dev：`DATABASE_URL= bun run dev`（空串覆盖 .env；或干脆删 .env 里的 DATABASE_URL）；SQLite 库文件被 dev 进程锁住（WAL）属正常，停进程才能删
+- 认证单例（globalThis.__memoboxAuth）与 store 同样的 HMR 坑——改 src/lib/auth.ts 后必须重启 dev
+- Better Auth 的坑：① drizzle schema 自检要求四张表（user/session/account/verification）都传给 drizzle 实例，缺 verification 直接 SchemaMismatchError；② sqlite 时间列必须 `integer(..., { mode: "timestamp" })`，否则它传 Date 进 bun:sqlite 绑定报错；③ cookie 值是 `裸token.URL编码签名`，测试拿会话要 `asResponse: true` 从 set-cookie 取，不能直接用返回的 token
+- Better Auth 兜底密钥顺序：BETTER_AUTH_SECRET → ADMIN_PASSWORD → 开发默认值；公网部署必须显式设 BETTER_AUTH_SECRET（README/.env.example 已注明）
+- pg 的认证表名就叫 "user"/"session" 等（Better Auth 约定），drizzle 全程带引号没问题，别改名

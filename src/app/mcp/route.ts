@@ -3,10 +3,15 @@
  * 这层只做薄适配：来源校验 + 转发；协议逻辑在 src/lib/mcp.ts。
  */
 import { NextRequest } from "next/server";
-import { handleRpcBody } from "@/lib/mcp";
+import { handleRpcBody, tokenOk } from "@/lib/mcp";
 import { memoryStore } from "@/lib/memory-store";
 
 export async function POST(req: NextRequest) {
+  // 可选令牌：配了 MCP_TOKEN 就要求 Bearer 匹配（公网部署防线）
+  if (!tokenOk(req.headers.get("authorization"), process.env.MCP_TOKEN)) {
+    return new Response("unauthorized", { status: 401 });
+  }
+
   // 本地服务的 DNS-rebinding 防线：拒绝非本机来源的浏览器请求
   const origin = req.headers.get("origin");
   if (

@@ -87,6 +87,8 @@ export class SQLiteStore implements MemoryStore {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS eval_labels_pair_idx ON eval_labels(query_log_id, memory_id);
     `);
+    // Better Auth 的四张认证表也放同一个库文件里（v1.5 多管理员）
+    client.exec(schema.AUTH_TABLES_SQL);
     this.db = drizzle(client, { schema });
   }
 

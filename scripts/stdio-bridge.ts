@@ -8,6 +8,7 @@
  *
  * 用法（客户端机器上只需装了 Bun，无需 clone 仓库）：
  *   MEMOBOX_URL=http://localhost:3100 bun stdio-bridge.ts
+ *   # 服务端配了 MCP_TOKEN 时，同值设 MEMOBOX_TOKEN 即可带上认证
  *   # Claude Code 接入：
  *   claude mcp add memobox --env MEMOBOX_URL=http://your-server:3100 -- bun /path/to/stdio-bridge.ts
  *
@@ -18,6 +19,8 @@ import { createInterface } from "node:readline";
 
 /** memobox 服务地址，默认本机 dev/容器端口 */
 const MEMOBOX_URL = process.env.MEMOBOX_URL ?? "http://localhost:3100";
+/** 服务端配了 MCP_TOKEN 时，桥用同一个令牌做 Bearer 认证 */
+const MEMOBOX_TOKEN = process.env.MEMOBOX_TOKEN;
 
 /** 一行输入的处理结果：null = 保持沉默（通知/空行），string = 要写回 stdout 的一行 */
 export type LineOutcome = string | null;
@@ -28,6 +31,7 @@ type FetchLike = typeof fetch;
 const rpcHeaders: Record<string, string> = {
   "content-type": "application/json",
   accept: "application/json",
+  ...(MEMOBOX_TOKEN ? { authorization: `Bearer ${MEMOBOX_TOKEN}` } : {}),
 };
 
 /** 从原始报文里抠出 id，用于错误响应的关联（抠不出就 null） */
@@ -73,7 +77,22 @@ export async function postRpc(
     };
   }
   if (res.status === 202) return { skip: true };
-  return { skip: false, body: await res.json() };
+  try {
+    return { skip: false, body: await res.json() };
+  } catch {
+    // 非 JSON 响应（如 401/500 的纯文本）：合成错误报文而不是让桥崩掉
+    return {
+      skip: false,
+      body: {
+        jsonrpc: "2.0",
+        id: idOf(raw),
+        error: {
+          code: -32603,
+          message: `memobox bridge: HTTP ${res.status} from ${url} (non-JSON response)`,
+        },
+      },
+    };
+  }
 }
 
 /**

@@ -1,4 +1,4 @@
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,24 +11,51 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAuth, signupEnabled } from "@/lib/auth";
 
-// 登录页读取 searchParams（运行时数据），阻塞渲染而非流式占位
+// 登录页读运行时数据（seeding/cookie），阻塞渲染而非流式占位
 export const instant = false;
 
 async function login(formData: FormData) {
   "use server";
-  const password = String(formData.get("password") ?? "");
-  const expected = process.env.ADMIN_PASSWORD;
-  if (expected && password === expected) {
-    (await cookies()).set("memobox_admin", "granted", {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
+  const { auth } = getAuth();
+  let ok = false;
+  try {
+    await auth.api.signInEmail({
+      body: {
+        email: String(formData.get("email") ?? ""),
+        password: String(formData.get("password") ?? ""),
+      },
+      headers: await headers(),
     });
-    redirect("/admin");
+    ok = true;
+  } catch {
+    // 密码不对 / 账号不存在等，统一回错误提示
   }
-  redirect("/login?e=1");
+  // redirect() 会抛异常，必须放在 try 外
+  redirect(ok ? "/admin" : "/login?e=1");
+}
+
+async function signup(formData: FormData) {
+  "use server";
+  if (!signupEnabled()) redirect("/login");
+  const { auth } = getAuth();
+  let ok = false;
+  try {
+    // signUpEmail 成功即已建立会话
+    await auth.api.signUpEmail({
+      body: {
+        name: String(formData.get("name") ?? "").trim() || "member",
+        email: String(formData.get("email") ?? ""),
+        password: String(formData.get("password") ?? ""),
+      },
+      headers: await headers(),
+    });
+    ok = true;
+  } catch {
+    // 邮箱已存在 / 密码太短等
+  }
+  redirect(ok ? "/admin" : "/login?e=2");
 }
 
 export default async function LoginPage({
@@ -36,32 +63,43 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ e?: string }>;
 }) {
-  const failed = Boolean((await searchParams).e);
+  const { ready, countUsers } = getAuth();
+  await ready; // 确保首次启动的播种（ADMIN_PASSWORD → 初始管理员）已完成
+  const [{ e }, total] = await Promise.all([searchParams, countUsers()]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-6">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>memobox 管理后台</CardTitle>
           <CardDescription>
-            单管理员模式：密码来自环境变量 ADMIN_PASSWORD
+            {total > 0
+              ? `多管理员模式 · 当前 ${total} 个账号`
+              : "还没有任何账号——注册第一个，或配 ADMIN_PASSWORD 重启自动播种"}
           </CardDescription>
         </CardHeader>
         <form action={login}>
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="email">邮箱</Label>
               <Input
-                id="password"
-                name="password"
-                type="password"
+                id="email"
+                name="email"
+                type="email"
                 required
                 autoFocus
               />
             </div>
-            {failed && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="password">密码</Label>
+              <Input id="password" name="password" type="password" required />
+            </div>
+            {e === "1" && (
+              <p className="text-sm text-destructive">邮箱或密码不对</p>
+            )}
+            {e === "2" && (
               <p className="text-sm text-destructive">
-                密码不对{process.env.ADMIN_PASSWORD ? "" : "（服务端未设置 ADMIN_PASSWORD）"}
+                注册失败（邮箱可能已存在，或密码至少 8 位）
               </p>
             )}
           </CardContent>
@@ -72,6 +110,45 @@ export default async function LoginPage({
           </CardFooter>
         </form>
       </Card>
+
+      {signupEnabled() && (
+        <Card className="w-full max-w-sm">
+          <CardHeader>
+            <CardTitle className="text-base">注册新管理员</CardTitle>
+            <CardDescription>
+              自托管小团队共用一个记忆库；公网部署建议
+              MEMOBOX_DISABLE_SIGNUP=1
+            </CardDescription>
+          </CardHeader>
+          <form action={signup}>
+            <CardContent className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">称呼</Label>
+                <Input id="name" name="name" type="text" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="signup-email">邮箱</Label>
+                <Input id="signup-email" name="email" type="email" required />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="signup-password">密码（至少 8 位）</Label>
+                <Input
+                  id="signup-password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={8}
+                />
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" variant="outline" className="w-full">
+                注册并进入
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      )}
     </div>
   );
 }

@@ -1,16 +1,19 @@
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { memoryStore } from "@/lib/memory-store";
+import { getAuth } from "@/lib/auth";
 
 /** CSV 转义：包引号，内部引号翻倍 */
 const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
 
 /**
  * 导出 query_log 为 CSV（最近 1000 条），供离线标注做评测集。
- * 路由 handler 不走 /admin 布局的守卫，这里自己校验 cookie。
+ * 路由 handler 不走 /admin 布局的守卫，这里自己校验会话。
  */
 export async function GET() {
-  const granted = (await cookies()).get("memobox_admin")?.value === "granted";
-  if (!granted) {
+  const { auth, ready } = getAuth();
+  await ready;
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) {
     return new Response("unauthorized", { status: 401 });
   }
 

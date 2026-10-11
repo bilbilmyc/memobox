@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { handleRpcBody } from "./mcp";
+import { handleRpcBody, tokenOk } from "./mcp";
 import type { Memory, MemoryStore } from "./memory-store";
 
 /** 协议层测试用的最小内存 fake store */
@@ -195,5 +195,20 @@ describe("handleRpcBody", () => {
     );
     const body = res.body as { result: { content: { text: string }[] } };
     expect(body.result.content[0].text).toContain("(entities: memobox)");
+  });
+});
+
+describe("tokenOk（可选 Bearer 令牌）", () => {
+  test("未配置令牌 = 不设防，任何请求都放行", () => {
+    expect(tokenOk(null, undefined)).toBe(true);
+    expect(tokenOk("Bearer anything", undefined)).toBe(true);
+  });
+
+  test("配置令牌后必须精确匹配 Bearer 值", () => {
+    expect(tokenOk("Bearer s3cret", "s3cret")).toBe(true);
+    expect(tokenOk(null, "s3cret")).toBe(false);
+    expect(tokenOk("bearer s3cret", "s3cret")).toBe(false); // 大小写敏感
+    expect(tokenOk("Bearer wrong", "s3cret")).toBe(false);
+    expect(tokenOk("s3cret", "s3cret")).toBe(false); // 缺 Bearer 前缀
   });
 });

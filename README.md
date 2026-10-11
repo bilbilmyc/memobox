@@ -51,8 +51,9 @@ That starts Postgres (pgvector), applies migrations, and serves the app on
 Either way:
 
 - MCP endpoint: `http://localhost:3100/mcp`
-- Admin console: `http://localhost:3100/admin` — password from
-  `ADMIN_PASSWORD` (default `memobox-dev`; **change it** in `.env`)
+- Admin console: `http://localhost:3100/admin` — first login
+  `admin@memobox.local` / `ADMIN_PASSWORD` (default `memobox-dev`; **change
+  it** in `.env`)
 
 ### Connect an agent (Claude Code)
 
@@ -74,6 +75,8 @@ endpoint, so it always matches the server's toolset. On the client machine
 ```bash
 # copy the one file, point it at your server
 MEMOBOX_URL=http://your-server:3100 bun stdio-bridge.ts
+# server set MCP_TOKEN? pass the same value:
+MEMOBOX_URL=... MEMOBOX_TOKEN=... bun stdio-bridge.ts
 
 # Claude Code via stdio:
 claude mcp add memobox --env MEMOBOX_URL=http://your-server:3100 -- bun /path/to/stdio-bridge.ts
@@ -85,7 +88,11 @@ Everything is env-driven (`.env` for compose, see `.env.example`):
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ADMIN_PASSWORD` | `memobox-dev` | Password for the single-admin console |
+| `ADMIN_PASSWORD` | `memobox-dev` | Seeds the initial admin on first boot (email `admin@memobox.local`); also the fallback session-secret |
+| `ADMIN_EMAIL` | `admin@memobox.local` | Email of the seeded initial admin |
+| `BETTER_AUTH_SECRET` | — | Session signing key — **set it on public deployments** (`openssl rand -base64 32`) |
+| `MEMOBOX_DISABLE_SIGNUP` | — | `1` = close self-serve admin registration (recommended for public deploys) |
+| `MCP_TOKEN` | — | If set, `/mcp` requires `Authorization: Bearer <same value>` — protects the endpoint on public deploys |
 | `DATABASE_URL` | — | Set = server mode (Postgres). Unset = local mode (SQLite) |
 | `MEMOBOX_DB_PATH` | `data/memobox.db` | SQLite file path (local mode) |
 | `MEMOBOX_BACKEND` | — | `stub` = in-memory demo store, nothing persisted |
@@ -94,6 +101,11 @@ Everything is env-driven (`.env` for compose, see `.env.example`):
 | `EMBEDDING_API_KEY` | — | API key for the embedding endpoint |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Model name |
 | `EMBEDDING_DIM` | `1536` | Vector dimensions — **locked by the first migration** (server mode), only changeable on a fresh database |
+
+The console is **multi-admin** (open-source [Better Auth](https://better-auth.com),
+email + password, accounts live in the same database): the first admin is seeded
+from `ADMIN_PASSWORD` on first boot, teammates can register themselves unless
+`MEMOBOX_DISABLE_SIGNUP=1`.
 
 ### Embedding providers
 
@@ -115,7 +127,7 @@ most recent rows. Availability over smartness.
 MCP client ──HTTP──▶  Next.js 16 (Bun runtime, standalone)
                         │  ├── /mcp        JSON-RPC 2.0, stateless
                         │  ├── /admin      governance console
-                        │  └── /login      single-admin password
+                        │  └── /login      multi-admin auth (Better Auth)
                         ▼
                    Postgres 17 + pgvector
                      memories ── query_log (eval-set groundwork)
@@ -148,4 +160,7 @@ bun run build             # production build (standalone)
       eval page, `relevant_ids` in the CSV export
 - [x] v1.4 — stdio bridge: zero-dependency single-file adapter for stdio-only
       clients (`scripts/stdio-bridge.ts`)
-- [ ] next — multi-admin
+- [x] v1.5 — multi-admin console via Better Auth (first admin seeded from
+      `ADMIN_PASSWORD`, optional signup close), optional `MCP_TOKEN` bearer
+      auth for public deployments (bridge + registry manifest included)
+- [ ] next — what users ask for
