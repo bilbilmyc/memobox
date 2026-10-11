@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { SQLiteStore } from "./sqlite-store";
 import type { EmbeddingProvider } from "@/lib/embeddings";
 import { computeBenchmark, cosineSim } from "@/lib/memory";
+import { buildBackup, parseBackup } from "@/lib/backup";
 
 /** 与 pg 集成测试同款：确定性「词哈希袋」向量 */
 function fakeEmbedder(dim = 64): EmbeddingProvider {
@@ -213,5 +214,72 @@ describe("SQLiteStore (in-memory)", () => {
     const queue = await store.unlabeledQueries(10);
     expect(queue.length).toBe(1);
     expect(queue[0].query).toBe("metrics");
+  });
+});
+
+describe("SQLiteStore 备份/迁移 (v1.6)", () => {
+  test("exportAll 按创建时间升序", async () => {
+    const a = new SQLiteStore(null, ":memory:");
+    // 用导入造出乱序时间——同毫秒连续 save 分不出先后
+    await a.importMemories([
+      { id: "x3", content: "c3", createdAt: 5 },
+      { id: "x1", content: "c1", createdAt: 1 },
+      { id: "x2", content: "c2", createdAt: 3 },
+    ]);
+    const backup = buildBackup(await a.exportAll());
+    expect(backup.memories.map((m) => m.id)).toEqual(["x1", "x2", "x3"]);
+  });
+
+  test("跨库导入保留 id/时间/实体，重复导入全跳过", async () => {
+    // 库 A：常规 save 三条（模拟生产库）
+    const a = new SQLiteStore(null, ":memory:");
+    const m2 = await a.save({ content: "second entry", entities: ["memobox", "soren"] });
+    await a.save({ content: "first entry", entities: ["memobox"] });
+    await a.save({ content: "third entry" });
+
+    const backup = buildBackup(await a.exportAll());
+    expect(backup.memories).toHaveLength(3);
+
+    // 库 B：解析备份文件后整体导入（模拟 SQLite→pg 换库迁移）
+    const parsed = parseBackup(JSON.stringify(backup));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const b = new SQLiteStore(null, ":memory:");
+    const r1 = await b.importMemories(parsed.items);
+    expect(r1).toEqual({ imported: 3, skipped: 0 });
+
+    // id / createdAt / 实体原样保留
+    const list = await b.list(10);
+    expect(list).toHaveLength(3);
+    const withEntities = list.find((m) => m.id === m2.id)!;
+    expect(withEntities.entities).toEqual(["memobox", "soren"]);
+    expect(withEntities.createdAt).toBe(m2.createdAt);
+
+    // 图谱边也长出来了
+    const entities = await b.topEntities();
+    expect(entities).toContainEqual({ name: "memobox", memories: 2 });
+    expect(entities).toContainEqual({ name: "soren", memories: 1 });
+
+    // 同一备份再导一次：id 冲突全跳过，不覆盖
+    const r2 = await b.importMemories(parsed.items);
+    expect(r2).toEqual({ imported: 0, skipped: 3 });
+    expect((await b.stats()).total).toBe(3);
+  });
+
+  test("带 fake embedder 的库导入时向量现算，检索可用", async () => {
+    const a = new SQLiteStore(null, ":memory:");
+    await a.save({ content: "aurora lights over the harbor" });
+    const parsed = parseBackup(
+      JSON.stringify(buildBackup(await a.exportAll()))
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    // 目标库语义模式：导入后关键词即语义命中
+    const b = new SQLiteStore(fakeEmbedder(), ":memory:");
+    await b.importMemories(parsed.items);
+    const hits = await b.search("aurora", 5);
+    expect(hits.length).toBeGreaterThanOrEqual(1);
+    expect(hits[0].content).toContain("aurora");
   });
 });

@@ -69,6 +69,19 @@ function fakeStore(): MemoryStore {
     async stats() {
       return { total: rows.size, searches: 0 };
     },
+    async exportAll() {
+      return [...rows.values()].sort((a, b) => a.createdAt - b.createdAt);
+    },
+    async importMemories(items: Memory[]) {
+      let imported = 0;
+      for (const item of items) {
+        if (!rows.has(item.id)) {
+          rows.set(item.id, item);
+          imported++;
+        }
+      }
+      return { imported, skipped: items.length - imported };
+    },
   };
 }
 

@@ -432,4 +432,57 @@ export class DrizzleStore implements MemoryStore {
     }
     return computeBenchmark([...byQuery.values()]);
   }
+
+  // ---- v1.6 备份/迁移 ----
+
+  async exportAll(): Promise<Memory[]> {
+    const rows = await getDb()
+      .select()
+      .from(memories)
+      .orderBy(memories.createdAt);
+    return rows.map((r) => this.toMemory(r));
+  }
+
+  async importMemories(
+    items: Memory[]
+  ): Promise<{ imported: number; skipped: number }> {
+    let imported = 0;
+    let skipped = 0;
+    for (const item of items) {
+      // pg 的主键是 uuid 列：stub 等来源的短 id 进不来，就地换新 UUID
+      // （SQLite 备份的 id 本就是 UUID，原样保留——迁移后引用不断）
+      const id = UUID_RE.test(item.id) ? item.id : crypto.randomUUID();
+      let embedding: number[] | undefined;
+      if (this.embedder) {
+        try {
+          embedding = await this.embedder.embed(item.content);
+        } catch {
+          // 与 save 同策略：embedding 失败按无向量落库
+        }
+      }
+      const inserted = await getDb()
+        .insert(memories)
+        .values({
+          id,
+          content: item.content,
+          kind: item.kind,
+          entities: item.entities ?? [],
+          source: item.source,
+          embedding,
+          createdAt: new Date(item.createdAt),
+        })
+        .onConflictDoNothing({ target: memories.id })
+        .returning({ id: memories.id });
+      if (inserted.length > 0) {
+        imported++;
+        await this.syncEdges(id, item.entities ?? []);
+      } else {
+        skipped++;
+      }
+    }
+    return { imported, skipped };
+  }
 }
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

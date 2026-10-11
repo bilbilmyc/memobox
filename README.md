@@ -82,6 +82,14 @@ MEMOBOX_URL=... MEMOBOX_TOKEN=... bun stdio-bridge.ts
 claude mcp add memobox --env MEMOBOX_URL=http://your-server:3100 -- bun /path/to/stdio-bridge.ts
 ```
 
+### Backup & migration
+
+The console ships a **备份 (backup)** page: export every memory to a single
+JSON file (vectors are recomputed on import, so the file stays portable), and
+import one back idempotently — existing ids are skipped, never overwritten.
+Export from SQLite local mode and import into Postgres server mode (or vice
+versa) to move an entire store between deployment styles.
+
 ## Configuration
 
 Everything is env-driven (`.env` for compose, see `.env.example`):
@@ -163,4 +171,7 @@ bun run build             # production build (standalone)
 - [x] v1.5 — multi-admin console via Better Auth (first admin seeded from
       `ADMIN_PASSWORD`, optional signup close), optional `MCP_TOKEN` bearer
       auth for public deployments (bridge + registry manifest included)
+- [x] v1.6 — backup & migration: one-click JSON export of all memories in the
+      console, idempotent import (existing ids skipped) — also the path for
+      moving a store between SQLite local mode and Postgres server mode
 - [ ] next — what users ask for

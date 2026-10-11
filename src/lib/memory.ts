@@ -75,6 +75,16 @@ export interface MemoryStore {
   unlabeledQueries(limit?: number): Promise<QueryLogEntry[]>;
   /** recall@k / precision 均值（仅统计有标注的查询） */
   benchmark(): Promise<Benchmark>;
+  // ---- v1.6 备份/迁移 ----
+  /** 全量导出（备份/迁移用）：全部记忆按创建时间升序 */
+  exportAll(): Promise<Memory[]>;
+  /**
+   * 批量导入：保留原 id 与 createdAt（迁移后链接/引用不断），id 已存在则
+   * 跳过该条（不覆盖）；向量现算（或无向量落库）。返回导入/跳过计数。
+   */
+  importMemories(
+    items: Memory[]
+  ): Promise<{ imported: number; skipped: number }>;
 }
 
 /** 余弦相似度：本地模式（SQLite）的向量检索用 */

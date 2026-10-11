@@ -4,6 +4,7 @@ import { DrizzleStore } from "./store";
 import { getDb } from "./index";
 import { memories, queryLog } from "./schema";
 import type { EmbeddingProvider } from "@/lib/embeddings";
+import { buildBackup } from "@/lib/backup";
 
 /**
  * 对 .env 里真实 Postgres 的集成测试（docker compose up -d）。
@@ -242,5 +243,43 @@ describe("DrizzleStore labeling + benchmark (live Postgres)", () => {
     expect(data?.entry.query).toBe(QUERY);
     expect(data?.recalled.length).toBeGreaterThanOrEqual(2);
     expect(data?.labels).toEqual([]);
+  });
+});
+
+describe("DrizzleStore 备份/迁移 (v1.6, live Postgres)", () => {
+  maybe("exportAll→importMemories 往返：id 冲突跳过，实体图谱长回来", async () => {
+    // 库内造两条带实体的行（TAG 源，afterAll 统一清）
+    const s1 = new DrizzleStore(null);
+    const m1 = await s1.save({
+      content: "backup roundtrip probe one",
+      entities: ["backup-probe"],
+      source: TAG,
+    });
+    await s1.save({
+      content: "backup roundtrip probe two",
+      entities: ["backup-probe", "second-anchor"],
+      source: TAG,
+    });
+
+    const backup = buildBackup(await s1.exportAll());
+    // 只认本用例的行：同库还有其他 describe 的 TAG 残留/并行写入
+    const mine = backup.memories.filter((m) =>
+      m.content.startsWith("backup roundtrip probe")
+    );
+    expect(mine).toHaveLength(2);
+    expect(mine.map((m) => m.id)).toContain(m1.id);
+
+    // 导回同一个库：id 全部冲突 → 全跳过、不覆盖
+    const r = await s1.importMemories(mine);
+    expect(r).toEqual({ imported: 0, skipped: 2 });
+
+    // 换成全新 id 再导：真插入，实体边长出来
+    const remapped = mine.map((m, i) => ({ ...m, id: crypto.randomUUID(), createdAt: m.createdAt + i }));
+    const r2 = await s1.importMemories(remapped);
+    expect(r2).toEqual({ imported: 2, skipped: 0 });
+    const entities = await s1.topEntities(100);
+    expect(
+      entities.find((e) => e.name === "backup-probe")?.memories
+    ).toBeGreaterThanOrEqual(3);
   });
 });

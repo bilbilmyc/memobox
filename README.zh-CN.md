@@ -76,6 +76,13 @@ MEMOBOX_URL=... MEMOBOX_TOKEN=... bun stdio-bridge.ts
 claude mcp add memobox --env MEMOBOX_URL=http://your-server:3100 -- bun /path/to/stdio-bridge.ts
 ```
 
+### 备份与迁移
+
+后台自带「备份」页：一键把全部记忆导出成单个 JSON 文件（向量不进备份——
+导入时按当前 embedding 配置重算，文件因此可跨部署搬运），导入幂等——
+id 已存在的条目跳过、绝不覆盖。从 SQLite 本地模式导出、再导入 Postgres
+服务端模式（或反向），就把整个记忆库在两种部署形态之间搬了家。
+
 ## 配置
 
 全部走环境变量（compose 读 `.env`，模板见 `.env.example`）：
@@ -148,4 +155,5 @@ bun run build             # 生产构建（standalone）
 - [x] v1.3 — 标注式检索基准：后台对查询结果标注相关/无关（含补标漏检），评测页出 recall@k 与 precision，CSV 导出带 `relevant_ids`
 - [x] v1.4 — stdio 桥：给只支持 stdio 传输的客户端的零依赖单文件适配器（`scripts/stdio-bridge.ts`）
 - [x] v1.5 — 多管理员后台（Better Auth，ADMIN_PASSWORD 播种首个管理员、可关自助注册）+ 可选 `MCP_TOKEN` 令牌认证（公网部署防线，桥与 registry 清单已带）
+- [x] v1.6 — 备份与迁移：后台一键导出全部记忆为单 JSON 文件，幂等导入（已有 id 跳过）——也是 SQLite 本地模式 ↔ Postgres 服务端模式的整体搬家通道
 - [ ] 待定 — 听用户的

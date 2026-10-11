@@ -37,6 +37,9 @@ export default async function AdminLayout({
               <Link href="/admin/eval" className="text-muted-foreground hover:text-foreground">
                 评测
               </Link>
+              <Link href="/admin/backup" className="text-muted-foreground hover:text-foreground">
+                备份
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">

@@ -121,6 +121,28 @@ export class StubStore implements MemoryStore {
   }> {
     return { labeledQueries: 0, recall: null, precision: null };
   }
+
+  // ---- v1.6 备份/迁移 ----
+
+  async exportAll(): Promise<Memory[]> {
+    return [...this.rows.values()].sort((a, b) => a.createdAt - b.createdAt);
+  }
+
+  async importMemories(
+    items: Memory[]
+  ): Promise<{ imported: number; skipped: number }> {
+    let imported = 0;
+    let skipped = 0;
+    for (const item of items) {
+      if (this.rows.has(item.id)) {
+        skipped++;
+        continue;
+      }
+      this.rows.set(item.id, { ...item });
+      imported++;
+    }
+    return { imported, skipped };
+  }
 }
 
 export function createStore(): MemoryStore {

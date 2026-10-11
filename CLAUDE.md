@@ -34,7 +34,8 @@ SQLite / 服务端一条 docker compose）、图谱质量检索、治理后台�
 - v1.3 ✅ 标注式检索基准：`eval_labels` 表（查询×记忆×相关性）、后台 `/admin/eval/[id]` 标注视图（核对召回 + 补标漏检，走 `scoreMemories` 而非 `search()` 以免污染 query_log）、评测页 recall@k / precision 均值（recall 分母含漏检）、待标注队列、CSV `relevant_ids` 列（38 测试全绿，e2e 含 server action 真实标注往返）。踩坑：drizzle 在 select 列表把 `${col}` 渲染成裸列名，被相关子查询的内表同名列遮蔽（`eval_labels.id`），须显式写 `query_log.id`
 - v1.4 ✅ stdio 桥：`scripts/stdio-bridge.ts` 零依赖单文件适配器（stdin 逐行 JSON-RPC → POST 转发 /mcp → stdout 回写；批量拆分重组、通知沉默、网络失败合成 -32603、坏行 -32700）；刻意自包含方便单文件分发，`import.meta.main` 守卫让单测可直接 import；`MEMOBOX_URL` 指向服务（45 测试全绿，e2e 真管道往返 + 断连路径过）
 - v1.5 ✅ 多管理员 + MCP 令牌：引入开源 **Better Auth**（「先引入开源的别人的，再考虑自研」——2026-10-11 Soren 拍板），邮箱+密码、账号与记忆同库（pg 迁移 0002 / sqlite AUTH_TABLES_SQL）；ADMIN_PASSWORD 首启播种初始管理员（admin@memobox.local，老部署口令无缝迁移）；`MEMOBOX_DISABLE_SIGNUP=1` 关自助注册；`MCP_TOKEN` 可选 Bearer 令牌护 /mcp（桥用同名 MEMOBOX_TOKEN）；registry 物料 `server.json` + `docs/mcp-registry.md`（51 测试全绿，e2e：播种→登录→新用户注册→CSV 401→令牌 401/200→桥降级）
-- 发布就绪 ✅（v1.5 后的加固，协议版本不动）：容器链路全量复验（迁移自动应用→播种→登录→注册→CSV 鉴权→MCP 令牌→桥降级，全绿）+ **认证旁路封堵**（详见已知事项的 PPR 泄漏条目）+ store 惰性单例（Proxy，next build 收集页面数据不再真建库）+ Dockerfile 钉 `oven/bun:1.4.2` + LICENSE(MIT，版权行占位 bilbilmyc) + `.github/workflows/ci.yml`（bun test/build + main 分支推 GHCR）。52 测试全绿
+- 发布就绪 ✅（v1.5 后的加固，协议版本不动）：容器链路全量复验（迁移自动应用→播种→登录→注册→CSV 鉴权→MCP 令牌→桥降级，全绿）+ **认证旁路封堵**（详见已知事项的 PPR 泄漏条目）+ store 惰性单例（Proxy，next build 收集页面数据不再真建库）+ Dockerfile 钉 `oven/bun:1.4.2` + LICENSE(MIT，版权行占位 bilbilmyc) + `.github/workflows/ci.yml`（bun test/build + main 分支推 GHCR）。52 测试全绿。仓库已推 https://github.com/bilbilmyc/memobox（main 分支）
+- v1.6 ✅ 备份与迁移：后台 /admin/backup 一键导出全部记忆为单 JSON（格式 `memobox-backup` v1，`src/lib/backup.ts`；向量刻意不进备份——可重算且维度随部署变），导入幂等（id 已存在跳过不覆盖，上限 5 万条/64MB）；保留原 id/createdAt（迁移后引用不断），非 UUID id（stub 来源）导入 pg 时就地换新 UUID；实体边导入后重长。66 测试全绿，e2e 含真实 multipart 上传往返与坏文件报错。也是 SQLite↔pg 换模式的搬家通道
 - v1.6+ 候选：听用户反馈（可能方向：记忆压缩/摘要、更多检索策略、备份导出）
 
 ## 约定
@@ -71,3 +72,7 @@ MCP 接入：`claude mcp add --transport http memobox http://localhost:3100/mcp`
 - **layout 守卫拦不住数据泄漏（发布就绪期实测的严重坑）**：① 开 `cacheComponents`（PPR）时静态壳先流出去，layout 的 redirect 拿得到状态码却拦不住已发出的页面 RSC 数据块——匿名请求 200 拿到完整后台数据；② 即使关掉 PPR，App Router 的 layout 和 page 并行渲染，307 响应体仍带页面 flight chunk。**约定：每个 admin 页面组件第一行 `await requireAdmin()`，页面内每个 server action 也第一行过守卫**（action 是独立 POST 入口，progressive enhancement 下无需 JS 即可调用）。当前 next.config.ts 不开 cacheComponents/partialPrefetching（后者依赖前者），页面也不写 `export const instant`（同样依赖它）
 - **store 单例必须惰性**：next build「Collecting page data」会真执行一次模块顶层代码，顶层 `new SQLiteStore()` 在无 .env 的构建容器里建库→首查崩。现用 ES Proxy 惰性代理 globalThis 上的实例；播种逻辑再加 NEXT_PHASE==="phase-production-build" 守卫（构建期 route handler 真跑一次，cookies() 会拒绝）
 - **Dockerfile 钉 oven/bun:1.4.2 不是随手写的**：bun:sqlite 的多语句 exec 行为在 patch 版本间漂移（1.4.3 容器构建即触发 `no such table: main.eval_labels`），本地/容器/CI 三处必须同一条基线
+- drizzle bun-sqlite 的 `.run()` 类型是 void（拿不到 changes/影响行数）——想知道「插没插进去」要么先 SELECT 再插（importMemories 的做法），要么 `.returning()`（pg 侧）
+- pg 的 memories 主键是 uuid 列：任何「外部 id 直插 pg」的路径都要 UUID 校验+兜底换新（importMemories 的做法），否则 psql 直接报 invalid input syntax for type uuid
+- server action 上传文件默认 body 上限 1MB——备份导入在 next.config.ts 里 `experimental.serverActions.bodySizeLimit: "64mb"`（页面侧另有 64MB/5 万条校验）。Next 16 此键仍属 experimental，构建会打 "Experiments" 提示，属预期
+- 测试确定性两条：① 同毫秒连续 save 分不出先后，排序断言用显式 createdAt（importMemories 造数）；② pg 集成测试按 source=TAG 过滤会吃到其他 describe 的行，认 content 前缀更稳

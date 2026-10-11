@@ -3,7 +3,7 @@
   "name": "io.github.bilbilmyc/memobox",
   "title": "memobox",
   "description": "Self-hosted long-term memory for AI agents: one MCP endpoint (Streamable HTTP + stdio bridge), semantic + entity-graph retrieval, and a bilingual admin console with labeled retrieval benchmarks. Local mode needs only a SQLite file; server mode is a single Docker container with Postgres + pgvector.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "repository": {
     "url": "https://github.com/bilbilmyc/memobox",
     "source": "github"

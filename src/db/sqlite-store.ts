@@ -518,4 +518,60 @@ export class SQLiteStore implements MemoryStore {
       }));
     return computeBenchmark(rows);
   }
+
+  // ---- v1.6 备份/迁移 ----
+
+  async exportAll(): Promise<Memory[]> {
+    const rows = this.db
+      .select()
+      .from(schema.memories)
+      .orderBy(schema.memories.createdAt)
+      .all();
+    return rows.map((r) => this.toMemory(r));
+  }
+
+  async importMemories(
+    items: Memory[]
+  ): Promise<{ imported: number; skipped: number }> {
+    let imported = 0;
+    let skipped = 0;
+    for (const item of items) {
+      // drizzle bun-sqlite 的 .run() 不返回 changes——先查后插
+      //（导入是单管理员低频操作，多一次 SELECT 无所谓）
+      const exists = this.db
+        .select({ id: schema.memories.id })
+        .from(schema.memories)
+        .where(eq(schema.memories.id, item.id))
+        .get();
+      if (exists) {
+        skipped++;
+        continue;
+      }
+      let embedding: string | null = null;
+      if (this.embedder) {
+        try {
+          embedding = JSON.stringify(await this.embedder.embed(item.content));
+        } catch {
+          // 与 save 同策略：embedding 失败按无向量落库
+        }
+      }
+      this.db
+        .insert(schema.memories)
+        .values({
+          id: item.id,
+          content: item.content,
+          kind: item.kind ?? "fact",
+          source: item.source ?? "mcp",
+          entities: JSON.stringify(item.entities ?? []),
+          embedding,
+          createdAt: item.createdAt,
+          updatedAt: Date.now(),
+        })
+        .onConflictDoNothing({ target: schema.memories.id })
+        .run();
+      imported++;
+      this.syncEdges(item.id, item.entities ?? []);
+    }
+    return { imported, skipped };
+  }
 }
