@@ -140,6 +140,15 @@ describe("createEmbedder", () => {
     saveConfig({ embedding: { base: "http://localhost:11434/v1", model: "bge-m3" } }, CFG);
     expect(createEmbedder()?.model).toBe("text-embedding-3-small");
   });
+
+  test("配置文件 local 段启用内置模型（构造不触发模型加载）", () => {
+    process.env.MEMOBOX_CONFIG_PATH = CFG;
+    delete process.env.EMBEDDING_API_BASE;
+    saveConfig({ embedding: { local: true } }, CFG);
+    const p = createEmbedder();
+    expect(p?.model).toBe("Xenova/bge-small-zh-v1.5");
+    expect(p?.dimensions).toBe(512);
+  });
 });
 
 describe("probeOllama", () => {

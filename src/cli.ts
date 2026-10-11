@@ -27,6 +27,7 @@ import { parseCodexMemoryMd, parseCodexSummary } from "@/lib/codex-import";
 import { defaultDbPath } from "@/lib/paths";
 import type { Memory, MemoryStore } from "@/lib/memory-store";
 import { createEmbedder, probeOllama } from "@/lib/embeddings";
+import { createLocalEmbedder, LOCAL_EMBED_MODEL } from "@/lib/local-embedder";
 import { defaultConfigPath, loadConfig, saveConfig } from "@/lib/config";
 import {
   DEFAULT_EMBED_MODEL,
@@ -41,7 +42,7 @@ import {
 import { detectClaude, detectCodex, detectPi, installClient, serverEntry, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
-export const VERSION = "2.4.0";
+export const VERSION = "2.5.0";
 
 /** doctor / model 子命令的外部依赖（真入口用默认值；单测注入假实现不碰网络） */
 export type CliTools = {
@@ -50,6 +51,8 @@ export type CliTools = {
   ensureServer: () => Promise<boolean>;
   listModels: () => Promise<string[] | null>;
   pull: (name: string, onStatus: (s: PullStatus) => void) => Promise<boolean>;
+  /** 内置小模型预检：加载模型并 embed 一条自检文本（enable --lite 用） */
+  loadLocalModel: (onProgress?: (msg: string) => void) => Promise<void>;
 };
 
 export const defaultCliTools: CliTools = {
@@ -58,6 +61,9 @@ export const defaultCliTools: CliTools = {
   ensureServer: () => ensureOllamaServer(),
   listModels: () => ollamaModels(),
   pull: (name, onStatus) => pullOllamaModel(name, onStatus),
+  loadLocalModel: async (onProgress) => {
+    await createLocalEmbedder(onProgress).embed("memobox 启动自检");
+  },
 };
 
 /** 子命令规格表：--help / help <命令> / 总帮助都从这里渲染 */
@@ -76,7 +82,7 @@ const COMMANDS: CmdSpec[] = [
   { name: "stats", usage: "memobox stats", desc: "库统计（记忆数 / 检索数）" },
   { name: "path", usage: "memobox path", desc: "打印库文件位置" },
   { name: "doctor", usage: "memobox doctor", desc: "自检：库文件 / 检索模式 / 三家客户端接线状态" },
-  { name: "model", usage: "memobox model <status|enable|disable> [--model bge-m3]", desc: "本地嵌入模型管理：enable 自动拉起 Ollama、拉模型、启用语义检索并补算历史向量" },
+  { name: "model", usage: "memobox model <status|enable|disable> [--model bge-m3] [--lite]", desc: "语义检索管理：enable 用 Ollama（能力强）；enable --lite 用内置小模型（约 25MB 进程内推理，零外部依赖）" },
   { name: "export", usage: "memobox export <file.json>", desc: "全量备份（memobox-backup v1 格式，向量不入备份可重算）" },
   { name: "import", usage: "memobox import <file.json>", desc: "导入备份（幂等：相同 id 跳过）" },
   { name: "import-codex", usage: "memobox import-codex [--file <MEMORY.md路径>] [--dry-run]", desc: "迁移 Codex 原生记忆（~/.codex/memories/，任务+用户画像；重复导入幂等）" },
@@ -265,6 +271,8 @@ export async function runCli(
           io.out(`         memobox model enable（自动拉模型、写配置、补算历史向量）`);
         } else if (await tools.ollamaVersion()) {
           io.out(`提示：    本机装了 Ollama 但服务未运行——memobox model enable 会自动拉起`);
+        } else {
+          io.out(`提示：    轻量语义检索可用内置小模型启用（零外部依赖）：memobox model enable --lite`);
         }
       }
       return 0;
@@ -279,14 +287,37 @@ export async function runCli(
         const models = ver ? await tools.listModels() : null;
         io.out(`Ollama 服务：${models ? `运行中（${models.length} 个模型${models.length ? "：" + models.join(", ") : ""}）` : "未运行"}`);
         const fromEnv = Boolean(process.env.EMBEDDING_API_BASE);
-        const fromCfg = Boolean(loadConfig().embedding?.base);
-        io.out(
-          `检索模式：  ${fromEnv || fromCfg ? "semantic" : "keyword（memobox model enable 可启用本地语义检索）"}` +
-            (fromEnv ? "（来源：环境变量 EMBEDDING_API_*）" : fromCfg ? `（来源：${defaultConfigPath()}）` : "")
-        );
+        const cfg = loadConfig().embedding;
+        const mode = fromEnv
+          ? "semantic（来源：环境变量 EMBEDDING_API_*）"
+          : cfg?.base
+            ? `semantic（来源：${defaultConfigPath()}，端点 ${cfg.base}）`
+            : cfg?.local
+              ? `semantic（来源：内置模型 ${cfg.model ?? LOCAL_EMBED_MODEL}，进程内推理）`
+              : "keyword（memobox model enable --lite 可最轻启用语义检索）";
+        io.out(`检索模式：  ${mode}`);
         return 0;
       }
       if (sub === "enable") {
+        // --lite：内置小模型（v2.5 轻量方案）——不碰 Ollama，进程内推理
+        if (flags.has("lite")) {
+          io.out(`启用内置嵌入模型 ${LOCAL_EMBED_MODEL}（约 25MB，缓存在 ~/.memobox/models）…`);
+          try {
+            await tools.loadLocalModel((m) => io.out(`  ${m}`));
+          } catch (e) {
+            io.err(`内置模型加载失败：${e instanceof Error ? e.message : e}`);
+            io.err("检查网络后重试（默认源 hf-mirror.com；可用环境变量 HF_ENDPOINT 换源）");
+            return 1;
+          }
+          saveConfig({ ...loadConfig(), embedding: { local: true, model: LOCAL_EMBED_MODEL } });
+          const backfilled = await makeStore().backfillEmbeddings((done, total) => {
+            if (done % 10 === 0 || done === total) io.out(`  补算向量 ${done}/${total}`);
+          });
+          if (backfilled > 0) io.out(`已补算 ${backfilled} 条历史记忆的向量`);
+          io.out(`✓ 语义检索已启用（内置模型，零外部服务）——写入 ${defaultConfigPath()}`);
+          io.out(`  所有 memobox 进程（含 MCP 服务）下次启动自动生效，无需重装客户端`);
+          return 0;
+        }
         const model = flags.get("model") ?? DEFAULT_EMBED_MODEL;
         const ver = await tools.ollamaVersion();
         if (!ver) {

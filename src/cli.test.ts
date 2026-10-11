@@ -26,6 +26,7 @@ const noOllamaTools = () => ({
   ensureServer: async () => false,
   listModels: async () => null,
   pull: async () => false,
+  loadLocalModel: async () => {},
 });
 
 /** 把配置文件指向不存在的临时路径并删掉 env 干扰；返回还原函数 */
@@ -514,6 +515,46 @@ describe("model 子命令（v2.4，本地小模型管理）", () => {
       await runCli(["model", "status"], h2.io, h2.store, tools);
       expect(h2.text()).toContain("semantic");
       expect(h2.text()).toContain("来源");
+    } finally {
+      restore();
+    }
+  });
+
+  test("enable --lite：预检通过写 local 配置；预检失败不写", async () => {
+    const restore = setup();
+    try {
+      const h = harness();
+      expect(await runCli(["model", "enable", "--lite"], h.io, h.store, noOllamaTools())).toBe(0);
+      const text = h.text();
+      expect(text).toContain("内置嵌入模型");
+      expect(text).toContain("零外部服务");
+      expect(loadConfig(CFG)).toEqual({
+        embedding: { local: true, model: "Xenova/bge-small-zh-v1.5" },
+      });
+
+      rmSync(CFG, { force: true });
+      const fail = {
+        ...noOllamaTools(),
+        loadLocalModel: async () => {
+          throw new Error("network down");
+        },
+      };
+      const h2 = harness();
+      expect(await runCli(["model", "enable", "--lite"], h2.io, h2.store, fail)).toBe(1);
+      expect(h2.err[0]).toContain("加载失败");
+      expect(existsSync(CFG)).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  test("status：local 模式显示内置模型来源", async () => {
+    const restore = setup();
+    try {
+      saveConfig({ embedding: { local: true, model: "Xenova/bge-small-zh-v1.5" } }, CFG);
+      const h = harness();
+      expect(await runCli(["model", "status"], h.io, h.store, noOllamaTools())).toBe(0);
+      expect(h.text()).toContain("内置模型 Xenova/bge-small-zh-v1.5");
     } finally {
       restore();
     }

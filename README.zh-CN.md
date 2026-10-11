@@ -99,9 +99,9 @@ memobox search "缩进"
 memobox list / forget <id> / entities / stats / path
 memobox doctor                       # 自检：库、检索模式、客户端接线（还会探测本机 Ollama）
 
-# 本地语义检索一键启用（CherryStudio 式：自动拉起 Ollama、拉 bge-m3、
-# 写 ~/.memobox/config.json、补算历史向量；模型管理见 model status/disable）
-memobox model enable
+# 语义检索一键启用（写 ~/.memobox/config.json，自动补算历史向量）
+memobox model enable --lite   # 内置小模型：约 25MB 进程内推理，零外部依赖（推荐）
+memobox model enable          # 或走本机 Ollama：bge-m3，能力更强（约 1.2GB）
 
 # 结构化过滤（条件 AND 组合），终端表格或 --json
 memobox query "端口" --kind preference --entity ports --since 7d
@@ -123,21 +123,23 @@ memobox import-codex
 
 - **存储**：单 SQLite 文件 `~/.memobox/memobox.db`（`MEMOBOX_DB_PATH` 可改）。
   无守护进程、无端口、无 Postgres。
-- **检索**：实体图谱扩展常开；配了 OpenAI 兼容端点就走语义检索（向量余弦），
-  没配就关键词打分兜底（零配置可用，中文整句可命中）。
-- **语义模式（可选增强）**：本机装了 Ollama 的话一条命令——`memobox model enable`
-  （自动拉起服务、拉 bge-m3 模型、写 `~/.memobox/config.json`、补算历史向量；
-  之后所有 memobox 进程含 MCP 服务自动生效，无需重装客户端）。
-  也可以手动设 `EMBEDDING_API_BASE` 与 `EMBEDDING_MODEL`
-  （OpenAI、SiliconFlow、Ollama 都行；`_KEY` 可选——本地端点免鉴权）。
+- **检索**：实体图谱扩展常开；关键词打分 v2.5 起升级为 BM25
+  （词频饱和 + 文档长度归一 + IDF + 实体加成），中文 bigram 天然适配；
+  配了语义模式则走向量余弦。
+- **语义模式（可选增强）**：`memobox model enable --lite` = 内置量化小模型
+  （bge-small-zh，约 25MB）进程内推理——无服务、无端口、无 Ollama，
+  模型惰性加载（keyword 模式的进程不占任何资源）。
+  `memobox model enable` = 本机 Ollama（bge-m3，能力更强）。
+  也可手动设 `EMBEDDING_API_BASE` 与 `EMBEDDING_MODEL`
+  （OpenAI、SiliconFlow 都行；`_KEY` 可选——本地端点免鉴权）。
 - **为什么不能直接借用 agent 自带的大模型？** MCP 服务是被客户端拉起的子进程，
   协议里没有「回调客户端帮你算向量」的通道。语义检索需要的只是文本转向量——
-  本机跑个 Ollama 就零成本，`memobox model enable` 全自动。
+  内置小模型在本进程里就能算。
 
 ## 开发
 
 ```bash
-bun test          # 110 个测试
+bun test          # 120 个测试
 bun run typecheck
 ```
 

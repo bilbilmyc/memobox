@@ -105,9 +105,9 @@ memobox search "tabs"
 memobox list / forget <id> / entities / stats / path
 memobox doctor                       # health check: db, retrieval, wiring (also detects local Ollama)
 
-# one-command local semantic search (CherryStudio-style: starts Ollama,
-# pulls bge-m3, writes ~/.memobox/config.json, backfills vectors)
-memobox model enable                 # also: model status / model disable
+# one-command semantic search (writes ~/.memobox/config.json, backfills vectors)
+memobox model enable --lite          # built-in small model: ~25MB in-process, zero external deps (recommended)
+memobox model enable                 # or local Ollama: bge-m3, stronger (~1.2GB)
 
 # structured filter (AND-combined), terminal table or --json
 memobox query "port" --kind preference --entity ports --since 7d
@@ -129,26 +129,25 @@ memobox import-codex
 
 - **Storage**: single SQLite file at `~/.memobox/memobox.db`
   (`MEMOBOX_DB_PATH` to move it). No daemon, no port, no Postgres.
-- **Retrieval**: entity-graph expansion always on; semantic search (cosine
-  over embeddings) when an OpenAI-compatible endpoint is configured, keyword
-  scoring as the zero-config fallback (Chinese full-sentence queries work).
-- **Semantic mode (optional upgrade)**: with Ollama installed it's one
-  command — `memobox model enable` (starts the Ollama server, pulls bge-m3,
-  writes `~/.memobox/config.json`, backfills vectors for existing memories;
-  every memobox process including MCP servers picks it up automatically, no
-  client reinstall needed). Or set `EMBEDDING_API_BASE` / `EMBEDDING_MODEL`
-  manually (OpenAI, SiliconFlow, Ollama…; `_KEY` optional — local endpoints
-  need none).
+- **Retrieval**: entity-graph expansion always on; keyword scoring upgraded
+  to BM25 in v2.5 (term-frequency saturation, document-length normalization,
+  IDF, entity boost) with CJK bigram tokenization; semantic mode adds cosine
+  over embeddings.
+- **Semantic mode (optional upgrade)**: `memobox model enable --lite` =
+  built-in quantized small model (bge-small-zh, ~25MB) running in-process —
+  no server, no port, no Ollama; the model is lazily loaded (keyword-mode
+  processes pay nothing). `memobox model enable` = local Ollama (bge-m3,
+  stronger). Or set `EMBEDDING_API_BASE` / `EMBEDDING_MODEL` manually
+  (OpenAI, SiliconFlow…; `_KEY` optional — local endpoints need none).
 - **Why can't it reuse the agent's own model?** An MCP server is a child
   process spawned by the client; the protocol has no channel to call back
-  into the client's model. Semantic search only needs text→vector math — a
-  local Ollama covers it at zero cost, and `memobox model enable` wires it
-  all up.
+  into the client's model. Semantic search only needs text→vector math —
+  the built-in small model computes it right inside the process.
 
 ## Development
 
 ```bash
-bun test          # 110 tests
+bun test          # 120 tests
 bun run typecheck
 ```
 

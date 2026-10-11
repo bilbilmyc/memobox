@@ -11,12 +11,18 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
 export type MemoboxConfig = {
-  /** 语义检索配置（`memobox model enable` / 手动维护） */
+  /**
+   * 语义检索配置（`memobox model enable` / 手动维护）。
+   * 两种互斥形态：端点模式（base）或内置模型模式（local，v2.5）。
+   */
   embedding?: {
-    base: string;
-    model: string;
-    /** 云端端点才需要；本地 Ollama 留空 */
+    /** OpenAI 兼容 /embeddings 端点（Ollama / 云端） */
+    base?: string;
+    model?: string;
+    /** 云端端点才需要；本地端点免鉴权 */
     key?: string;
+    /** 内置小模型（进程内推理，零外部依赖）——`model enable --lite` 写的 */
+    local?: boolean;
   };
 };
 

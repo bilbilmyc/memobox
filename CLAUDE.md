@@ -36,6 +36,7 @@ SQLite 单文件存储，零服务、零端口、零依赖。
 - v2.3 ✅ **中文化 + 帮助体系 + Codex 记忆迁移**（2026-10-11，Soren 要求）：①CLI 全部人类输出改中文（命令规格表 COMMANDS 渲染总帮助；`help <命令>` 与任意命令 `--help` 给单命令帮助；MCP 协议内文案保持英文）；②`memobox import-codex`——解析 `~/.codex/memories/`（MEMORY.md 任务组 → 每任务一条 event，keywords 进 entities、状态尾缀保留；memory_summary.md 的 User Profile → 一条 preference），id = sha1(组名|标题) 前缀 `codex-`，重复导入幂等；--dry-run 预览。**Codex 的总结是现成的（会话结束 agent 自己写），迁移只做零 LLM 结构化重组**。本机已实迁 84 条（Soren 的 30 个任务组全量）+ 用户画像。88 测试全绿
 - v2.3.1 ✅ **端点可选化 + 通用接法**（2026-10-11，Soren 问「mcp 工具还用接入 ai 端点吗？直接用 ai 工具自身不可以吗」）：①`EMBEDDING_API_KEY` 变可选——本地 Ollama（OpenAI 兼容、无鉴权）只设 `EMBEDDING_API_BASE` 即启用语义检索，无 key 时不送 authorization 头；②`memobox doctor` keyword 模式下自动探测本机 Ollama（`probeOllama`，500ms 超时，优先推荐 bge/m3/embed/gte 类模型），打印完整 env 提示——只提示不自动启用；runCli 第 4 参注入探测函数保测试确定性；③`memobox install` 无参数 = 打印任意 stdio MCP 客户端通用接法（command/args；env 只列键名防 KEY 泄漏）；④`.env.example` / README 双语改写：零配置优先 + 解释为什么不能借用 agent 自带模型（MCP 是被客户端拉起的子进程，协议无回调通道）。94 测试全绿
 - v2.4.0 ✅ **本地小模型自管理（Soren 要求「像 CherryStudio 那样自己启动小模型，做成可配置项」）**：①`~/.memobox/config.json` 配置文件（src/lib/config.ts，MEMOBOX_CONFIG_PATH 可覆盖）——`createEmbedder()` 改为 env 优先、其次配置文件，**被客户端拉起的 MCP 服务也能拿到配置，不用重装客户端**；②`memobox model <status|enable|disable>`——enable 全链路：检测 Ollama（PATH 上 --version，ollama/ollama.exe 双名）→ 没起服务就后台 spawn `ollama serve` 并轮询端口（≤20s）→ 缺模型就 POST /api/pull 流式拉取（NDJSON 解析 + 进度节流）→ 写配置 → `backfillEmbeddings()` 补算存量向量（新加的 MemoryStore 接口方法；单条失败跳过、不动 updated_at）；disable 只删配置段（env 还配着会提醒它优先）；③doctor 的 Ollama 提示改为指向 `memobox model enable`，服务没跑但装了也给提示；④runCli 第 4 参改为 CliTools 注入对象（probeOllama/ollamaVersion/ensureServer/listModels/pull），测试零网络。110 测试全绿
+- v2.5.0 ✅ **轻量化双管齐下（Soren：「有没有更轻量的方案，本身就是一个 mcp 现在越来越重了」→ 选定 1+2 一起做）**：①**BM25** 替换朴素命中计数（scoreMemories：k1=1.2 / b=0.75、候选集内 IDF、实体命中 ×1.5 加成、子串实体匹配保留）——零依赖，keyword 模式排序质量实质提升；②**内置小模型 `memobox model enable --lite`**——@huggingface/transformers@4.3.1（**动态 import**：keyword 模式进程完全不加载 transformers）+ Xenova/bge-small-zh-v1.5 q8（约 25MB、512 维、中英），缓存在 ~/.memobox/models，源 hf-mirror.com 优先、失败自动换 huggingface.co、HF_ENDPOINT 可覆盖；**Bun 1.4.2 实测 3-8ms/条**（先写探针脚本验证可行才接线）；③config.embedding 二态：base（端点）/ local（内置）；enable --lite 先预检（真加载模型 embed 一条自检，失败不写配置不留半启用状态）再写配置 + 补算；doctor 无 Ollama 时提示 --lite。**已在本机实启 lite：85 条全量补算，近义查询（「怎么装 jdk」→「Windows 开发环境与全量工具链升级」）命中，doctor=semantic**。120 测试全绿
 - v2.4+ 候选：npm 发布（待 Soren 注册 npm 账号）；memobox 自己的记忆压缩/摘要（需 LLM，或复用 Codex 式 agent 端总结）
 
 ## 约定
@@ -55,6 +56,8 @@ MEMOBOX_DB_PATH=x bun src/cli.ts stats   # 指定库文件
 
 ## 已知事项
 
+- **transformers.js 的重量账（v2.5 实测）**：运行时惰性（keyword 模式进程零加载、MCP 冷启不变），但 node_modules ≈ 500MB——onnxruntime-node 294MB（transformers.node.mjs **静态 import，甩不掉**，是 3-8ms 推理速度的来源）+ onnxruntime-web 143MB；模型本体只有 25MB。bun 默认拦截 onnxruntime-node/protobufjs 的 postinstall（`bun pm untrusted` 可见），实测推理不受影响，异常时可 `bun pm trust onnxruntime-node`
+- **node_modules 会有死重量**：v2.0 删依赖后 next/@next/lucide-react 残留了 360MB 无人清理——大改依赖后要 `rm -rf node_modules && bun install` 复核体积
 - bun:sqlite 多语句 exec 在 patch 版本间有漂移（1.4.3 建表即崩过）——本机/CI 固定 bun 1.4.2 基线
 - drizzle bun-sqlite 的 `.run()` 类型是 void（拿不到 changes）——「插没插进去」要 SELECT-then-insert（importMemories 的做法）
 - 测试确定性：同毫秒连续 save 分不出先后，排序断言用显式 createdAt 造数

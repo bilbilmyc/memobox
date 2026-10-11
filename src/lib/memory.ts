@@ -136,20 +136,60 @@ export function tokenize(query: string): string[] {
   return terms;
 }
 
-/** 朴素关键词打分 —— 回退检索模式（v0.2 起用；v2.1 起支持 CJK） */
+/**
+ * BM25 关键词打分（v2.5，替换 v0.2 的朴素命中计数）：
+ * - 词频饱和（k1）：同一个词出现 10 次不会线性加 10 倍分
+ * - 文档长度归一（b）：长文档的命中打折，短而准的排前面
+ * - 候选集内 IDF：稀有词权重大，常用词（「的」「使用」类 bigram）权重小
+ * - 实体命中加成：entities 是人工标注的强信号，额外 ×1.5
+ * 零依赖；中文经 tokenize() 的 bigram 天然适配。
+ */
+const BM25_K1 = 1.2;
+const BM25_B = 0.75;
+const ENTITY_BOOST = 1.5;
+
 export function scoreMemories(
   rows: Memory[],
   query: string,
   limit: number
 ): Memory[] {
-  const terms = tokenize(query);
+  const terms = [...new Set(tokenize(query))];
+  if (terms.length === 0 || rows.length === 0) return [];
+  const docTokens = rows.map((r) => tokenize(r.content));
+  const entityTokens = rows.map((r) =>
+    new Set((r.entities ?? []).flatMap((e) => tokenize(e)))
+  );
+  const entityRaw = rows.map((r) =>
+    (r.entities ?? []).map((e) => e.toLowerCase())
+  );
+  // 候选集内文档频率 → IDF（BM25 变体，恒正）
+  const N = rows.length;
+  const df = new Map<string, number>();
+  for (const tokens of docTokens) {
+    for (const t of new Set(tokens)) df.set(t, (df.get(t) ?? 0) + 1);
+  }
+  const idf = (t: string) =>
+    Math.log(1 + (N - (df.get(t) ?? 0) + 0.5) / ((df.get(t) ?? 0) + 0.5));
+  const avgdl = docTokens.reduce((s, d) => s + d.length, 0) / N || 1;
   return rows
-    .map((row) => {
-      const text = row.content.toLowerCase();
+    .map((row, i) => {
+      const dl = docTokens[i].length;
       let score = 0;
       for (const t of terms) {
-        if (text.includes(t)) score += 2;
-        if (row.entities?.some((e) => e.toLowerCase().includes(t))) score += 1;
+        let f = 0;
+        for (const x of docTokens[i]) if (x === t) f++;
+        if (f > 0) {
+          score +=
+            (idf(t) * (f * (BM25_K1 + 1))) /
+            (f + BM25_K1 * (1 - BM25_B + (BM25_B * dl) / avgdl));
+        }
+        // 实体命中：精确 token 或子串（查询 port 命中实体 ports）
+        if (
+          entityTokens[i].has(t) ||
+          entityRaw[i].some((e) => e.includes(t) || t.includes(e))
+        ) {
+          score += idf(t) * ENTITY_BOOST;
+        }
       }
       return { row, score };
     })

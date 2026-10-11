@@ -12,6 +12,7 @@ export interface EmbeddingProvider {
 }
 
 import { loadConfig } from "./config";
+import { createLocalEmbedder } from "./local-embedder";
 
 export function openAICompatibleEmbedder(
   opts: {
@@ -76,6 +77,8 @@ export function createEmbedder(): EmbeddingProvider | null {
       dimensions: Number(process.env.EMBEDDING_DIM ?? 1536),
     });
   }
+  // 内置小模型（model enable --lite）：构造零开销，模型在第一次 embed 才加载
+  if (cfg?.local) return createLocalEmbedder();
   return null;
 }
 

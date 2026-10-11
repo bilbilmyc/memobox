@@ -64,3 +64,31 @@ describe("scoreMemories CJK", () => {
     expect(scoreMemories(rows, "commas", 5)).toHaveLength(0);
   });
 });
+
+describe("scoreMemories BM25（v2.5）", () => {
+  test("IDF：命中稀有词的排在只命中常用词的前面", () => {
+    const rows = [
+      ...["a1", "a2", "a3", "a4", "a5"].map((i) => mem(i, `端口备忘 ${i}：常规内容`)),
+      mem("hit", "carlife 投屏很稳"),
+    ];
+    // 「端口」在 5 篇都出现（IDF 低），「carlife」只有 1 篇（IDF 高）
+    const hits = scoreMemories(rows, "端口 carlife", 5);
+    expect(hits[0].id).toBe("hit");
+  });
+
+  test("长度归一：同样命中一次，短文档排前面", () => {
+    const rows = [
+      mem("long", "端口 3100 dev bun drizzle zod next react vue webpack vite eslint 一大堆别的内容"),
+      mem("short", "端口 3100"),
+    ];
+    expect(scoreMemories(rows, "端口", 5)[0].id).toBe("short");
+  });
+
+  test("实体加成：内容同样命中时，带对应实体的排前面", () => {
+    const rows = [
+      mem("plain", "端口相关的内容若干"),
+      mem("tagged", "端口另外的内容", ["端口"]),
+    ];
+    expect(scoreMemories(rows, "端口", 5)[0].id).toBe("tagged");
+  });
+});
