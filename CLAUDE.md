@@ -32,7 +32,8 @@ SQLite 单文件存储，零服务、零端口、零依赖。
 - v1.7 ✅ stdio 直连本地模式（scripts/mcp-local.ts 复用 handleRpcBody + SQLiteStore，无 HTTP/端口/pg）——v2.0 的直接前身
 - v2.0 ✅ **CLI 转向**（2026-10-11 Soren 拍板）：整个产品 = `memobox` 命令。默认（无参数/`serve`）= stdio MCP 服务（吸收自 mcp-local.ts → src/mcp-server.ts）；人用子命令 `save/search/list/forget/stats/entities/path`；`export/import` 备份；`install claude|codex|pi` 自动写客户端配置（幂等）。存储只留 SQLite（默认 `~/.memobox/memobox.db`），删掉 Next/React/Better Auth/Postgres/Docker/pg schema 全家。**已知遗留**：旧 `data/memobox.db` 不自动迁移（用 `memobox import` 或直接拷贝）；npm 发布待 Soren 本人 `npm publish`
 - v2.1 ✅ **CJK 关键词检索 + doctor 自检**（2026-10-11）：①修掉 v1.x 起的已知失效——`tokenize()`（src/lib/memory.ts）CJK 连续段切 bigram、拉丁部分按 `\p{L}\p{N}` 切，scoreMemories 与图谱锚点（sqlite-store search 的 anchors）都换用它，中文整句「端口有什么偏好」关键词模式即可命中；②`memobox doctor`——库文件/记忆数/检索模式 + 三家客户端接线探测（detectCodex/Pi/Claude 与安装器同判据；claude 查 `~/.claude.json` 的 mcpServers.memobox）。71 测试全绿。本机已由本人授权接线 Codex（`memobox install codex`）
-- v2.2+ 候选：npm 发布（待 Soren 注册 npm 账号）；记忆压缩/摘要
+- v2.2 ✅ **终端查询**（2026-10-11，Soren 要求「类似 sql 查询、全终端操作」）：①`memobox query [text] --kind/--entity/--source/--since/--limit/--json`——结构化 AND 过滤（--since 支持 7d/12h/30m 与 ISO 日期），renderTable 终端对齐表格（超宽截断，完整走 --json/get）；②`memobox sql "SELECT ..."`——bun:sqlite readonly 直开库文件透传 SQL（白名单 SELECT/WITH/PRAGMA，写语句拒绝）；③`memobox get <id>` 单条完整 JSON。79 测试全绿
+- v2.3+ 候选：npm 发布（待 Soren 注册 npm 账号）；记忆压缩/摘要（Codex 原生记忆是 agent 端多层总结：raw → rollout_summaries → MEMORY.md 任务组 + memory_summary.md 用户画像，memobox 的对应物还没做）
 
 ## 约定
 

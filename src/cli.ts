@@ -22,6 +22,7 @@
  * EMBEDDING_API_* 启用语义检索（不配 = 关键词模式）。
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { Database } from "bun:sqlite";
 import { SQLiteStore } from "@/db/sqlite-store";
 import { buildBackup, parseBackup } from "@/lib/backup";
 import { defaultDbPath } from "@/lib/paths";
@@ -29,7 +30,7 @@ import type { Memory, MemoryStore } from "@/lib/memory-store";
 import { detectClaude, detectCodex, detectPi, installClient, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
-export const VERSION = "2.1.0";
+export const VERSION = "2.2.0";
 
 const USAGE = `memobox ${VERSION} — local long-term memory for AI agents
 
@@ -45,6 +46,10 @@ usage:
   memobox stats
   memobox path                         print database file location
   memobox doctor                       health check: db, retrieval, client wiring
+  memobox query [text] [--kind k] [--entity e] [--source s]
+                   [--since 7d|2026-01-01] [--limit 20] [--json]
+  memobox get <id>                     show one memory in full (JSON)
+  memobox sql "SELECT ..."             read-only SQL over the SQLite db [--json]
   memobox export <file.json>           export all memories (backup)
   memobox import <file.json>           import backup (idempotent)
   memobox install <claude|codex|pi>    wire up an MCP client
@@ -76,6 +81,36 @@ export function parseArgs(argv: string[]): {
 /** 一条记忆的展示行：`[id] content (entities: ...)`——与 MCP 输出同款 */
 export function renderMemory(m: Memory): string {
   return `[${m.id}] ${m.content}${m.entities?.length ? ` (entities: ${m.entities.join(", ")})` : ""}`;
+}
+
+/** 终端表格：列对齐，超宽单元格截断（完整内容走 --json 或 get） */
+export function renderTable(rows: Record<string, unknown>[]): string {
+  if (rows.length === 0) return "(no rows)";
+  const keys = Object.keys(rows[0]);
+  const cell = (v: unknown) => {
+    const s = v === null || v === undefined ? "NULL" : String(v);
+    return s.length > 48 ? s.slice(0, 47) + "…" : s;
+  };
+  const body = rows.map((r) => keys.map((k) => cell(r[k])));
+  const widths = keys.map((k, i) =>
+    Math.max(k.length, ...body.map((r) => r[i].length))
+  );
+  const line = (cs: string[]) =>
+    cs.map((c, i) => c.padEnd(widths[i])).join("  ").trimEnd();
+  return [line(keys), ...body.map(line)].join("\n");
+}
+
+/**
+ * --since 解析：`7d` / `12h` / `30m` 相对时长，或 ISO 日期/日期时间。
+ * 返回毫秒时间戳下限；格式不合法返回 NaN。
+ */
+export function parseSince(v: string): number {
+  const rel = /^(\d+)([dhm])$/.exec(v);
+  if (rel) {
+    const unit = rel[2] === "d" ? 864e5 : rel[2] === "h" ? 36e5 : 6e4;
+    return Date.now() - Number(rel[1]) * unit;
+  }
+  return Date.parse(v);
 }
 
 /** 注入点：输出流与 store 工厂都可替换（单测用 StubStore + 收集器） */
@@ -156,6 +191,89 @@ export async function runCli(
     case "path": {
       io.out(defaultDbPath());
       return 0;
+    }
+    case "query": {
+      // 结构化过滤（AND 组合）：文本子串 + kind/source 精确 + entity 包含 + 时间下限
+      const text = pos.slice(1).join(" ").toLowerCase() || undefined;
+      const sinceRaw = flags.get("since");
+      const since = sinceRaw !== undefined ? parseSince(sinceRaw) : undefined;
+      if (Number.isNaN(since)) {
+        io.err(`bad --since "${sinceRaw}" — use 7d / 12h / 30m or an ISO date`);
+        return 1;
+      }
+      const kind = flags.get("kind");
+      const source = flags.get("source");
+      const entity = flags.get("entity");
+      const limit = Number(flags.get("limit") ?? 20) || 20;
+      let rows = await makeStore().list(2000);
+      if (text) rows = rows.filter((m) => m.content.toLowerCase().includes(text));
+      if (kind) rows = rows.filter((m) => m.kind === kind);
+      if (source) rows = rows.filter((m) => m.source === source);
+      if (entity)
+        rows = rows.filter((m) =>
+          (m.entities ?? []).some((e) => e.toLowerCase() === entity.toLowerCase())
+        );
+      if (since !== undefined) rows = rows.filter((m) => m.createdAt >= since);
+      const cut = rows.slice(0, limit);
+      if (flags.has("json")) io.out(JSON.stringify(cut, null, 2));
+      else if (cut.length === 0) io.out("(no rows)");
+      else
+        io.out(
+          renderTable(
+            cut.map((m) => ({
+              id: m.id,
+              created: new Date(m.createdAt).toISOString().slice(0, 10),
+              kind: m.kind ?? "",
+              entities: (m.entities ?? []).join(","),
+              source: m.source ?? "",
+              content: m.content,
+            }))
+          )
+        );
+      return 0;
+    }
+    case "get": {
+      const id = pos[1];
+      if (!id) {
+        io.err("usage: memobox get <id>");
+        return 1;
+      }
+      const m = await makeStore().get(id);
+      if (!m) {
+        io.err(`not found: ${id}`);
+        return 1;
+      }
+      io.out(JSON.stringify(m, null, 2));
+      return 0;
+    }
+    case "sql": {
+      // 只读 SQL 透传：直接查 SQLite 本体（schema 见 --json 的列名或源码）
+      const stmt = pos.slice(1).join(" ");
+      if (!stmt) {
+        io.err('usage: memobox sql "SELECT ..." [--json]');
+        return 1;
+      }
+      if (!/^\s*(select|with|pragma)\b/i.test(stmt)) {
+        io.err("read-only: only SELECT / WITH / PRAGMA statements are allowed");
+        return 1;
+      }
+      let db: Database;
+      try {
+        db = new Database(defaultDbPath(), { readonly: true });
+      } catch {
+        io.err(`cannot open ${defaultDbPath()} — save a memory first`);
+        return 1;
+      }
+      try {
+        const rows = db.query(stmt).all() as Record<string, unknown>[];
+        io.out(flags.has("json") ? JSON.stringify(rows, null, 2) : renderTable(rows));
+        return 0;
+      } catch (e) {
+        io.err(e instanceof Error ? e.message : String(e));
+        return 1;
+      } finally {
+        db.close();
+      }
     }
     case "doctor": {
       // 自检：库文件 + 检索模式 + 三家客户端接线情况，一眼定位「agent 怎么不记事」

@@ -93,6 +93,15 @@ memobox save "prefer tabs in this repo" --entities style
 memobox search "tabs"
 memobox list / forget <id> / entities / stats / path
 memobox doctor                       # health check: db, retrieval, client wiring
+
+# structured filter (AND-combined), terminal table or --json
+memobox query "port" --kind preference --entity ports --since 7d
+memobox get <id>                     # one memory, full JSON
+
+# raw read-only SQL over the SQLite database
+memobox sql "SELECT source, count(*) AS n FROM memories GROUP BY source"
+memobox sql "SELECT content FROM memories WHERE kind = 'decision' LIMIT 5" --json
+
 memobox export backup.json     # full backup (memobox-backup v1 format)
 memobox import backup.json     # idempotent — same ids are skipped
 ```

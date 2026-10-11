@@ -89,6 +89,15 @@ memobox save "这个仓库用 tab 缩进" --entities style
 memobox search "缩进"
 memobox list / forget <id> / entities / stats / path
 memobox doctor                       # 自检：库、检索模式、客户端接线状态
+
+# 结构化过滤（条件 AND 组合），终端表格或 --json
+memobox query "端口" --kind preference --entity ports --since 7d
+memobox get <id>                     # 单条记忆完整 JSON
+
+# 直连 SQLite 的只读 SQL
+memobox sql "SELECT source, count(*) AS n FROM memories GROUP BY source"
+memobox sql "SELECT content FROM memories WHERE kind = 'decision' LIMIT 5" --json
+
 memobox export backup.json     # 全量备份（memobox-backup v1 格式）
 memobox import backup.json     # 幂等导入——相同 id 自动跳过
 ```

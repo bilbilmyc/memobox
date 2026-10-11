@@ -1,6 +1,6 @@
 {
   "name": "memobox",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Local long-term memory for AI coding agents — stdio MCP server + CLI for Claude Code / Codex / pi",
   "license": "MIT",
   "type": "module",
