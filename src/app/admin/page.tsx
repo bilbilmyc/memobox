@@ -50,9 +50,13 @@ export default async function AdminDashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-semibold">Stub</p>
+            <p className="text-3xl font-semibold">
+              {memoryStore.backend === "postgres" ? "Postgres" : "Stub"}
+            </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              内存桩，重启即清——Drizzle + pgvector 接线见决策日志 v0.2
+              {memoryStore.backend === "postgres"
+                ? "关键词检索（近 500 条窗口）· pgvector 语义检索见路线图 v0.3"
+                : "内存桩，重启即清——设置 DATABASE_URL 并 docker compose up -d 切到 Postgres"}
             </p>
           </CardContent>
         </Card>

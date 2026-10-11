@@ -15,9 +15,10 @@ import {
  * tables below are created now but only used from v1.1 (see CLAUDE.md
  * decision log).
  *
- * Embedding size 1536 fits text-embedding-3-small. Decide the final
- * embedding model BEFORE the first migration is applied anywhere —
- * e.g. bge-m3 (Chinese-friendly) needs 1024.
+ * Embedding size is fixed by the FIRST generated migration: 1536 (OpenAI
+ * text-embedding-3-small) by default, overridable via EMBEDDING_DIM before
+ * the first migration — e.g. 1024 for bge-m3. Changing it later means a
+ * destructive column migration.
  */
 export const memories = pgTable(
   "memories",
@@ -28,7 +29,9 @@ export const memories = pgTable(
     kind: text("kind").notNull().default("fact"), // fact | preference | event | decision
     source: text("source").notNull().default("mcp"), // e.g. "claude-code"
     entities: jsonb("entities").$type<string[]>().notNull().default([]),
-    embedding: vector("embedding", { dimensions: 1536 }),
+    embedding: vector("embedding", {
+      dimensions: Number(process.env.EMBEDDING_DIM ?? 1536),
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -75,3 +78,5 @@ export const queryLog = pgTable("query_log", {
     .notNull()
     .defaultNow(),
 });
+
+export type MemoryRow = typeof memories.$inferSelect;

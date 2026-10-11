@@ -24,8 +24,8 @@ docker compose）、图谱质量检索、治理后台（编辑/遗忘/来源追�
 ## 路线图
 
 - v0.1 ✅ 骨架：MCP POST-only stateless 端点（stub store）+ /admin 壳 + schema + compose
-- v0.2 DrizzleStore 接线：embedding 模型定案（**首次迁移前必须定**：1536=OpenAI vs 1024=bge-m3 中文更优）+ memory_save/search 落库 + query_log 记录
-- v0.3 评测集：检索质量基准（query_log → 标注 → 报表）
+- v0.2 ✅ Postgres 接线：DrizzleStore（save/search/list/stats）+ query_log 逐查记录 + 关键词窗口检索（近 500 条打分）+ 协议逻辑抽离 `src/lib/mcp.ts`（13 测试全绿）
+- v0.3 embedding provider（**维度首次迁移已锁定 1536，改维度=破坏性迁移**，旋钮 `EMBEDDING_DIM` 留给全新部署）+ pgvector 语义检索替换关键词窗口 + 评测集报表（query_log → 标注 → 检索质量基准）
 - v1.0 发布闭环：Dockerfile standalone、README 中英、MCP 注册表提交
 - v1.1 图谱检索（entity_nodes / memory_entity_edges 启用）
 
