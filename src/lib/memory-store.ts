@@ -13,6 +13,7 @@ export type { Memory, MemoryStore } from "./memory";
 
 class StubStore implements MemoryStore {
   readonly backend = "stub";
+  readonly retrieval = "keyword" as const;
   private rows = new Map<string, Memory>();
   private searches = 0;
 
@@ -44,6 +45,10 @@ class StubStore implements MemoryStore {
     return [...this.rows.values()]
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, limit);
+  }
+
+  async recentQueries(): Promise<[]> {
+    return [];
   }
 
   async stats(): Promise<{ total: number; searches: number }> {

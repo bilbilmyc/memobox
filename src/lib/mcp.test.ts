@@ -7,6 +7,7 @@ function fakeStore(): MemoryStore {
   const rows = new Map<string, Memory>();
   return {
     backend: "fake",
+    retrieval: "keyword" as const,
     async save(input) {
       const row: Memory = { id: `t${rows.size + 1}`, createdAt: 1, ...input };
       rows.set(row.id, row);
@@ -19,6 +20,9 @@ function fakeStore(): MemoryStore {
     },
     async list(limit: number) {
       return [...rows.values()].slice(0, limit);
+    },
+    async recentQueries() {
+      return [];
     },
     async stats() {
       return { total: rows.size, searches: 0 };

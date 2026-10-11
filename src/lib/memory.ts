@@ -12,8 +12,17 @@ export type Memory = {
   createdAt: number;
 };
 
+export type QueryLogEntry = {
+  id: string;
+  query: string;
+  recalled: number;
+  latencyMs: number | null;
+  createdAt: number;
+};
+
 export interface MemoryStore {
   readonly backend: string;
+  readonly retrieval: "semantic" | "keyword";
   save(input: {
     content: string;
     kind?: string;
@@ -22,10 +31,11 @@ export interface MemoryStore {
   }): Promise<Memory>;
   search(query: string, limit?: number): Promise<Memory[]>;
   list(limit: number): Promise<Memory[]>;
+  recentQueries(limit?: number): Promise<QueryLogEntry[]>;
   stats(): Promise<{ total: number; searches: number }>;
 }
 
-/** Naive keyword scoring shared by the stub and postgres backends (v0.2). */
+/** Naive keyword scoring — the fallback retrieval mode (v0.2). */
 export function scoreMemories(
   rows: Memory[],
   query: string,

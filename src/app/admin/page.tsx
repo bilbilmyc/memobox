@@ -15,9 +15,10 @@ import {
 import { memoryStore } from "@/lib/memory-store";
 
 export default async function AdminDashboard() {
-  const [{ total, searches }, recent] = await Promise.all([
+  const [{ total, searches }, recent, queries] = await Promise.all([
     memoryStore.stats(),
     memoryStore.list(20),
+    memoryStore.recentQueries(10),
   ]);
 
   return (
@@ -55,7 +56,9 @@ export default async function AdminDashboard() {
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {memoryStore.backend === "postgres"
-                ? "关键词检索（近 500 条窗口）· pgvector 语义检索见路线图 v0.3"
+                ? memoryStore.retrieval === "semantic"
+                  ? `pgvector 语义检索（${memoryStore.retrieval === "semantic" ? "cosine" : ""}）`
+                  : "关键词检索（近 500 条窗口）· 配置 EMBEDDING_API_* 升级语义检索"
                 : "内存桩，重启即清——设置 DATABASE_URL 并 docker compose up -d 切到 Postgres"}
             </p>
           </CardContent>
@@ -99,6 +102,44 @@ export default async function AdminDashboard() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(m.createdAt).toLocaleString("zh-CN")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>最近检索</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {queries.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              还没有检索记录（query_log 是评测集的原料，见决策日志）
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>查询</TableHead>
+                  <TableHead className="w-20">命中</TableHead>
+                  <TableHead className="w-24">延迟</TableHead>
+                  <TableHead className="w-44">时间</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {queries.map((q) => (
+                  <TableRow key={q.id}>
+                    <TableCell className="max-w-md truncate">{q.query}</TableCell>
+                    <TableCell>{q.recalled}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {q.latencyMs == null ? "—" : `${q.latencyMs}ms`}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(q.createdAt).toLocaleString("zh-CN")}
                     </TableCell>
                   </TableRow>
                 ))}

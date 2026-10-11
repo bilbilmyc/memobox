@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { MemoryStore } from "./memory-store";
 
 const PROTOCOL_VERSION = "2025-06-18";
-const SERVER_INFO = { name: "memobox", version: "0.1.0" };
+const SERVER_INFO = { name: "memobox", version: "0.3.0" };
 
 const saveArgs = z.object({
   content: z.string().min(1),
