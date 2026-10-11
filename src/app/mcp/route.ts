@@ -1,14 +1,13 @@
 /**
- * Memobox MCP endpoint — Streamable HTTP transport, stateless mode.
- * Thin adapter: origin check + JSON parsing live here, protocol logic in
- * src/lib/mcp.ts.
+ * memobox MCP 端点 —— Streamable HTTP 传输、无状态模式。
+ * 这层只做薄适配：来源校验 + 转发；协议逻辑在 src/lib/mcp.ts。
  */
 import { NextRequest } from "next/server";
 import { handleRpcBody } from "@/lib/mcp";
 import { memoryStore } from "@/lib/memory-store";
 
 export async function POST(req: NextRequest) {
-  // DNS-rebinding hygiene for a localhost service: reject foreign origins.
+  // 本地服务的 DNS-rebinding 防线：拒绝非本机来源的浏览器请求
   const origin = req.headers.get("origin");
   if (
     origin &&
@@ -26,7 +25,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  // No server-initiated SSE stream; POST-only JSON mode.
+  // 不提供服务端主动推送的 SSE 通道：POST-only 的纯 JSON 模式
   return new Response("method not allowed", {
     status: 405,
     headers: { Allow: "POST" },

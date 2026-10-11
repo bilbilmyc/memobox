@@ -6,8 +6,8 @@ import { memories, queryLog } from "./schema";
 import type { EmbeddingProvider } from "@/lib/embeddings";
 
 /**
- * Integration tests against the real Postgres from .env
- * (docker compose up -d). Skipped when DATABASE_URL is not set.
+ * 对 .env 里真实 Postgres 的集成测试（docker compose up -d）。
+ * 未配 DATABASE_URL 时整体跳过。
  */
 const dbAvailable = Boolean(process.env.DATABASE_URL);
 const maybe = dbAvailable ? test : test.skip;
@@ -15,7 +15,7 @@ const maybe = dbAvailable ? test : test.skip;
 const store = new DrizzleStore();
 const TAG = "test-integration";
 
-/** Deterministic bag-of-hashed-words 1536-dim vectors for semantic tests. */
+/** 确定性「词哈希袋」1536 维向量，语义测试专用 */
 function fakeEmbedder(): EmbeddingProvider {
   return {
     model: "fake-hash",
@@ -35,17 +35,23 @@ function fakeEmbedder(): EmbeddingProvider {
   };
 }
 
+// 文件级 afterAll：describe 内注册只会在该 describe 结束时触发，
+// 后跑的 describe 写入的行就漏掉了（v1.2 踩过：TAG 行残留）
+afterAll(async () => {
+  if (!dbAvailable) return;
+  await getDb().delete(memories).where(eq(memories.source, TAG));
+  for (const q of [
+    "test-integration-query",
+    "aurora borealis lights phenomena",
+    "vivid dune lantern",
+    "graph governance probe row alpha",
+    "persistence",
+  ]) {
+    await getDb().delete(queryLog).where(eq(queryLog.query, q));
+  }
+});
+
 describe("DrizzleStore", () => {
-  afterAll(async () => {
-    if (!dbAvailable) return;
-    await getDb().delete(memories).where(eq(memories.source, TAG));
-    await getDb()
-      .delete(queryLog)
-      .where(eq(queryLog.query, "test-integration-query"));
-    await getDb()
-      .delete(queryLog)
-      .where(eq(queryLog.query, "aurora borealis lights phenomena"));
-  });
 
   maybe("save persists and returns the row", async () => {
     const row = await store.save({
@@ -126,5 +132,75 @@ describe("DrizzleStore semantic (fake embedder + live pgvector)", () => {
     expect(recent[0].query).toBe("aurora borealis lights phenomena");
     expect(recent[0].recalled).toBeGreaterThanOrEqual(1);
     expect(typeof recent[0].latencyMs).toBe("number");
+  });
+});
+
+describe("DrizzleStore graph + governance (live Postgres)", () => {
+  maybe("save syncs entity edges; topEntities counts them", async () => {
+    const store = new DrizzleStore(null);
+    await store.save({
+      content: "graph governance probe row alpha",
+      entities: ["graph-gov-probe", "shared-anchor"],
+      source: TAG,
+    });
+    await store.save({
+      content: "graph governance probe row beta",
+      entities: ["graph-gov-probe"],
+      source: TAG,
+    });
+    const entities = await store.topEntities(50);
+    const probe = entities.find((e) => e.name === "graph-gov-probe");
+    expect(probe?.memories).toBe(2);
+  });
+
+  maybe("graph expansion appends entity-linked memories", async () => {
+    const store = new DrizzleStore(null);
+    // 关键词只能直接命中第一条；第二条与查询词零重叠，
+    // 仅靠共享实体被图谱扩展带出（措辞刻意避开其他用例的词）
+    const linked = await store.save({
+      content: "mellow cactus telegram",
+      entities: ["expansion-anchor-v2"],
+      source: TAG,
+    });
+    await store.save({
+      content: "vivid dune lantern",
+      entities: ["expansion-anchor-v2"],
+      source: TAG,
+    });
+    const hits = await store.search("vivid dune lantern", 5);
+    expect(hits.length).toBe(2);
+    expect(hits.some((h) => h.id === linked.id)).toBe(true);
+  });
+
+  maybe("update rewrites content; forget cascades and sweeps orphans", async () => {
+    const store = new DrizzleStore(null);
+    const saved = await store.save({
+      content: "governance edit target row",
+      entities: ["gov-edit-probe"],
+      source: TAG,
+    });
+
+    const updated = await store.update(saved.id, {
+      content: "governance edited content",
+      entities: ["gov-edit-probe-2"],
+    });
+    expect(updated?.content).toBe("governance edited content");
+    expect(updated?.entities).toEqual(["gov-edit-probe-2"]);
+
+    expect(await store.forget(saved.id)).toBe(true);
+    expect(await store.get(saved.id)).toBeNull();
+    // 孤儿实体应已被清扫
+    const entities = await store.topEntities(100);
+    expect(entities.find((e) => e.name === "gov-edit-probe-2")).toBeUndefined();
+    expect(await store.forget(saved.id)).toBe(false);
+  });
+
+  maybe("evalStats aggregates the query log", async () => {
+    const store = new DrizzleStore(null);
+    const stats = await store.evalStats();
+    expect(stats.totalQueries).toBeGreaterThanOrEqual(1);
+    expect(stats.zeroRecall).toBeLessThanOrEqual(stats.totalQueries);
+    expect(stats.p50LatencyMs).toBeGreaterThanOrEqual(0);
+    expect(stats.p95LatencyMs).toBeGreaterThanOrEqual(stats.p50LatencyMs);
   });
 });

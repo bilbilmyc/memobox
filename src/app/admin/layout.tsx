@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -23,9 +24,16 @@ export default async function AdminLayout({
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-6">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-6">
             <span className="font-mono font-semibold">memobox</span>
-            <span className="text-sm text-muted-foreground">管理后台</span>
+            <nav className="flex items-center gap-4 text-sm">
+              <Link href="/admin" className="text-muted-foreground hover:text-foreground">
+                总览
+              </Link>
+              <Link href="/admin/eval" className="text-muted-foreground hover:text-foreground">
+                评测
+              </Link>
+            </nav>
           </div>
           <form action={logout}>
             <Button type="submit" variant="ghost" size="sm">

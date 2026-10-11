@@ -1,13 +1,12 @@
 /**
- * Minimal MCP JSON-RPC 2.0 handler (Streamable HTTP, stateless, JSON
- * responses). Kept free of Next.js imports so it unit-tests cleanly;
- * src/app/mcp/route.ts is a thin adapter.
+ * 极简 MCP JSON-RPC 2.0 处理器（Streamable HTTP 传输、无状态、纯 JSON 响应）。
+ * 不引任何 Next.js 依赖，方便单测；src/app/mcp/route.ts 只是薄适配层。
  */
 import { z } from "zod";
 import type { MemoryStore } from "./memory-store";
 
 const PROTOCOL_VERSION = "2025-06-18";
-const SERVER_INFO = { name: "memobox", version: "1.1.0" };
+const SERVER_INFO = { name: "memobox", version: "1.2.0" };
 
 const saveArgs = z.object({
   content: z.string().min(1),
@@ -19,6 +18,10 @@ const saveArgs = z.object({
 const searchArgs = z.object({
   query: z.string().min(1),
   limit: z.number().int().min(1).max(50).default(5),
+});
+
+const entitiesArgs = z.object({
+  limit: z.number().int().min(1).max(100).default(20),
 });
 
 export const TOOLS = [
@@ -37,7 +40,8 @@ export const TOOLS = [
         entities: {
           type: "array",
           items: { type: "string" },
-          description: "Entity tags, e.g. project or people names",
+          description:
+            "Entity tags, e.g. project or people names — they power graph-linked recall",
         },
         source: {
           type: "string",
@@ -59,6 +63,17 @@ export const TOOLS = [
       required: ["query"],
     },
   },
+  {
+    name: "memory_entities",
+    description:
+      "List known entity tags with their memory counts — use this to see what the memory graph knows about.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", default: 20 },
+      },
+    },
+  },
 ] as const;
 
 export type RpcResult = { status: number; body?: unknown };
@@ -73,13 +88,14 @@ const err = (id: unknown, code: number, message: string): RpcResult => ({
   body: { jsonrpc: "2.0", id, error: { code, message } },
 });
 
+/** 工具级错误：按 MCP 规范包在 result.content 里，isError: true */
 const toolError = (id: unknown, message: string): RpcResult =>
   ok(id, {
     content: [{ type: "text", text: message }],
     isError: true,
   });
 
-/** Handle one raw JSON-RPC message body against the given store. */
+/** 处理一条原始 JSON-RPC 消息体（对给定的 store） */
 export async function handleRpcBody(
   raw: string,
   store: MemoryStore
@@ -100,7 +116,7 @@ export async function handleRpcBody(
     params?: { name?: string; arguments?: unknown } & Record<string, unknown>;
   };
 
-  // Notifications (no id) are acknowledged with an empty 202.
+  // 通知（无 id）：按规范回空 202
   if (id === undefined || id === null) {
     return { status: 202 };
   }
@@ -155,15 +171,39 @@ export async function handleRpcBody(
               {
                 type: "text",
                 text: hits.length
-                  ? hits.map((h) => `[${h.id}] ${h.content}`).join("\n")
+                  ? hits
+                      .map(
+                        (h) =>
+                          `[${h.id}] ${h.content}${
+                            h.entities?.length
+                              ? ` (entities: ${h.entities.join(", ")})`
+                              : ""
+                          }`
+                      )
+                      .join("\n")
                   : "no matching memories",
+              },
+            ],
+          });
+        }
+        if (name === "memory_entities") {
+          const parsed = entitiesArgs.safeParse(rawArgs);
+          if (!parsed.success) return toolError(id, parsed.error.message);
+          const entities = await store.topEntities(parsed.data.limit);
+          return ok(id, {
+            content: [
+              {
+                type: "text",
+                text: entities.length
+                  ? entities.map((e) => `${e.name} (${e.memories})`).join("\n")
+                  : "no entities yet",
               },
             ],
           });
         }
         return toolError(id, `unknown tool: ${String(name)}`);
       } catch (e) {
-        // Storage backend down etc. — surfaced as a tool error, not RPC error.
+        // 存储后端挂了等情况：按工具错误返回，而不是 RPC 错误
         return toolError(
           id,
           `storage unavailable: ${e instanceof Error ? e.message : String(e)}`

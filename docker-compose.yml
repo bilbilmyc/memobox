@@ -1,4 +1,5 @@
 services:
+  # Postgres + pgvector（服务端模式的存储层）
   db:
     image: pgvector/pgvector:pg17
     container_name: memobox-db
@@ -6,11 +7,12 @@ services:
       POSTGRES_USER: memobox
       POSTGRES_PASSWORD: memobox
       POSTGRES_DB: memobox
-    # 5433 on the host to avoid clashing with any local postgres
+    # 宿主机 5433，避开本机可能已有的 postgres
     ports:
       - "5433:5432"
     volumes:
       - memobox_pgdata:/var/lib/postgresql/data
+      # 首次建库时自动启用 vector 扩展
       - ./db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U memobox"]
@@ -18,15 +20,16 @@ services:
       timeout: 3s
       retries: 10
 
+  # 应用本体（Next standalone + Bun）；本地模式不需要它——直接 bun run start
   app:
     build: .
     container_name: memobox-app
     restart: unless-stopped
-    # 3100 on the host (same as `bun run dev`); override with APP_PORT.
+    # 宿主机 3100（与 bun run dev 同端口），APP_PORT 可改
     ports:
       - "${APP_PORT:-3100}:3000"
     environment:
-      # Inside the compose network the db hostname is `db`, not localhost.
+      # compose 网络内数据库主机名是 db，不是 localhost
       DATABASE_URL: postgres://memobox:memobox@db:5432/memobox
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-memobox-dev}
       EMBEDDING_API_BASE: ${EMBEDDING_API_BASE:-}
@@ -35,7 +38,7 @@ services:
       EMBEDDING_DIM: ${EMBEDDING_DIM:-}
     depends_on:
       db:
-        condition: service_healthy
+        condition: service_healthy # 等 db 健康再起，保证启动迁移能连上
     healthcheck:
       test:
         [

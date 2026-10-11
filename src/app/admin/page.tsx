@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -95,14 +96,20 @@ export default async function AdminDashboard() {
                   <TableHead className="w-24">类型</TableHead>
                   <TableHead className="w-32">来源</TableHead>
                   <TableHead className="w-44">时间</TableHead>
+                  <TableHead className="w-16">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recent.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell className="font-mono text-xs">{m.id}</TableCell>
-                    <TableCell className="max-w-md truncate">
-                      {m.content}
+                    <TableCell className="max-w-md">
+                      <span className="block truncate">{m.content}</span>
+                      {m.entities?.length ? (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {m.entities.join(" · ")}
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell>{m.kind ?? "fact"}</TableCell>
                     <TableCell className="text-muted-foreground">
@@ -110,6 +117,14 @@ export default async function AdminDashboard() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {new Date(m.createdAt).toLocaleString("zh-CN")}
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/admin/memories/${m.id}`}
+                        className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                      >
+                        编辑
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ))}

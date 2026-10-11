@@ -1,7 +1,7 @@
 /**
- * Embedding providers. Any OpenAI-compatible /embeddings endpoint works
- * (OpenAI, SiliconFlow bge-m3, Ollama's compat layer, ...). When no
- * provider is configured the store falls back to keyword retrieval.
+ * Embedding provider。任何 OpenAI 兼容的 /embeddings 端点都能用
+ * （OpenAI、SiliconFlow 的 bge-m3、Ollama 兼容层……）。
+ * 没配置时 store 回退为关键词检索。
  */
 
 export interface EmbeddingProvider {
@@ -16,7 +16,7 @@ export function openAICompatibleEmbedder(
     key: string;
     model: string;
     dimensions: number;
-    /** Injectable for tests. */
+    /** 测试注入用 */
     fetchFn?: typeof fetch;
   }
 ): EmbeddingProvider {
@@ -48,7 +48,7 @@ export function openAICompatibleEmbedder(
   };
 }
 
-/** Env-driven factory; null (no EMBEDDING_API_BASE/KEY) → keyword mode. */
+/** 环境变量驱动的工厂；没配 EMBEDDING_API_BASE/KEY → 返回 null（关键词模式） */
 export function createEmbedder(): EmbeddingProvider | null {
   const base = process.env.EMBEDDING_API_BASE;
   const key = process.env.EMBEDDING_API_KEY;

@@ -3,7 +3,7 @@ import { SQLiteStore } from "./sqlite-store";
 import type { EmbeddingProvider } from "@/lib/embeddings";
 import { cosineSim } from "@/lib/memory";
 
-/** Same deterministic bag-of-hashed-words vectors as the pg integration tests. */
+/** 与 pg 集成测试同款：确定性「词哈希袋」向量 */
 function fakeEmbedder(dim = 64): EmbeddingProvider {
   return {
     model: "fake-hash",
@@ -82,5 +82,60 @@ describe("SQLiteStore (in-memory)", () => {
     await store.save({ content: "unrelated content here", source: "test" });
     const hits = await store.search("zzz-no-match-token", 5);
     expect(hits).toEqual([]);
+  });
+
+  test("graph expansion appends entity-linked memories", async () => {
+    const store = new SQLiteStore(null, ":memory:");
+    // 关键词只能直接命中第一条；第二条通过共享实体 payments 被图谱扩展带出
+    await store.save({
+      content: "quarterly invoice flow settled",
+      entities: ["payments"],
+      source: "test",
+    });
+    const linked = await store.save({
+      content: "stripe webhook retries fixed",
+      entities: ["payments"],
+      source: "test",
+    });
+    const hits = await store.search("invoice", 5);
+    expect(hits.length).toBe(2);
+    expect(hits.some((h) => h.id === linked.id)).toBe(true);
+  });
+
+  test("update rewrites content/entities; forget cascades graph", async () => {
+    const store = new SQLiteStore(null, ":memory:");
+    const saved = await store.save({
+      content: "before edit",
+      entities: ["graph-cleanup-test"],
+      source: "test",
+    });
+
+    const updated = await store.update(saved.id, {
+      content: "after edit",
+      entities: ["renamed-entity"],
+    });
+    expect(updated?.content).toBe("after edit");
+    expect(updated?.entities).toEqual(["renamed-entity"]);
+    // 实体榜应只剩新实体
+    const entities = await store.topEntities(10);
+    expect(entities).toEqual([{ name: "renamed-entity", memories: 1 }]);
+
+    expect(await store.forget(saved.id)).toBe(true);
+    expect(await store.get(saved.id)).toBeNull();
+    // 遗忘后孤儿实体被清扫，实体榜清空
+    expect(await store.topEntities(10)).toEqual([]);
+    expect(await store.forget(saved.id)).toBe(false);
+  });
+
+  test("evalStats aggregates query log", async () => {
+    const store = new SQLiteStore(null, ":memory:");
+    await store.save({ content: "metrics anchor row", source: "test" });
+    await store.search("metrics anchor", 5);
+    await store.search("zzz-no-match-token", 5);
+    const stats = await store.evalStats();
+    expect(stats.totalQueries).toBe(2);
+    expect(stats.zeroRecall).toBe(1);
+    expect(stats.p50LatencyMs).toBeGreaterThanOrEqual(0);
+    expect(stats.p95LatencyMs).toBeGreaterThanOrEqual(stats.p50LatencyMs);
   });
 });

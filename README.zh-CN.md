@@ -120,4 +120,5 @@ bun run build             # 生产构建（standalone）
 - [x] v0.3 — 可插拔 embedding、pgvector 语义检索、检索日志后台
 - [x] v1.0 — Dockerfile（standalone、自动迁移）、中英双语文档
 - [x] v1.1 — SQLite 本地模式（`bun:sqlite`、JS 余弦、零依赖）
-- [ ] v1.2 — 图谱检索（`entity_nodes` / `memory_entity_edges`）、后台编辑与遗忘、检索评测报告
+- [x] v1.2 — 实体图谱检索、`memory_entities` 工具、后台编辑与遗忘、评测报表（p50/p95、零召回清单、CSV 导出）
+- [ ] 待定 — 标注式检索基准（recall@k）、stdio 桥、多管理员

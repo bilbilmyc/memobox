@@ -11,14 +11,12 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * memories — the core table. MVP retrieval is pgvector; the entity-graph
- * tables below are created now but only used from v1.1 (see CLAUDE.md
- * decision log).
+ * memories —— 核心表。检索主力是 pgvector；下面的实体图谱表
+ * 从建库就一起创建，v1.2 起启用（决策记录见 CLAUDE.md）。
  *
- * Embedding size is fixed by the FIRST generated migration: 1536 (OpenAI
- * text-embedding-3-small) by default, overridable via EMBEDDING_DIM before
- * the first migration — e.g. 1024 for bge-m3. Changing it later means a
- * destructive column migration.
+ * 向量维度由第一次生成的迁移锁死：默认 1536（OpenAI
+ * text-embedding-3-small），首次迁移前可用 EMBEDDING_DIM 覆盖——
+ * 例如 bge-m3 用 1024。之后再改就是破坏性列迁移。
  */
 export const memories = pgTable(
   "memories",
@@ -42,7 +40,7 @@ export const memories = pgTable(
   (t) => [index("memories_created_at_idx").on(t.createdAt)]
 );
 
-/** Reserved for v1.1: graph retrieval over extracted entities. */
+/** 实体节点表：图谱检索用（v1.2 启用，名字唯一） */
 export const entityNodes = pgTable("entity_nodes", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull().unique(),
@@ -52,7 +50,7 @@ export const entityNodes = pgTable("entity_nodes", {
     .defaultNow(),
 });
 
-/** Reserved for v1.1: memory ↔ entity edges with relation types. */
+/** 记忆 ↔ 实体边表：带关系类型和权重，双向级联删除 */
 export const memoryEntityEdges = pgTable("memory_entity_edges", {
   id: uuid("id").defaultRandom().primaryKey(),
   memoryId: uuid("memory_id")
@@ -66,8 +64,8 @@ export const memoryEntityEdges = pgTable("memory_entity_edges", {
 });
 
 /**
- * query_log — every search query and what was recalled. This is day-1
- * groundwork for the eval set (decision log: evals are the moat).
+ * query_log —— 记下每一次检索查询和它召回了什么。
+ * 这是评测集的 day-1 铺垫（决策日志：评测集是护城河）。
  */
 export const queryLog = pgTable("query_log", {
   id: uuid("id").defaultRandom().primaryKey(),

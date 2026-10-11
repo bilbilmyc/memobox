@@ -125,5 +125,7 @@ bun run build             # production build (standalone)
 - [x] v0.3 — pluggable embeddings, pgvector semantic search, query-log console
 - [x] v1.0 — Dockerfile (standalone, auto-migrations), bilingual docs
 - [x] v1.1 — SQLite local mode (`bun:sqlite`, JS cosine, zero dependencies)
-- [ ] v1.2 — graph retrieval (`entity_nodes` / `memory_entity_edges`), memory
-      editing & forgetting in the console, retrieval eval report
+- [x] v1.2 — entity-graph retrieval, `memory_entities` tool, memory
+      editing & forgetting in the console, eval report (p50/p95, zero-recall
+      list, CSV export)
+- [ ] next — labeled retrieval benchmark (recall@k), stdio bridge, multi-admin

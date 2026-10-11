@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { handleRpcBody } from "./mcp";
 import type { Memory, MemoryStore } from "./memory-store";
 
-/** Minimal in-memory fake for protocol-level tests. */
+/** 协议层测试用的最小内存 fake store */
 function fakeStore(): MemoryStore {
   const rows = new Map<string, Memory>();
   return {
@@ -20,6 +20,37 @@ function fakeStore(): MemoryStore {
     },
     async list(limit: number) {
       return [...rows.values()].slice(0, limit);
+    },
+    async get(id: string) {
+      return rows.get(id) ?? null;
+    },
+    async update(
+      id: string,
+      patch: { content?: string; kind?: string; entities?: string[] }
+    ) {
+      const row = rows.get(id);
+      if (!row) return null;
+      const next = { ...row, ...patch };
+      rows.set(id, next);
+      return next;
+    },
+    async forget(id: string) {
+      return rows.delete(id);
+    },
+    async topEntities(limit = 20) {
+      const counts = new Map<string, number>();
+      for (const r of rows.values()) {
+        for (const e of r.entities ?? []) {
+          counts.set(e, (counts.get(e) ?? 0) + 1);
+        }
+      }
+      return [...counts.entries()]
+        .map(([name, memories]) => ({ name, memories }))
+        .sort((a, b) => b.memories - a.memories)
+        .slice(0, limit);
+    },
+    async evalStats() {
+      return { totalQueries: 0, zeroRecall: 0, p50LatencyMs: 0, p95LatencyMs: 0 };
     },
     async recentQueries() {
       return [];
@@ -44,12 +75,13 @@ describe("handleRpcBody", () => {
     expect(body.result.protocolVersion).toBe("2025-03-26");
   });
 
-  test("tools/list exposes both tools", async () => {
+  test("tools/list exposes all three tools", async () => {
     const res = await handleRpcBody(rpc(2, "tools/list"), fakeStore());
     const body = res.body as { result: { tools: { name: string }[] } };
     expect(body.result.tools.map((t) => t.name)).toEqual([
       "memory_save",
       "memory_search",
+      "memory_entities",
     ]);
   });
 
@@ -120,5 +152,37 @@ describe("handleRpcBody", () => {
     );
     expect(res.status).toBe(202);
     expect(res.body).toBeUndefined();
+  });
+
+  test("memory_entities lists entity counts", async () => {
+    // 先种两条带实体的记忆，再查实体榜
+    const store = fakeStore();
+    await store.save({ content: "a", entities: ["memobox", "postgres"] });
+    await store.save({ content: "b", entities: ["memobox"] });
+    const res = await handleRpcBody(
+      rpc(9, "tools/call", { name: "memory_entities", arguments: {} }),
+      store
+    );
+    const body = res.body as { result: { content: { text: string }[] } };
+    const text = body.result.content[0].text;
+    expect(text).toContain("memobox (2)");
+    expect(text).toContain("postgres (1)");
+  });
+
+  test("search output includes entity tags", async () => {
+    const store = fakeStore();
+    const saved = await store.save({
+      content: "hello entity tags",
+      entities: ["memobox"],
+    });
+    const res = await handleRpcBody(
+      rpc(10, "tools/call", {
+        name: "memory_search",
+        arguments: { query: saved.content },
+      }),
+      store
+    );
+    const body = res.body as { result: { content: { text: string }[] } };
+    expect(body.result.content[0].text).toContain("(entities: memobox)");
   });
 });

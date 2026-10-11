@@ -4,7 +4,7 @@ import * as schema from "./schema";
 
 let _db: ReturnType<typeof drizzle> | undefined;
 
-/** Throws with a readable message when DATABASE_URL is missing. */
+/** 惰性建连接池；缺 DATABASE_URL 时抛一条人话错误 */
 export function getDb() {
   const url = process.env.DATABASE_URL;
   if (!url) {

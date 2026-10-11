@@ -1,8 +1,7 @@
 /**
- * Store selection: DATABASE_URL set → DrizzleStore (Postgres, server
- * mode); otherwise SQLiteStore (local mode, zero dependencies — the
- * database file defaults to ./data/memobox.db). StubStore stays exported
- * for tests and as an explicit MEMOBOX_BACKEND=stub escape hatch.
+ * 存储选择：配了 DATABASE_URL → DrizzleStore（Postgres 服务端模式）；
+ * 没配 → SQLiteStore（本地模式，零依赖，库文件默认 ./data/memobox.db）。
+ * StubStore 保留给测试和 MEMOBOX_BACKEND=stub 的演示逃生口。
  */
 import { DrizzleStore } from "@/db/store";
 import { SQLiteStore } from "@/db/sqlite-store";
@@ -14,6 +13,7 @@ import {
 
 export type { Memory, MemoryStore } from "./memory";
 
+/** 内存桩：不落盘，重启即清。仅测试 / 演示用。 */
 export class StubStore implements MemoryStore {
   readonly backend = "stub";
   readonly retrieval = "keyword" as const;
@@ -50,6 +50,48 @@ export class StubStore implements MemoryStore {
       .slice(0, limit);
   }
 
+  async get(id: string): Promise<Memory | null> {
+    return this.rows.get(id) ?? null;
+  }
+
+  async update(
+    id: string,
+    patch: { content?: string; kind?: string; entities?: string[] }
+  ): Promise<Memory | null> {
+    const row = this.rows.get(id);
+    if (!row) return null;
+    const next: Memory = {
+      ...row,
+      ...(patch.content !== undefined ? { content: patch.content } : {}),
+      ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
+      ...(patch.entities !== undefined ? { entities: patch.entities } : {}),
+    };
+    this.rows.set(id, next);
+    return next;
+  }
+
+  async forget(id: string): Promise<boolean> {
+    return this.rows.delete(id);
+  }
+
+  async topEntities(): Promise<[]> {
+    return [];
+  }
+
+  async evalStats(): Promise<{
+    totalQueries: number;
+    zeroRecall: number;
+    p50LatencyMs: number;
+    p95LatencyMs: number;
+  }> {
+    return {
+      totalQueries: this.searches,
+      zeroRecall: 0,
+      p50LatencyMs: 0,
+      p95LatencyMs: 0,
+    };
+  }
+
   async recentQueries(): Promise<[]> {
     return [];
   }
@@ -64,6 +106,8 @@ export function createStore(): MemoryStore {
   return process.env.DATABASE_URL ? new DrizzleStore() : new SQLiteStore();
 }
 
+// globalThis 单例：Next dev 的 HMR 每次重载模块都会重新执行这里，
+// 挂到全局上保证进程内只有一个连接池（代价：改 store 类形状后需重启 dev）
 const g = globalThis as unknown as { __memoboxStore?: MemoryStore };
 
 export const memoryStore: MemoryStore = (g.__memoboxStore ??=

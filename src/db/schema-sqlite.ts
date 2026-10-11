@@ -1,9 +1,8 @@
 import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
- * SQLite mirror of the pg schema (src/db/schema.ts) for local mode.
- * Vectors live as JSON text; cosine similarity is computed in JS —
- * fine at personal scale (thousands of rows).
+ * 本地模式用的 SQLite 版 schema（与 src/db/schema.ts 的 pg 版对应）。
+ * 向量存 JSON 文本列，余弦相似度在 JS 里算——个人规模（几千条）够用。
  */
 export const memories = sqliteTable(
   "memories",
@@ -26,6 +25,21 @@ export const queryLog = sqliteTable("query_log", {
   recalledIds: text("recalled_ids").notNull().default("[]"), // JSON string[]
   latencyMs: integer("latency_ms"),
   createdAt: integer("created_at").notNull(),
+});
+
+/** 图谱表：与 pg 版 schema 对应（v1.2 启用） */
+export const entityNodes = sqliteTable("entity_nodes", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  createdAt: integer("created_at").notNull(),
+});
+
+export const memoryEntityEdges = sqliteTable("memory_entity_edges", {
+  id: text("id").primaryKey(),
+  memoryId: text("memory_id").notNull(),
+  entityId: text("entity_id").notNull(),
+  relation: text("relation").notNull().default("tag"),
+  weight: integer("weight").notNull().default(1),
 });
 
 export type SqliteMemoryRow = typeof memories.$inferSelect;

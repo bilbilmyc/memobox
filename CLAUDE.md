@@ -30,7 +30,13 @@ SQLite / 服务端一条 docker compose）、图谱质量检索、治理后台�
 - v0.4 评测集报表（query_log → 标注 → 检索质量基准）
 - v1.0 ✅ 发布闭环：Dockerfile 多阶段（bun standalone，启动自动迁移 `scripts/migrate.ts`）+ compose `app` 服务（depends_on db healthy、restart、healthcheck）+ README.md / README.zh-CN.md 双语。剩余：MCP 注册表提交（需 Soren 本人操作）、LICENSE 待定名
 - v1.1 ✅ SQLite 本地模式（2026-10-11 Soren 提议）：`bun:sqlite` 零依赖 + JS 余弦（本地规模全表扫即可）+ 双模式选择（`DATABASE_URL` 有=Postgres 服务端模式，无=SQLite 本地模式，默认 `data/memobox.db`，`MEMOBOX_DB_PATH` 可改，`MEMOBOX_BACKEND=stub` 兜底）+ 内联幂等 DDL（无 drizzle-kit sqlite 迁移负担）（25 测试全绿，sqlite e2e 过）
-- v1.2 图谱检索（entity_nodes / memory_entity_edges 启用）、后台编辑与遗忘、检索评测报表
+- v1.2 ✅ 图谱检索 + 治理 + 评测：实体图谱扩展（save 同步 entity_nodes/edges，检索按「共享实体数」补满名额，直接落空时实体即检索入口）、新 MCP 工具 `memory_entities`、search 输出带实体标签、后台 `/admin/memories/[id]` 编辑/遗忘（改内容重算向量、改实体同步边、遗忘级联+清孤儿）、`/admin/eval` 评测报表（总量/零召回/p50/p95 + 实体 Top + 零召回清单 + CSV 导出）（34 测试全绿，全页面 e2e 过）
+- v1.3+ 候选：检索质量基准（标注后 recall@k）、stdio 桥、多管理员
+
+## 约定
+
+- **代码与配置的注释一律用中文**（2026-10-11 Soren 要求）；对外文案（MCP 工具 description 等 agent 可见面）保持英文
+- 提交信息英文、里程碑制，尾行 `Co-Authored-By: Claude Code <noreply@anthropic.com>`
 
 ## 常用命令
 
