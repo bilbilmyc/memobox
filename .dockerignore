@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+.claude
+.agents
+*.log
+.DS_Store
+README.md
+README.zh-CN.md
+CLAUDE.md
+AGENTS.md

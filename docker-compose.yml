@@ -18,5 +18,36 @@ services:
       timeout: 3s
       retries: 10
 
+  app:
+    build: .
+    container_name: memobox-app
+    restart: unless-stopped
+    # 3100 on the host (same as `bun run dev`); override with APP_PORT.
+    ports:
+      - "${APP_PORT:-3100}:3000"
+    environment:
+      # Inside the compose network the db hostname is `db`, not localhost.
+      DATABASE_URL: postgres://memobox:memobox@db:5432/memobox
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-memobox-dev}
+      EMBEDDING_API_BASE: ${EMBEDDING_API_BASE:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "await fetch('http://127.0.0.1:3000/').then(r=>{if(!r.ok)throw 0})",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+
 volumes:
   memobox_pgdata:
