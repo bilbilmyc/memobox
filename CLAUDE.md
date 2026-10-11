@@ -76,3 +76,5 @@ MCP 接入：`claude mcp add --transport http memobox http://localhost:3100/mcp`
 - pg 的 memories 主键是 uuid 列：任何「外部 id 直插 pg」的路径都要 UUID 校验+兜底换新（importMemories 的做法），否则 psql 直接报 invalid input syntax for type uuid
 - server action 上传文件默认 body 上限 1MB——备份导入在 next.config.ts 里 `experimental.serverActions.bodySizeLimit: "64mb"`（页面侧另有 64MB/5 万条校验）。Next 16 此键仍属 experimental，构建会打 "Experiments" 提示，属预期
 - 测试确定性两条：① 同毫秒连续 save 分不出先后，排序断言用显式 createdAt（importMemories 造数）；② pg 集成测试按 source=TAG 过滤会吃到其他 describe 的行，认 content 前缀更稳
+- **Windows Git Bash 里 curl -d 带中文 = GBK 灾难**：shell 把请求体按系统 ANSI 码页（GBK）转码后才交给 curl，入库即乱码（v1.6 实际发生，用户看到满屏乱码）。往 /mcp 灌中文数据必须 python 写 UTF-8 文件 + `curl --data-binary @file`；验证手段：pg 里 `octet_length(content) ≈ 3 × char_length`（纯中文）
+- 后台不是只读报表：总览带「检索试验」（走真实 search() 管线，含图谱扩展与 query_log）和「手动写入」（source=console）——人也能直接用记忆库，不必等 agent 接入（2026-10-11 用户反馈「web 上没什么可操作的」）
