@@ -17,13 +17,13 @@ import {
   type QueryLogEntry,
 } from "@/lib/memory";
 import * as schema from "./schema-sqlite";
+import { defaultDbPath } from "@/lib/paths";
 
 type SaveInput = Parameters<MemoryStore["save"]>[0];
 
 /**
- * 本地模式的 SQLite 存储（零依赖：bun:sqlite 是 Bun 内置的）。
- * DATABASE_URL 未配置时启用；库文件默认 ./data/memobox.db
- * （MEMOBOX_DB_PATH 可改，":memory:" 供测试用）。
+ * SQLite 存储（v2.0 起是唯一后端；零依赖：bun:sqlite 是 Bun 内置的）。
+ * 库文件默认 ~/.memobox/memobox.db（MEMOBOX_DB_PATH 可改，":memory:" 供测试）。
  * 语义检索在 JS 里对 JSON 向量算余弦——个人规模（几千条）足够快；
  * 关键词打分是回退路径。v1.2：实体图谱扩展 + 编辑/遗忘 + 评测聚合。
  */
@@ -35,7 +35,7 @@ export class SQLiteStore implements MemoryStore {
 
   constructor(
     private readonly embedder: EmbeddingProvider | null = createEmbedder(),
-    dbPath: string = process.env.MEMOBOX_DB_PATH ?? "data/memobox.db"
+    dbPath: string = defaultDbPath()
   ) {
     this.retrieval = embedder ? "semantic" : "keyword";
     // 建好库文件所在目录（":memory:" 除外）
@@ -87,8 +87,6 @@ export class SQLiteStore implements MemoryStore {
       );
       CREATE UNIQUE INDEX IF NOT EXISTS eval_labels_pair_idx ON eval_labels(query_log_id, memory_id);
     `);
-    // Better Auth 的四张认证表也放同一个库文件里（v1.5 多管理员）
-    client.exec(schema.AUTH_TABLES_SQL);
     this.db = drizzle(client, { schema });
   }
 

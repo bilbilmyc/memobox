@@ -1,12 +1,12 @@
 /**
- * 极简 MCP JSON-RPC 2.0 处理器（Streamable HTTP 传输、无状态、纯 JSON 响应）。
- * 不引任何 Next.js 依赖，方便单测；src/app/mcp/route.ts 只是薄适配层。
+ * 极简 MCP JSON-RPC 2.0 处理器（无状态、纯 JSON 响应）。
+ * 不引任何框架依赖，方便单测；stdio 服务（src/mcp-server.ts）是薄适配层。
  */
 import { z } from "zod";
 import type { MemoryStore } from "./memory-store";
 
 const PROTOCOL_VERSION = "2025-06-18";
-const SERVER_INFO = { name: "memobox", version: "1.7.0" };
+const SERVER_INFO = { name: "memobox", version: "2.0.0" };
 
 const saveArgs = z.object({
   content: z.string().min(1),
@@ -94,19 +94,6 @@ const toolError = (id: unknown, message: string): RpcResult =>
     content: [{ type: "text", text: message }],
     isError: true,
   });
-
-/**
- * 可选的 MCP 访问令牌校验（v1.5）：
- * 服务端配了 MCP_TOKEN 就要求 Authorization: Bearer <token>——
- * 公网部署护住 /mcp；本地/内网不配则保持开放（零配置体验）。
- */
-export function tokenOk(
-  authorization: string | null,
-  expected: string | undefined
-): boolean {
-  if (!expected) return true; // 未配置令牌 = 不设防
-  return authorization === `Bearer ${expected}`;
-}
 
 /** 处理一条原始 JSON-RPC 消息体（对给定的 store） */
 export async function handleRpcBody(

@@ -1,10 +1,9 @@
 /**
- * 存储选择：配了 DATABASE_URL → DrizzleStore（Postgres 服务端模式）；
- * 没配 → SQLiteStore（本地模式，零依赖，库文件默认 ./data/memobox.db）。
- * StubStore 保留给测试和 MEMOBOX_BACKEND=stub 的演示逃生口。
+ * 存储入口（v2.0）：只留 SQLite（本地文件，零依赖）与 StubStore。
+ * StubStore 给测试和 MEMOBOX_BACKEND=stub 的演示逃生口用。
  */
-import { DrizzleStore } from "@/db/store";
 import { SQLiteStore } from "@/db/sqlite-store";
+import { defaultDbPath } from "@/lib/paths";
 import {
   scoreMemories,
   type Memory,
@@ -145,26 +144,8 @@ export class StubStore implements MemoryStore {
   }
 }
 
+/** 工厂：stub 逃生口优先，否则 SQLite（库文件见 defaultDbPath） */
 export function createStore(): MemoryStore {
   if (process.env.MEMOBOX_BACKEND === "stub") return new StubStore();
-  return process.env.DATABASE_URL ? new DrizzleStore() : new SQLiteStore();
+  return new SQLiteStore(undefined, defaultDbPath());
 }
-
-// globalThis 单例：Next dev 的 HMR 每次重载模块都会重新执行这里，
-// 挂到全局上保证进程内只有一个连接池（代价：改 store 类形状后需重启 dev）
-const g = globalThis as unknown as { __memoboxStore?: MemoryStore };
-
-/**
- * 惰性单例：`next build` 收集页面数据时会求值所有路由模块——如果在模块
- * 顶层就 createStore()，构建容器（无 .env）会走 SQLite 分支、在构建期真的
- * 建库跑 DDL（v1.5 在 Docker 里就栽在这）。Proxy 把构造推迟到第一次真正
- * 调用方法时——那一定是请求处理，环境变量已就位。
- */
-export const memoryStore: MemoryStore = new Proxy({} as MemoryStore, {
-  get(_target, prop) {
-    if (!g.__memoboxStore) g.__memoboxStore = createStore();
-    const value = Reflect.get(g.__memoboxStore as object, prop);
-    // 方法绑回实例，避免解构/单独调用时丢 this
-    return typeof value === "function" ? (value as Function).bind(g.__memoboxStore) : value;
-  },
-});
