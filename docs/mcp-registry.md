@@ -6,7 +6,7 @@
 
 ## 前置条件（只有你能做）
 
-1. **仓库公开**：把 memobox 推到你的 GitHub，然后把仓库里所有 `your-name`
+1. **仓库公开**：把 memobox 推到你的 GitHub，然后把仓库里所有 `bilbilmyc`
    占位符替换成你的 GitHub 用户名（`server.json`、`README.md`、`README.zh-CN.md`）。
 2. **GitHub 账号**：发布用 GitHub 设备码授权，registry 的命名空间要求
    `io.github.<你的用户名>/memobox`——`server.json` 里的 `name` 必须与之一致。

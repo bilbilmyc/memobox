@@ -31,7 +31,7 @@ what your agents remember.
 ### Local mode — no Docker, no Postgres (needs [Bun](https://bun.sh) ≥ 1.4)
 
 ```bash
-git clone https://github.com/your-name/memobox && cd memobox
+git clone https://github.com/bilbilmyc/memobox && cd memobox
 bun install
 bun run build && bun run start
 ```

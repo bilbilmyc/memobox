@@ -34,7 +34,7 @@ SQLite / 服务端一条 docker compose）、图谱质量检索、治理后台�
 - v1.3 ✅ 标注式检索基准：`eval_labels` 表（查询×记忆×相关性）、后台 `/admin/eval/[id]` 标注视图（核对召回 + 补标漏检，走 `scoreMemories` 而非 `search()` 以免污染 query_log）、评测页 recall@k / precision 均值（recall 分母含漏检）、待标注队列、CSV `relevant_ids` 列（38 测试全绿，e2e 含 server action 真实标注往返）。踩坑：drizzle 在 select 列表把 `${col}` 渲染成裸列名，被相关子查询的内表同名列遮蔽（`eval_labels.id`），须显式写 `query_log.id`
 - v1.4 ✅ stdio 桥：`scripts/stdio-bridge.ts` 零依赖单文件适配器（stdin 逐行 JSON-RPC → POST 转发 /mcp → stdout 回写；批量拆分重组、通知沉默、网络失败合成 -32603、坏行 -32700）；刻意自包含方便单文件分发，`import.meta.main` 守卫让单测可直接 import；`MEMOBOX_URL` 指向服务（45 测试全绿，e2e 真管道往返 + 断连路径过）
 - v1.5 ✅ 多管理员 + MCP 令牌：引入开源 **Better Auth**（「先引入开源的别人的，再考虑自研」——2026-10-11 Soren 拍板），邮箱+密码、账号与记忆同库（pg 迁移 0002 / sqlite AUTH_TABLES_SQL）；ADMIN_PASSWORD 首启播种初始管理员（admin@memobox.local，老部署口令无缝迁移）；`MEMOBOX_DISABLE_SIGNUP=1` 关自助注册；`MCP_TOKEN` 可选 Bearer 令牌护 /mcp（桥用同名 MEMOBOX_TOKEN）；registry 物料 `server.json` + `docs/mcp-registry.md`（51 测试全绿，e2e：播种→登录→新用户注册→CSV 401→令牌 401/200→桥降级）
-- 发布就绪 ✅（v1.5 后的加固，协议版本不动）：容器链路全量复验（迁移自动应用→播种→登录→注册→CSV 鉴权→MCP 令牌→桥降级，全绿）+ **认证旁路封堵**（详见已知事项的 PPR 泄漏条目）+ store 惰性单例（Proxy，next build 收集页面数据不再真建库）+ Dockerfile 钉 `oven/bun:1.4.2` + LICENSE(MIT，版权行占位 your-name) + `.github/workflows/ci.yml`（bun test/build + main 分支推 GHCR）。52 测试全绿
+- 发布就绪 ✅（v1.5 后的加固，协议版本不动）：容器链路全量复验（迁移自动应用→播种→登录→注册→CSV 鉴权→MCP 令牌→桥降级，全绿）+ **认证旁路封堵**（详见已知事项的 PPR 泄漏条目）+ store 惰性单例（Proxy，next build 收集页面数据不再真建库）+ Dockerfile 钉 `oven/bun:1.4.2` + LICENSE(MIT，版权行占位 bilbilmyc) + `.github/workflows/ci.yml`（bun test/build + main 分支推 GHCR）。52 测试全绿
 - v1.6+ 候选：听用户反馈（可能方向：记忆压缩/摘要、更多检索策略、备份导出）
 
 ## 约定

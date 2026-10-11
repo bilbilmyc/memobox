@@ -29,7 +29,7 @@ Agent 会忘事。memobox 给任何支持 MCP（Model Context Protocol）的客�
 ### 本地模式 —— 不用 Docker、不用 Postgres（需要 [Bun](https://bun.sh) ≥ 1.4）
 
 ```bash
-git clone https://github.com/your-name/memobox && cd memobox
+git clone https://github.com/bilbilmyc/memobox && cd memobox
 bun install
 bun run build && bun run start
 ```
