@@ -64,6 +64,21 @@ Then just ask: *"Remember that I prefer tabs over spaces"* and later
 *"What do you know about my formatting preferences?"* — the agent persists
 and recalls via `memory_save` / `memory_search`.
 
+### Connect a stdio-only client
+
+Some clients only speak the stdio transport. `scripts/stdio-bridge.ts` is a
+zero-dependency single-file adapter: it forwards each stdin line to the HTTP
+endpoint, so it always matches the server's toolset. On the client machine
+(all it needs is Bun):
+
+```bash
+# copy the one file, point it at your server
+MEMOBOX_URL=http://your-server:3100 bun stdio-bridge.ts
+
+# Claude Code via stdio:
+claude mcp add memobox --env MEMOBOX_URL=http://your-server:3100 -- bun /path/to/stdio-bridge.ts
+```
+
 ## Configuration
 
 Everything is env-driven (`.env` for compose, see `.env.example`):
@@ -131,4 +146,6 @@ bun run build             # production build (standalone)
 - [x] v1.3 — labeled retrieval benchmark: label query results as relevant or
       not (including missed hits) in the console, recall@k & precision on the
       eval page, `relevant_ids` in the CSV export
-- [ ] next — stdio bridge, multi-admin
+- [x] v1.4 — stdio bridge: zero-dependency single-file adapter for stdio-only
+      clients (`scripts/stdio-bridge.ts`)
+- [ ] next — multi-admin

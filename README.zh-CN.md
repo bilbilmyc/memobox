@@ -60,6 +60,20 @@ claude mcp add --transport http memobox http://localhost:3100/mcp
 然后直接说：*"记住我用 tab 不用空格"*，过会儿再问 *"你知道我的缩进偏好吗？"*
 —— agent 会通过 `memory_save` / `memory_search` 持久化并召回记忆。
 
+### 接入只支持 stdio 的客户端
+
+有些客户端只会说 stdio 传输。`scripts/stdio-bridge.ts` 是零依赖的单文件适配器：
+把 stdin 的每一行转发给 HTTP 端点，因此永远和服务端的工具集保持一致。客户端
+机器上只需要装 Bun：
+
+```bash
+# 拷走这一个文件，指向你的服务
+MEMOBOX_URL=http://your-server:3100 bun stdio-bridge.ts
+
+# Claude Code 走 stdio：
+claude mcp add memobox --env MEMOBOX_URL=http://your-server:3100 -- bun /path/to/stdio-bridge.ts
+```
+
 ## 配置
 
 全部走环境变量（compose 读 `.env`，模板见 `.env.example`）：
@@ -122,4 +136,5 @@ bun run build             # 生产构建（standalone）
 - [x] v1.1 — SQLite 本地模式（`bun:sqlite`、JS 余弦、零依赖）
 - [x] v1.2 — 实体图谱检索、`memory_entities` 工具、后台编辑与遗忘、评测报表（p50/p95、零召回清单、CSV 导出）
 - [x] v1.3 — 标注式检索基准：后台对查询结果标注相关/无关（含补标漏检），评测页出 recall@k 与 precision，CSV 导出带 `relevant_ids`
-- [ ] 待定 — stdio 桥、多管理员
+- [x] v1.4 — stdio 桥：给只支持 stdio 传输的客户端的零依赖单文件适配器（`scripts/stdio-bridge.ts`）
+- [ ] 待定 — 多管理员
