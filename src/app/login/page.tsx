@@ -37,8 +37,9 @@ async function login(formData: FormData) {
 
 async function signup(formData: FormData) {
   "use server";
-  if (!signupEnabled()) redirect("/login");
-  const { auth } = getAuth();
+  const { auth, countUsers } = getAuth();
+  // 注册默认关：仅显式开启（团队模式）或引导态（库里还没有任何用户）放行
+  if (!signupEnabled() && (await countUsers()) > 0) redirect("/login");
   let ok = false;
   try {
     // signUpEmail 成功即已建立会话
@@ -70,10 +71,12 @@ export default async function LoginPage({
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>memobox 管理后台</CardTitle>
+          <CardTitle>管理员登录</CardTitle>
           <CardDescription>
             {total > 0
-              ? `多管理员模式 · 当前 ${total} 个账号`
+              ? total === 1
+                ? "单管理员模式 · 管理后台与记忆数据需要会话"
+                : `当前 ${total} 个管理员账号`
               : "还没有任何账号——注册第一个，或配 ADMIN_PASSWORD 重启自动播种"}
           </CardDescription>
         </CardHeader>
@@ -110,13 +113,16 @@ export default async function LoginPage({
         </form>
       </Card>
 
-      {signupEnabled() && (
+      {(signupEnabled() || total === 0) && (
         <Card className="w-full max-w-sm">
           <CardHeader>
-            <CardTitle className="text-base">注册新管理员</CardTitle>
+            <CardTitle className="text-base">
+              {total === 0 ? "创建第一个管理员" : "注册新管理员"}
+            </CardTitle>
             <CardDescription>
-              自托管小团队共用一个记忆库；公网部署建议
-              MEMOBOX_DISABLE_SIGNUP=1
+              {total === 0
+                ? "创建后注册自动关闭（单管理员为默认形态）"
+                : "团队模式已开启（MEMOBOX_ENABLE_SIGNUP=1）：小团队共用一个记忆库"}
             </CardDescription>
           </CardHeader>
           <form action={signup}>

@@ -92,7 +92,7 @@ id 已存在的条目跳过、绝不覆盖。从 SQLite 本地模式导出、再
 | `ADMIN_PASSWORD` | `memobox-dev` | 首次启动播种初始管理员（admin@memobox.local）；兜底充当会话密钥 |
 | `ADMIN_EMAIL` | `admin@memobox.local` | 播种管理员的邮箱 |
 | `BETTER_AUTH_SECRET` | — | 会话签名密钥——**公网部署务必设置**（`openssl rand -base64 32`） |
-| `MEMOBOX_DISABLE_SIGNUP` | — | `1` = 关闭自助注册管理员（公网部署建议开启） |
+| `MEMOBOX_ENABLE_SIGNUP` | — | `1` = 开放自助注册管理员（默认关闭——单管理员是自托管常态） |
 | `MCP_TOKEN` | — | 配了则 `/mcp` 要求 `Authorization: Bearer <同值>`——公网部署的防线 |
 | `DATABASE_URL` | — | 配了 = 服务端模式（Postgres）；不配 = 本地模式（SQLite） |
 | `MEMOBOX_DB_PATH` | `data/memobox.db` | SQLite 文件路径（本地模式） |
@@ -103,9 +103,9 @@ id 已存在的条目跳过、绝不覆盖。从 SQLite 本地模式导出、再
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | 模型名 |
 | `EMBEDDING_DIM` | `1536` | 向量维度——**由首次迁移锁定**（服务端模式），只有全新库才能改 |
 
-后台是**多管理员**的（开源 [Better Auth](https://better-auth.com)，邮箱 + 密码，
-账号和记忆同库）：初始管理员由 `ADMIN_PASSWORD` 首次启动播种，队友可自助注册，
-除非设了 `MEMOBOX_DISABLE_SIGNUP=1`。
+后台用邮箱 + 密码认证（开源 [Better Auth](https://better-auth.com)，账号和
+记忆同库）：初始管理员由 `ADMIN_PASSWORD` 首次启动播种。自助注册**默认关闭**
+——单管理员是自托管的常态；小团队共用记忆库才设 `MEMOBOX_ENABLE_SIGNUP=1`。
 
 ### Embedding 服务商
 
@@ -154,6 +154,6 @@ bun run build             # 生产构建（standalone）
 - [x] v1.2 — 实体图谱检索、`memory_entities` 工具、后台编辑与遗忘、评测报表（p50/p95、零召回清单、CSV 导出）
 - [x] v1.3 — 标注式检索基准：后台对查询结果标注相关/无关（含补标漏检），评测页出 recall@k 与 precision，CSV 导出带 `relevant_ids`
 - [x] v1.4 — stdio 桥：给只支持 stdio 传输的客户端的零依赖单文件适配器（`scripts/stdio-bridge.ts`）
-- [x] v1.5 — 多管理员后台（Better Auth，ADMIN_PASSWORD 播种首个管理员、可关自助注册）+ 可选 `MCP_TOKEN` 令牌认证（公网部署防线，桥与 registry 清单已带）
+- [x] v1.5 — 管理后台认证（Better Auth，ADMIN_PASSWORD 播种首个管理员；注册默认关、`MEMOBOX_ENABLE_SIGNUP=1` 开团队模式）+ 可选 `MCP_TOKEN` 令牌认证（公网部署防线，桥与 registry 清单已带）
 - [x] v1.6 — 备份与迁移：后台一键导出全部记忆为单 JSON 文件，幂等导入（已有 id 跳过）——也是 SQLite 本地模式 ↔ Postgres 服务端模式的整体搬家通道
 - [ ] 待定 — 听用户的

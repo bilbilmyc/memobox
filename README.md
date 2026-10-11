@@ -99,7 +99,7 @@ Everything is env-driven (`.env` for compose, see `.env.example`):
 | `ADMIN_PASSWORD` | `memobox-dev` | Seeds the initial admin on first boot (email `admin@memobox.local`); also the fallback session-secret |
 | `ADMIN_EMAIL` | `admin@memobox.local` | Email of the seeded initial admin |
 | `BETTER_AUTH_SECRET` | — | Session signing key — **set it on public deployments** (`openssl rand -base64 32`) |
-| `MEMOBOX_DISABLE_SIGNUP` | — | `1` = close self-serve admin registration (recommended for public deploys) |
+| `MEMOBOX_ENABLE_SIGNUP` | — | `1` = open self-serve admin registration (off by default — single admin is the self-hosted norm) |
 | `MCP_TOKEN` | — | If set, `/mcp` requires `Authorization: Bearer <same value>` — protects the endpoint on public deploys |
 | `DATABASE_URL` | — | Set = server mode (Postgres). Unset = local mode (SQLite) |
 | `MEMOBOX_DB_PATH` | `data/memobox.db` | SQLite file path (local mode) |
@@ -110,10 +110,11 @@ Everything is env-driven (`.env` for compose, see `.env.example`):
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Model name |
 | `EMBEDDING_DIM` | `1536` | Vector dimensions — **locked by the first migration** (server mode), only changeable on a fresh database |
 
-The console is **multi-admin** (open-source [Better Auth](https://better-auth.com),
-email + password, accounts live in the same database): the first admin is seeded
-from `ADMIN_PASSWORD` on first boot, teammates can register themselves unless
-`MEMOBOX_DISABLE_SIGNUP=1`.
+The console authenticates with email + password via open-source
+[Better Auth](https://better-auth.com) (accounts live in the same database):
+the first admin is seeded from `ADMIN_PASSWORD` on first boot. Registration is
+**off by default** — single admin is the self-hosted norm; set
+`MEMOBOX_ENABLE_SIGNUP=1` only when a small team shares one memory store.
 
 ### Embedding providers
 
@@ -168,9 +169,10 @@ bun run build             # production build (standalone)
       eval page, `relevant_ids` in the CSV export
 - [x] v1.4 — stdio bridge: zero-dependency single-file adapter for stdio-only
       clients (`scripts/stdio-bridge.ts`)
-- [x] v1.5 — multi-admin console via Better Auth (first admin seeded from
-      `ADMIN_PASSWORD`, optional signup close), optional `MCP_TOKEN` bearer
-      auth for public deployments (bridge + registry manifest included)
+- [x] v1.5 — console auth via Better Auth (first admin seeded from
+      `ADMIN_PASSWORD`; signup off by default, `MEMOBOX_ENABLE_SIGNUP=1`
+      opens team mode), optional `MCP_TOKEN` bearer auth for public
+      deployments (bridge + registry manifest included)
 - [x] v1.6 — backup & migration: one-click JSON export of all memories in the
       console, idempotent import (existing ids skipped) — also the path for
       moving a store between SQLite local mode and Postgres server mode

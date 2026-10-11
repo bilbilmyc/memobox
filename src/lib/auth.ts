@@ -131,8 +131,12 @@ export async function seedInitialAdmin(
   }
 }
 
-/** 注册开关：公网部署想关闭自助注册时设 MEMOBOX_DISABLE_SIGNUP=1 */
-export const signupEnabled = () => !process.env.MEMOBOX_DISABLE_SIGNUP;
+/**
+ * 注册开关（v1.6 后翻转默认）：单管理员是自托管的常态，注册默认**关**；
+ * 小团队共用记忆库才显式设 MEMOBOX_ENABLE_SIGNUP=1。
+ * 首账号引导另算——库里一个用户都没有时，注册页放行一次（见登录页）。
+ */
+export const signupEnabled = () => process.env.MEMOBOX_ENABLE_SIGNUP === "1";
 
 /**
  * admin 页面/动作的会话守卫：无有效会话即跳登录页。
