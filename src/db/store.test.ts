@@ -46,6 +46,7 @@ afterAll(async () => {
     "vivid dune lantern",
     "graph governance probe row alpha",
     "persistence",
+    "lantern harbor benchmark probe",
   ]) {
     await getDb().delete(queryLog).where(eq(queryLog.query, q));
   }
@@ -202,5 +203,44 @@ describe("DrizzleStore graph + governance (live Postgres)", () => {
     expect(stats.zeroRecall).toBeLessThanOrEqual(stats.totalQueries);
     expect(stats.p50LatencyMs).toBeGreaterThanOrEqual(0);
     expect(stats.p95LatencyMs).toBeGreaterThanOrEqual(stats.p50LatencyMs);
+  });
+});
+
+describe("DrizzleStore labeling + benchmark (live Postgres)", () => {
+  const QUERY = "lantern harbor benchmark probe";
+
+  maybe("label/unlabel round-trip moves the benchmark", async () => {
+    const store = new DrizzleStore(null);
+    const hit = await store.save({
+      content: "lantern harbor benchmark probe hit row",
+      source: TAG,
+    });
+    await store.save({
+      content: "lantern harbor benchmark probe miss row",
+      source: TAG,
+    });
+    await store.search(QUERY, 5); // 关键词召回两条
+
+    const entry = (await store.recentQueries(1))[0];
+    // 库里还有其他用例未清理的 lantern 行 + 图谱扩展会多带几条，只断言下限
+    expect(entry.recalled).toBeGreaterThanOrEqual(2);
+
+    await store.label(entry.id, hit.id, true);
+    let bench = await store.benchmark();
+    expect(bench.labeledQueries).toBeGreaterThanOrEqual(1);
+    expect(bench.recall).toBe(1);
+
+    // recentQueries 带出已标相关的记忆 id（回归：子查询列遮蔽曾让它恒空）
+    expect((await store.recentQueries(1))[0].relevantIds).toContain(hit.id);
+
+    // 撤销后这条查询回到无标注状态
+    await store.unlabel(entry.id, hit.id);
+    const queue = await store.unlabeledQueries(5);
+    expect(queue.some((q) => q.id === entry.id)).toBe(true);
+
+    const data = await store.getQuery(entry.id);
+    expect(data?.entry.query).toBe(QUERY);
+    expect(data?.recalled.length).toBeGreaterThanOrEqual(2);
+    expect(data?.labels).toEqual([]);
   });
 });

@@ -1,4 +1,10 @@
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 /**
  * 本地模式用的 SQLite 版 schema（与 src/db/schema.ts 的 pg 版对应）。
@@ -26,6 +32,19 @@ export const queryLog = sqliteTable("query_log", {
   latencyMs: integer("latency_ms"),
   createdAt: integer("created_at").notNull(),
 });
+
+/** 评测标注表：与 pg 版 schema 对应（v1.3 启用），双外键级联 */
+export const evalLabels = sqliteTable(
+  "eval_labels",
+  {
+    id: text("id").primaryKey(),
+    queryLogId: text("query_log_id").notNull(),
+    memoryId: text("memory_id").notNull(),
+    relevant: integer("relevant").notNull(), // 0/1
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("eval_labels_pair_idx").on(t.queryLogId, t.memoryId)]
+);
 
 /** 图谱表：与 pg 版 schema 对应（v1.2 启用） */
 export const entityNodes = sqliteTable("entity_nodes", {

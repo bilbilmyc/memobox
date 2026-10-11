@@ -1,15 +1,17 @@
 import { mkdirSync } from "node:fs";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { createEmbedder, type EmbeddingProvider } from "@/lib/embeddings";
 import {
+  computeBenchmark,
   cosineSim,
   expandByEntities,
   percentile,
   scoreMemories,
   type EntityCount,
   type EvalStats,
+  type Label,
   type Memory,
   type MemoryStore,
   type QueryLogEntry,
@@ -76,6 +78,14 @@ export class SQLiteStore implements MemoryStore {
         weight INTEGER NOT NULL DEFAULT 1
       );
       CREATE INDEX IF NOT EXISTS edges_memory_idx ON memory_entity_edges(memory_id);
+      CREATE TABLE IF NOT EXISTS eval_labels (
+        id TEXT PRIMARY KEY,
+        query_log_id TEXT NOT NULL REFERENCES query_log(id) ON DELETE CASCADE,
+        memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+        relevant INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS eval_labels_pair_idx ON eval_labels(query_log_id, memory_id);
     `);
     this.db = drizzle(client, { schema });
   }
@@ -307,6 +317,13 @@ export class SQLiteStore implements MemoryStore {
   }
 
   async recentQueries(limit = 10): Promise<QueryLogEntry[]> {
+    const relevantByQuery = new Map<string, string[]>();
+    for (const l of this.db.select().from(schema.evalLabels).all()) {
+      if (!l.relevant) continue;
+      const list = relevantByQuery.get(l.queryLogId) ?? [];
+      list.push(l.memoryId);
+      relevantByQuery.set(l.queryLogId, list);
+    }
     const rows = this.db
       .select()
       .from(schema.queryLog)
@@ -319,6 +336,7 @@ export class SQLiteStore implements MemoryStore {
       recalled: JSON.parse(r.recalledIds).length,
       latencyMs: r.latencyMs,
       createdAt: r.createdAt,
+      relevantIds: relevantByQuery.get(r.id) ?? [],
     }));
   }
 
@@ -372,5 +390,130 @@ export class SQLiteStore implements MemoryStore {
       .from(schema.queryLog)
       .get();
     return { total: m?.count ?? 0, searches: q?.count ?? 0 };
+  }
+
+  // ---- v1.3 标注式评测 ----
+
+  async label(
+    queryLogId: string,
+    memoryId: string,
+    relevant: boolean
+  ): Promise<void> {
+    this.db
+      .insert(schema.evalLabels)
+      .values({
+        id: crypto.randomUUID(),
+        queryLogId,
+        memoryId,
+        relevant: relevant ? 1 : 0,
+        createdAt: Date.now(),
+      })
+      .onConflictDoUpdate({
+        target: [schema.evalLabels.queryLogId, schema.evalLabels.memoryId],
+        set: { relevant: relevant ? 1 : 0 },
+      })
+      .run();
+  }
+
+  async unlabel(queryLogId: string, memoryId: string): Promise<void> {
+    this.db
+      .delete(schema.evalLabels)
+      .where(
+        and(
+          eq(schema.evalLabels.queryLogId, queryLogId),
+          eq(schema.evalLabels.memoryId, memoryId)
+        )
+      )
+      .run();
+  }
+
+  async getQuery(id: string): Promise<{
+    entry: QueryLogEntry;
+    recalled: Memory[];
+    labels: Label[];
+  } | null> {
+    const rows = this.db
+      .select()
+      .from(schema.queryLog)
+      .where(eq(schema.queryLog.id, id))
+      .limit(1)
+      .all();
+    if (rows.length === 0) return null;
+    const r = rows[0];
+    const recalledIds: string[] = JSON.parse(r.recalledIds);
+    const byId = new Map(
+      this.db
+        .select()
+        .from(schema.memories)
+        .all()
+        .map((m) => [m.id, this.toMemory(m)])
+    );
+    const labels = this.db
+      .select()
+      .from(schema.evalLabels)
+      .where(eq(schema.evalLabels.queryLogId, id))
+      .all();
+    return {
+      entry: {
+        id: r.id,
+        query: r.query,
+        recalled: recalledIds.length,
+        latencyMs: r.latencyMs,
+        createdAt: r.createdAt,
+      },
+      // 按当时的召回顺序展示（被遗忘的记忆自然消失）
+      recalled: recalledIds
+        .map((mid) => byId.get(mid))
+        .filter((m): m is Memory => Boolean(m)),
+      labels: labels.map((l) => ({
+        memoryId: l.memoryId,
+        relevant: Boolean(l.relevant),
+      })),
+    };
+  }
+
+  async unlabeledQueries(limit = 20): Promise<QueryLogEntry[]> {
+    const labeled = new Set(
+      this.db
+        .select({ queryLogId: schema.evalLabels.queryLogId })
+        .from(schema.evalLabels)
+        .all()
+        .map((l) => l.queryLogId)
+    );
+    const rows = this.db
+      .select()
+      .from(schema.queryLog)
+      .orderBy(desc(schema.queryLog.createdAt))
+      .all();
+    return rows
+      .filter((r) => !labeled.has(r.id))
+      .slice(0, limit)
+      .map((r) => ({
+        id: r.id,
+        query: r.query,
+        recalled: JSON.parse(r.recalledIds).length,
+        latencyMs: r.latencyMs,
+        createdAt: r.createdAt,
+      }));
+  }
+
+  async benchmark() {
+    const queries = this.db.select().from(schema.queryLog).all();
+    const recalledById = new Map(
+      queries.map((q) => [q.id, JSON.parse(q.recalledIds) as string[]])
+    );
+    const labelsByQuery = new Map<string, Label[]>();
+    for (const l of this.db.select().from(schema.evalLabels).all()) {
+      const list = labelsByQuery.get(l.queryLogId) ?? [];
+      list.push({ memoryId: l.memoryId, relevant: Boolean(l.relevant) });
+      labelsByQuery.set(l.queryLogId, list);
+    }
+    const rows = queries
+      .filter((q) => (labelsByQuery.get(q.id)?.length ?? 0) > 0)
+      .map((q) => ({
+        recalledIds: recalledById.get(q.id) ?? [],
+        labels: labelsByQuery.get(q.id) ?? [],
+      }));
+    return computeBenchmark(rows);
   }
 }

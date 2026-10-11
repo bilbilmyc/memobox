@@ -99,6 +99,28 @@ export class StubStore implements MemoryStore {
   async stats(): Promise<{ total: number; searches: number }> {
     return { total: this.rows.size, searches: this.searches };
   }
+
+  // ---- v1.3 标注式评测（桩：无日志可标） ----
+
+  async label(): Promise<void> {}
+
+  async unlabel(): Promise<void> {}
+
+  async getQuery(): Promise<null> {
+    return null;
+  }
+
+  async unlabeledQueries(): Promise<[]> {
+    return [];
+  }
+
+  async benchmark(): Promise<{
+    labeledQueries: number;
+    recall: number | null;
+    precision: number | null;
+  }> {
+    return { labeledQueries: 0, recall: null, precision: null };
+  }
 }
 
 export function createStore(): MemoryStore {

@@ -52,6 +52,17 @@ function fakeStore(): MemoryStore {
     async evalStats() {
       return { totalQueries: 0, zeroRecall: 0, p50LatencyMs: 0, p95LatencyMs: 0 };
     },
+    async label() {},
+    async unlabel() {},
+    async getQuery() {
+      return null;
+    },
+    async unlabeledQueries() {
+      return [];
+    },
+    async benchmark() {
+      return { labeledQueries: 0, recall: null, precision: null };
+    },
     async recentQueries() {
       return [];
     },

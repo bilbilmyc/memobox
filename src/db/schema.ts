@@ -7,7 +7,9 @@ import {
   vector,
   real,
   integer,
+  boolean,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -62,6 +64,29 @@ export const memoryEntityEdges = pgTable("memory_entity_edges", {
   relation: text("relation"),
   weight: real("weight").notNull().default(1),
 });
+
+/**
+ * eval_labels —— 人工标注：某条检索日志里，哪些记忆「真的相关」。
+ * relevant=true 且未被召回的行（补充标注）参与 recall 分母，
+ * 这才是真 recall@k 而不只是 precision。v1.3 启用。
+ */
+export const evalLabels = pgTable(
+  "eval_labels",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    queryLogId: uuid("query_log_id")
+      .notNull()
+      .references(() => queryLog.id, { onDelete: "cascade" }),
+    memoryId: uuid("memory_id")
+      .notNull()
+      .references(() => memories.id, { onDelete: "cascade" }),
+    relevant: boolean("relevant").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("eval_labels_pair_idx").on(t.queryLogId, t.memoryId)]
+);
 
 /**
  * query_log —— 记下每一次检索查询和它召回了什么。

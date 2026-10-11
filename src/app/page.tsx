@@ -5,7 +5,7 @@ export default function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-6 text-center font-sans">
       <p className="font-mono text-sm text-muted-foreground">
-        memobox v1.2.0
+        memobox v1.3.0
       </p>
       <h1 className="max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">
         Self-hosted long-term memory for your AI agents

@@ -128,4 +128,7 @@ bun run build             # production build (standalone)
 - [x] v1.2 — entity-graph retrieval, `memory_entities` tool, memory
       editing & forgetting in the console, eval report (p50/p95, zero-recall
       list, CSV export)
-- [ ] next — labeled retrieval benchmark (recall@k), stdio bridge, multi-admin
+- [x] v1.3 — labeled retrieval benchmark: label query results as relevant or
+      not (including missed hits) in the console, recall@k & precision on the
+      eval page, `relevant_ids` in the CSV export
+- [ ] next — stdio bridge, multi-admin

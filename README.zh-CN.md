@@ -121,4 +121,5 @@ bun run build             # 生产构建（standalone）
 - [x] v1.0 — Dockerfile（standalone、自动迁移）、中英双语文档
 - [x] v1.1 — SQLite 本地模式（`bun:sqlite`、JS 余弦、零依赖）
 - [x] v1.2 — 实体图谱检索、`memory_entities` 工具、后台编辑与遗忘、评测报表（p50/p95、零召回清单、CSV 导出）
-- [ ] 待定 — 标注式检索基准（recall@k）、stdio 桥、多管理员
+- [x] v1.3 — 标注式检索基准：后台对查询结果标注相关/无关（含补标漏检），评测页出 recall@k 与 precision，CSV 导出带 `relevant_ids`
+- [ ] 待定 — stdio 桥、多管理员

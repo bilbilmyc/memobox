@@ -15,13 +15,14 @@ export async function GET() {
   }
 
   const queries = await memoryStore.recentQueries(1000);
-  const header = "query,recalled,latency_ms,created_at";
+  const header = "query,recalled,latency_ms,created_at,relevant_ids";
   const lines = queries.map((q) =>
     [
       esc(q.query),
       q.recalled,
       q.latencyMs ?? "",
       new Date(q.createdAt).toISOString(),
+      (q.relevantIds ?? []).join(";"),
     ].join(",")
   );
   const csv = [header, ...lines].join("\r\n");

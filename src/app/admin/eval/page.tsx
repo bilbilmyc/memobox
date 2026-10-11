@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -15,19 +16,24 @@ import {
 import { memoryStore } from "@/lib/memory-store";
 
 /**
- * 检索评测报表：query_log 的聚合视图。零召回查询是评测集的第一批
- * 候选（该召回而没召回 = 最值得人工标注的样本）；CSV 可导出离线标注。
+ * 检索评测报表：query_log 的聚合视图 + 标注式基准（v1.3）。
+ * 零召回查询是评测集的第一批候选（该召回而没召回 = 最值得人工
+ * 标注的样本）；CSV 可导出离线分析。
  */
 export default async function EvalPage() {
-  const [stats, entities, queries] = await Promise.all([
+  const [stats, bench, entities, queries, unlabeled] = await Promise.all([
     memoryStore.evalStats(),
+    memoryStore.benchmark(),
     memoryStore.topEntities(15),
     memoryStore.recentQueries(50),
+    memoryStore.unlabeledQueries(10),
   ]);
   const zeroRecall = queries.filter((q) => q.recalled === 0);
   const zeroRate = stats.totalQueries
     ? Math.round((stats.zeroRecall / stats.totalQueries) * 100)
     : 0;
+  const pct = (v: number | null) =>
+    v == null ? "—" : `${Math.round(v * 100)}%`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -88,6 +94,66 @@ export default async function EvalPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>检索基准（标注式）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-3xl font-semibold">
+            recall@k {pct(bench.recall)}
+            <span className="mx-3 text-muted-foreground">·</span>
+            precision {pct(bench.precision)}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {bench.labeledQueries} 条已标注查询的均值 · 在下方队列逐条标注，
+            漏检的相关记忆可在标注页补充（计入 recall 分母）
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>待标注队列</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {unlabeled.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              队列空了——最近的查询都标注过了（或还没有查询）
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>查询</TableHead>
+                  <TableHead className="w-20">召回</TableHead>
+                  <TableHead className="w-44">时间</TableHead>
+                  <TableHead className="w-16"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {unlabeled.map((q) => (
+                  <TableRow key={q.id}>
+                    <TableCell className="max-w-md truncate">{q.query}</TableCell>
+                    <TableCell>{q.recalled}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(q.createdAt).toLocaleString("zh-CN")}
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/admin/eval/${q.id}`}
+                        className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                      >
+                        标注
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

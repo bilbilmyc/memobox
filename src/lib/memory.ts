@@ -18,6 +18,8 @@ export type QueryLogEntry = {
   recalled: number;
   latencyMs: number | null;
   createdAt: number;
+  /** 该查询被标为「相关」的记忆 id（v1.3，未加载时缺省） */
+  relevantIds?: string[];
 };
 
 export type EntityCount = { name: string; memories: number };
@@ -27,6 +29,16 @@ export type EvalStats = {
   zeroRecall: number;
   p50LatencyMs: number;
   p95LatencyMs: number;
+};
+
+export type Label = { memoryId: string; relevant: boolean };
+
+export type Benchmark = {
+  labeledQueries: number;
+  /** 已标注查询的 recall@k 均值；无有效标注时为 null */
+  recall: number | null;
+  /** 已标注召回项的 precision 均值；无有效标注时为 null */
+  precision: number | null;
 };
 
 export interface MemoryStore {
@@ -50,6 +62,19 @@ export interface MemoryStore {
   forget(id: string): Promise<boolean>;
   topEntities(limit?: number): Promise<EntityCount[]>;
   evalStats(): Promise<EvalStats>;
+  // ---- v1.3 标注式评测 ----
+  /** 标注（或改标）某条检索日志里某条记忆的相关性；幂等 upsert */
+  label(queryLogId: string, memoryId: string, relevant: boolean): Promise<void>;
+  /** 撤销一条标注 */
+  unlabel(queryLogId: string, memoryId: string): Promise<void>;
+  /** 取一条检索日志 + 它召回的记忆（按当时顺序）+ 现有标注，供标注页渲染 */
+  getQuery(
+    id: string
+  ): Promise<{ entry: QueryLogEntry; recalled: Memory[]; labels: Label[] } | null>;
+  /** 还没有任何标注的检索日志（标注队列） */
+  unlabeledQueries(limit?: number): Promise<QueryLogEntry[]>;
+  /** recall@k / precision 均值（仅统计有标注的查询） */
+  benchmark(): Promise<Benchmark>;
 }
 
 /** 余弦相似度：本地模式（SQLite）的向量检索用 */
@@ -123,4 +148,41 @@ export function percentile(sortedAsc: number[], p: number): number {
   if (sortedAsc.length === 0) return 0;
   const idx = Math.ceil((p / 100) * sortedAsc.length) - 1;
   return sortedAsc[Math.max(0, Math.min(idx, sortedAsc.length - 1))];
+}
+
+/**
+ * 标注式基准（v1.3）：
+ * recall@k   = |召回 ∩ 相关| / |相关|   —— 相关集含补充标注的漏检记忆
+ * precision  = 被标注的召回项中相关的占比
+ * 均值只统计有相应标注的查询；无任何有效标注时返回 null。
+ */
+export function computeBenchmark(
+  rows: { recalledIds: string[]; labels: Label[] }[]
+): Benchmark {
+  let recallSum = 0;
+  let recallN = 0;
+  let precSum = 0;
+  let precN = 0;
+  for (const r of rows) {
+    if (r.labels.length === 0) continue;
+    const recalled = new Set(r.recalledIds);
+    const relevant = new Set(
+      r.labels.filter((l) => l.relevant).map((l) => l.memoryId)
+    );
+    if (relevant.size > 0) {
+      recallSum +=
+        [...relevant].filter((id) => recalled.has(id)).length / relevant.size;
+      recallN++;
+    }
+    const labeledRecalled = r.labels.filter((l) => recalled.has(l.memoryId));
+    if (labeledRecalled.length > 0) {
+      precSum += labeledRecalled.filter((l) => l.relevant).length / labeledRecalled.length;
+      precN++;
+    }
+  }
+  return {
+    labeledQueries: recallN + precN > 0 ? rows.filter((r) => r.labels.length > 0).length : 0,
+    recall: recallN ? recallSum / recallN : null,
+    precision: precN ? precSum / precN : null,
+  };
 }
