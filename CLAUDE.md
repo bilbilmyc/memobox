@@ -33,11 +33,12 @@ SQLite 单文件存储，零服务、零端口、零依赖。
 - v2.0 ✅ **CLI 转向**（2026-10-11 Soren 拍板）：整个产品 = `memobox` 命令。默认（无参数/`serve`）= stdio MCP 服务（吸收自 mcp-local.ts → src/mcp-server.ts）；人用子命令 `save/search/list/forget/stats/entities/path`；`export/import` 备份；`install claude|codex|pi` 自动写客户端配置（幂等）。存储只留 SQLite（默认 `~/.memobox/memobox.db`），删掉 Next/React/Better Auth/Postgres/Docker/pg schema 全家。**已知遗留**：旧 `data/memobox.db` 不自动迁移（用 `memobox import` 或直接拷贝）；npm 发布待 Soren 本人 `npm publish`
 - v2.1 ✅ **CJK 关键词检索 + doctor 自检**（2026-10-11）：①修掉 v1.x 起的已知失效——`tokenize()`（src/lib/memory.ts）CJK 连续段切 bigram、拉丁部分按 `\p{L}\p{N}` 切，scoreMemories 与图谱锚点（sqlite-store search 的 anchors）都换用它，中文整句「端口有什么偏好」关键词模式即可命中；②`memobox doctor`——库文件/记忆数/检索模式 + 三家客户端接线探测（detectCodex/Pi/Claude 与安装器同判据；claude 查 `~/.claude.json` 的 mcpServers.memobox）。71 测试全绿。本机已由本人授权接线 Codex（`memobox install codex`）
 - v2.2 ✅ **终端查询**（2026-10-11，Soren 要求「类似 sql 查询、全终端操作」）：①`memobox query [text] --kind/--entity/--source/--since/--limit/--json`——结构化 AND 过滤（--since 支持 7d/12h/30m 与 ISO 日期），renderTable 终端对齐表格（超宽截断，完整走 --json/get）；②`memobox sql "SELECT ..."`——bun:sqlite readonly 直开库文件透传 SQL（白名单 SELECT/WITH/PRAGMA，写语句拒绝）；③`memobox get <id>` 单条完整 JSON。79 测试全绿
-- v2.3+ 候选：npm 发布（待 Soren 注册 npm 账号）；记忆压缩/摘要（Codex 原生记忆是 agent 端多层总结：raw → rollout_summaries → MEMORY.md 任务组 + memory_summary.md 用户画像，memobox 的对应物还没做）
+- v2.3 ✅ **中文化 + 帮助体系 + Codex 记忆迁移**（2026-10-11，Soren 要求）：①CLI 全部人类输出改中文（命令规格表 COMMANDS 渲染总帮助；`help <命令>` 与任意命令 `--help` 给单命令帮助；MCP 协议内文案保持英文）；②`memobox import-codex`——解析 `~/.codex/memories/`（MEMORY.md 任务组 → 每任务一条 event，keywords 进 entities、状态尾缀保留；memory_summary.md 的 User Profile → 一条 preference），id = sha1(组名|标题) 前缀 `codex-`，重复导入幂等；--dry-run 预览。**Codex 的总结是现成的（会话结束 agent 自己写），迁移只做零 LLM 结构化重组**。本机已实迁 84 条（Soren 的 30 个任务组全量）+ 用户画像。88 测试全绿
+- v2.4+ 候选：npm 发布（待 Soren 注册 npm 账号）；memobox 自己的记忆压缩/摘要（需 LLM，或复用 Codex 式 agent 端总结）
 
 ## 约定
 
-- **代码与配置的注释一律用中文**（Soren 要求）；对外文案（CLI 输出、MCP 工具 description、README）保持英文
+- **代码与配置的注释一律用中文**（Soren 要求）；**CLI 人类输出也用中文**（2026-10-11 v2.3 Soren 要求「我要的是 cli 工具，你支持中文」）；仅 agent 可见文案（MCP 工具 description、MCP 协议内消息）保持英文；README 双语
 - 提交信息英文、里程碑制，尾行 `Co-Authored-By: Claude Code <noreply@anthropic.com>`
 
 ## 常用命令

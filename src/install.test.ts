@@ -88,7 +88,7 @@ describe("install 文件操作（临时家目录）", () => {
     // 已配置 → 跳过且内容不变
     const second = await installCodex(entry, home);
     expect(second.ok).toBe(true);
-    expect(second.message).toContain("already configured");
+    expect(second.message).toContain("已配置过");
     expect(readFileSync(path, "utf-8")).toBe(once);
   });
 
@@ -120,15 +120,15 @@ describe("install 文件操作（临时家目录）", () => {
     expect(cfg.mcpServers.existing).toEqual({ command: "x" });
     expect(cfg.mcpServers.memobox.args).toEqual(entry.args);
 
-    // 幂等：再装一次报告 already
+    // 幂等：再装一次报告已配置过
     const again = await installPi(entry, home);
-    expect(again.message).toContain("already configured");
+    expect(again.message).toContain("已配置过");
 
     // 坏 JSON：拒绝而不是覆盖
     writeFileSync(join(home, ".pi", "agent", "mcp.json"), "{oops", "utf-8");
     const bad = await installPi(entry, home);
     expect(bad.ok).toBe(false);
-    expect(bad.message).toContain("not valid JSON");
+    expect(bad.message).toContain("不是合法 JSON");
   });
 });
 

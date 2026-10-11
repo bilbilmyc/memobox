@@ -84,6 +84,12 @@ agent 不会主动调记忆工具——在你的 `AGENTS.md` / `CLAUDE.md` 里�
 
 ## 自己也能用
 
+CLI 的人类输出全部是中文；数据与 MCP 协议文案保持原样。每条命令都支持 `--help`：
+
+```bash
+memobox help / memobox <命令> --help
+```
+
 ```bash
 memobox save "这个仓库用 tab 缩进" --entities style
 memobox search "缩进"
@@ -100,6 +106,10 @@ memobox sql "SELECT content FROM memories WHERE kind = 'decision' LIMIT 5" --jso
 
 memobox export backup.json     # 全量备份（memobox-backup v1 格式）
 memobox import backup.json     # 幂等导入——相同 id 自动跳过
+
+# 迁移 Codex 原生记忆（~/.codex/memories/）进 memobox——
+# 让 Claude Code / pi 也能检索到同一份；幂等，--dry-run 先预览
+memobox import-codex
 ```
 
 ## 工作原理

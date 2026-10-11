@@ -125,10 +125,10 @@ export async function installCodex(
   const path = join(home, ".codex", "config.toml");
   const existing = existsSync(path) ? readFileSync(path, "utf-8") : "";
   if (CODEX_MARK.test(existing)) {
-    return { ok: true, message: `already configured: ${path} contains [mcp_servers.memobox]` };
+    return { ok: true, message: `已配置过：${path} 里已有 [mcp_servers.memobox]` };
   }
   writeCreatingDirs(path, existing + codexTomlBlock(entry));
-  return { ok: true, message: `added [mcp_servers.memobox] to ${path}` };
+  return { ok: true, message: `已追加 [mcp_servers.memobox] -> ${path}` };
 }
 
 /** pi：合并 ~/.pi/agent/mcp.json（存在 memobox 键时视为已配置） */
@@ -144,7 +144,7 @@ export async function installPi(
     } catch {
       return {
         ok: false,
-        message: `${path} is not valid JSON — fix or back it up first, memobox will not touch it`,
+        message: `${path} 不是合法 JSON——请先修复或备份，memobox 不会动它`,
       };
     }
   }
@@ -155,10 +155,10 @@ export async function installPi(
       ((existing as { mcpServers: Record<string, unknown> }).mcpServers.memobox !== undefined)
   );
   if (has) {
-    return { ok: true, message: `already configured: ${path} has mcpServers.memobox` };
+    return { ok: true, message: `已配置过：${path} 里已有 mcpServers.memobox` };
   }
   writeCreatingDirs(path, JSON.stringify(piMerge(existing, entry), null, 2) + "\n");
-  return { ok: true, message: `added mcpServers.memobox to ${path}` };
+  return { ok: true, message: `已写入 mcpServers.memobox -> ${path}` };
 }
 
 /** claude：调官方 CLI 写配置；PATH 上没有时给手动片段降级 */
@@ -177,12 +177,12 @@ export async function installClaude(
     proc.exited,
   ]);
   if (code === 0) {
-    return { ok: true, message: `claude mcp add ok: ${stdout.trim() || "memobox added (user scope)"}` };
+    return { ok: true, message: `claude mcp add 成功：${stdout.trim() || "memobox 已加入（user 级）"}` };
   }
   // claude 不在 PATH 或执行失败——给等价手动命令
   return {
     ok: false,
-    message: `could not run \`claude\` (exit ${code}: ${stderr.trim().split("\n")[0]}). Run manually:\n  claude ${args.join(" ")}`,
+    message: `无法执行 claude（退出码 ${code}：${stderr.trim().split("\n")[0]}）。手动执行：\n  claude ${args.join(" ")}`,
   };
 }
 
@@ -211,14 +211,14 @@ export function detectCodex(home: string = homedir()): DetectResult {
   return {
     client: "codex",
     configured,
-    detail: configured ? path : `${path} has no [mcp_servers.memobox] — run: memobox install codex`,
+    detail: configured ? path : `${path} 没有 [mcp_servers.memobox] —— 运行 memobox install codex`,
   };
 }
 
 export function detectPi(home: string = homedir()): DetectResult {
   const path = join(home, ".pi", "agent", "mcp.json");
   if (!existsSync(path)) {
-    return { client: "pi", configured: false, detail: `${path} missing — run: memobox install pi` };
+    return { client: "pi", configured: false, detail: `缺少 ${path} —— 运行 memobox install pi` };
   }
   try {
     const cfg = JSON.parse(readFileSync(path, "utf-8")) as {
@@ -228,10 +228,10 @@ export function detectPi(home: string = homedir()): DetectResult {
     return {
       client: "pi",
       configured,
-      detail: configured ? path : `${path} has no mcpServers.memobox — run: memobox install pi`,
+      detail: configured ? path : `${path} 没有 mcpServers.memobox —— 运行 memobox install pi`,
     };
   } catch {
-    return { client: "pi", configured: false, detail: `${path} is not valid JSON` };
+    return { client: "pi", configured: false, detail: `${path} 不是合法 JSON` };
   }
 }
 
@@ -239,7 +239,7 @@ export function detectClaude(home: string = homedir()): DetectResult {
   // user 级 MCP 配置在 ~/.claude.json 的 mcpServers 键里
   const path = join(home, ".claude.json");
   if (!existsSync(path)) {
-    return { client: "claude", configured: false, detail: `${path} missing — run: memobox install claude` };
+    return { client: "claude", configured: false, detail: `缺少 ${path} —— 运行 memobox install claude` };
   }
   try {
     const cfg = JSON.parse(readFileSync(path, "utf-8")) as {
@@ -249,9 +249,9 @@ export function detectClaude(home: string = homedir()): DetectResult {
     return {
       client: "claude",
       configured,
-      detail: configured ? path : `${path} has no memobox entry — run: memobox install claude`,
+      detail: configured ? path : `${path} 没有 memobox 条目 —— 运行 memobox install claude`,
     };
   } catch {
-    return { client: "claude", configured: false, detail: `${path} is not valid JSON` };
+    return { client: "claude", configured: false, detail: `${path} 不是合法 JSON` };
   }
 }

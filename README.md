@@ -88,6 +88,13 @@ Agents don't call memory tools unprompted — add an activation line to your
 
 ## Use it yourself
 
+Human-facing CLI output is in Chinese (the author is a Chinese speaker);
+data and MCP protocol text stay as-is. Every command supports `--help`:
+
+```bash
+memobox help / memobox <command> --help
+```
+
 ```bash
 memobox save "prefer tabs in this repo" --entities style
 memobox search "tabs"
@@ -104,6 +111,10 @@ memobox sql "SELECT content FROM memories WHERE kind = 'decision' LIMIT 5" --jso
 
 memobox export backup.json     # full backup (memobox-backup v1 format)
 memobox import backup.json     # idempotent — same ids are skipped
+
+# migrate Codex's native memories (~/.codex/memories/) into memobox
+# so Claude Code / pi can recall them too — idempotent, --dry-run previews
+memobox import-codex
 ```
 
 ## How it works

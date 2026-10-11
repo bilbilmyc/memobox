@@ -1,20 +1,16 @@
 #!/usr/bin/env bun
 /**
- * memobox CLI（v2.0）—— 给 AI agent 的本地长期记忆，一个命令搞定。
+ * memobox CLI（v2.3）—— 给 AI agent 的本地长期记忆，一个命令搞定。
  *
  * 无参数 = stdio MCP 服务（给 Claude Code / Codex / pi 拉起用）；
- * 带子命令 = 人直接操作记忆库。
+ * 带子命令 = 人直接操作记忆库。人类输出一律中文（2026-10-11 Soren
+ * 要求）；MCP 协议内对 agent 的文案保持英文。
  *
- *   memobox                        # stdio MCP 服务（等价 `memobox serve`）
- *   memobox save "text" [--kind fact] [--entities a,b] [--source x]
- *   memobox search "query" [--limit 5]
- *   memobox list [--limit 20]
- *   memobox forget <id>
- *   memobox stats
- *   memobox entities [--limit 20]
- *   memobox path                   # 打印库文件位置
- *   memobox export <file.json>     # 全量备份（memobox-backup v1 格式）
- *   memobox import <file.json>     # 幂等导入
+ *   memobox                        # stdio MCP 服务（等价 memobox serve）
+ *   memobox save / search / list / forget / entities / stats / path
+ *   memobox query / get / sql      # 查询三件套
+ *   memobox export / import        # 备份
+ *   memobox import-codex           # 迁移 Codex 原生记忆
  *   memobox install claude|codex|pi
  *
  * runCli 把 argv / 输出 / store 全部注入，单测不起真进程；
@@ -22,44 +18,61 @@
  * EMBEDDING_API_* 启用语义检索（不配 = 关键词模式）。
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { Database } from "bun:sqlite";
 import { SQLiteStore } from "@/db/sqlite-store";
 import { buildBackup, parseBackup } from "@/lib/backup";
+import { parseCodexMemoryMd, parseCodexSummary } from "@/lib/codex-import";
 import { defaultDbPath } from "@/lib/paths";
 import type { Memory, MemoryStore } from "@/lib/memory-store";
 import { detectClaude, detectCodex, detectPi, installClient, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
-export const VERSION = "2.2.0";
+export const VERSION = "2.3.0";
 
-const USAGE = `memobox ${VERSION} — local long-term memory for AI agents
+/** 子命令规格表：--help / help <命令> / 总帮助都从这里渲染 */
+type CmdSpec = { name: string; usage: string; desc: string };
 
-usage:
-  memobox                              stdio MCP server (for MCP clients)
-  memobox serve                        same as above, explicit
-  memobox save <text> [--kind fact|preference|event|decision]
-                   [--entities a,b] [--source name]
-  memobox search <query> [--limit 5]
-  memobox list [--limit 20]
-  memobox forget <id>
-  memobox entities [--limit 20]
-  memobox stats
-  memobox path                         print database file location
-  memobox doctor                       health check: db, retrieval, client wiring
-  memobox query [text] [--kind k] [--entity e] [--source s]
-                   [--since 7d|2026-01-01] [--limit 20] [--json]
-  memobox get <id>                     show one memory in full (JSON)
-  memobox sql "SELECT ..."             read-only SQL over the SQLite db [--json]
-  memobox export <file.json>           export all memories (backup)
-  memobox import <file.json>           import backup (idempotent)
-  memobox install <claude|codex|pi>    wire up an MCP client
+const COMMANDS: CmdSpec[] = [
+  { name: "serve", usage: "memobox serve", desc: "启动 stdio MCP 服务（无参数时等价；供 Claude Code / Codex / pi 拉起）" },
+  { name: "save", usage: "memobox save <文本> [--kind fact|preference|event|decision] [--entities a,b] [--source 名字]", desc: "存一条记忆" },
+  { name: "search", usage: "memobox search <查询> [--limit 5]", desc: "检索记忆（关键词/语义自动，支持中文整句）" },
+  { name: "list", usage: "memobox list [--limit 20]", desc: "按时间倒序列出记忆" },
+  { name: "query", usage: "memobox query [文本] [--kind k] [--entity e] [--source s] [--since 7d|12h|30m|ISO日期] [--limit 20] [--json]", desc: "结构化过滤查询（条件 AND 组合）" },
+  { name: "get", usage: "memobox get <id>", desc: "查看单条记忆（完整 JSON）" },
+  { name: "sql", usage: 'memobox sql "SELECT ..." [--json]', desc: "只读 SQL 直查 SQLite 库文件" },
+  { name: "forget", usage: "memobox forget <id>", desc: "删除一条记忆（实体边级联清理）" },
+  { name: "entities", usage: "memobox entities [--limit 20]", desc: "实体标签统计（记忆图谱入口）" },
+  { name: "stats", usage: "memobox stats", desc: "库统计（记忆数 / 检索数）" },
+  { name: "path", usage: "memobox path", desc: "打印库文件位置" },
+  { name: "doctor", usage: "memobox doctor", desc: "自检：库文件 / 检索模式 / 三家客户端接线状态" },
+  { name: "export", usage: "memobox export <file.json>", desc: "全量备份（memobox-backup v1 格式，向量不入备份可重算）" },
+  { name: "import", usage: "memobox import <file.json>", desc: "导入备份（幂等：相同 id 跳过）" },
+  { name: "import-codex", usage: "memobox import-codex [--file <MEMORY.md路径>] [--dry-run]", desc: "迁移 Codex 原生记忆（~/.codex/memories/，任务+用户画像；重复导入幂等）" },
+  { name: "install", usage: "memobox install <claude|codex|pi>", desc: "接入 MCP 客户端（幂等，自动透传 EMBEDDING_API_*）" },
+  { name: "version", usage: "memobox version", desc: "打印版本号" },
+  { name: "help", usage: "memobox help [命令]", desc: "总帮助，或某条命令的详细用法" },
+];
 
-env:
-  MEMOBOX_DB_PATH    database file (default ~/.memobox/memobox.db)
-  EMBEDDING_API_*    OpenAI-compatible /embeddings endpoint for
-                     semantic search (unset = keyword mode)`;
+/** 总帮助 */
+export const USAGE =
+  `memobox ${VERSION} —— 给 AI agent 的本地长期记忆（SQLite，零服务）\n\n` +
+  `用法：memobox <命令> [参数]\n\n` +
+  `命令：\n` +
+  COMMANDS.map((c) => `  ${c.usage}\n      ${c.desc}`).join("\n") +
+  `\n\n环境变量：\n` +
+  `  MEMOBOX_DB_PATH    库文件位置（默认 ~/.memobox/memobox.db）\n` +
+  `  EMBEDDING_API_*    OpenAI 兼容 /embeddings 端点，配了走语义检索\n` +
+  `                     （不配 = 关键词模式，中文已支持）`;
 
-/** 极简参数解析：位置参数按序收集，--flag 值成对收集 */
+/** 单条命令的帮助；未知命令返回 null */
+export function cmdHelp(name: string): string | null {
+  const c = COMMANDS.find((x) => x.name === name);
+  return c ? `${c.usage}\n      ${c.desc}` : null;
+}
+
+/** 极简参数解析：位置参数按序收集，--flag 值成对收集（末尾孤旗标=布尔） */
 export function parseArgs(argv: string[]): {
   pos: string[];
   flags: Map<string, string>;
@@ -70,7 +83,7 @@ export function parseArgs(argv: string[]): {
     if (argv[i].startsWith("--") && i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
       flags.set(argv[i].slice(2), argv[++i]);
     } else if (argv[i].startsWith("--")) {
-      flags.set(argv[i].slice(2), ""); // 布尔旗标（当前未用，留个底）
+      flags.set(argv[i].slice(2), ""); // 布尔旗标（--json / --help / --dry-run）
     } else {
       pos.push(argv[i]);
     }
@@ -85,7 +98,7 @@ export function renderMemory(m: Memory): string {
 
 /** 终端表格：列对齐，超宽单元格截断（完整内容走 --json 或 get） */
 export function renderTable(rows: Record<string, unknown>[]): string {
-  if (rows.length === 0) return "(no rows)";
+  if (rows.length === 0) return "(无结果)";
   const keys = Object.keys(rows[0]);
   const cell = (v: unknown) => {
     const s = v === null || v === undefined ? "NULL" : String(v);
@@ -127,6 +140,12 @@ export async function runCli(
   const { pos, flags } = parseArgs(argv);
   const cmd = pos[0] ?? "serve";
 
+  // 任意命令后跟 --help：打印该命令的帮助；裸 --help / 未知命令回落到总帮助
+  if (flags.has("help")) {
+    io.out(pos.length > 0 ? (cmdHelp(cmd) ?? USAGE) : USAGE);
+    return 0;
+  }
+
   switch (cmd) {
     case "serve": {
       await serveStdio(makeStore());
@@ -135,7 +154,7 @@ export async function runCli(
     case "save": {
       const content = pos.slice(1).join(" ");
       if (!content) {
-        io.err('usage: memobox save <text> [--kind ...] [--entities a,b]');
+        io.err("用法：memobox save <文本> [--kind ...] [--entities a,b]");
         return 1;
       }
       const row = await makeStore().save({
@@ -144,52 +163,69 @@ export async function runCli(
         entities: flags.get("entities")?.split(",").map((s) => s.trim()).filter(Boolean),
         source: flags.get("source") ?? "cli",
       });
-      io.out(`saved memory ${row.id}`);
+      io.out(`已保存记忆 ${row.id}`);
       return 0;
     }
     case "search": {
       const query = pos.slice(1).join(" ");
       if (!query) {
-        io.err("usage: memobox search <query> [--limit 5]");
+        io.err("用法：memobox search <查询> [--limit 5]");
         return 1;
       }
       const limit = Number(flags.get("limit") ?? 5) || 5;
       const hits = await makeStore().search(query, limit);
-      if (hits.length === 0) io.out("no matching memories");
+      if (hits.length === 0) io.out("没有匹配的记忆");
       else hits.forEach((h) => io.out(renderMemory(h)));
       return 0;
     }
     case "list": {
       const limit = Number(flags.get("limit") ?? 20) || 20;
       const rows = await makeStore().list(limit);
-      if (rows.length === 0) io.out("no memories yet — save one with: memobox save <text>");
+      if (rows.length === 0) io.out("还没有记忆——先用 memobox save <文本> 存一条");
       else rows.forEach((h) => io.out(renderMemory(h)));
       return 0;
     }
     case "forget": {
       const id = pos[1];
       if (!id) {
-        io.err("usage: memobox forget <id>");
+        io.err("用法：memobox forget <id>");
         return 1;
       }
       const ok = await makeStore().forget(id);
-      io[ok ? "out" : "err"](ok ? `forgot memory ${id}` : `not found: ${id}`);
+      io[ok ? "out" : "err"](ok ? `已遗忘记忆 ${id}` : `未找到：${id}`);
       return ok ? 0 : 1;
     }
     case "entities": {
       const limit = Number(flags.get("limit") ?? 20) || 20;
       const rows = await makeStore().topEntities(limit);
-      if (rows.length === 0) io.out("no entities yet");
+      if (rows.length === 0) io.out("还没有实体标签");
       else rows.forEach((e) => io.out(`${e.name} (${e.memories})`));
       return 0;
     }
     case "stats": {
       const { total, searches } = await makeStore().stats();
-      io.out(`${total} memories, ${searches} searches — db: ${defaultDbPath()}`);
+      io.out(`共 ${total} 条记忆，${searches} 次检索 —— 库：${defaultDbPath()}`);
       return 0;
     }
     case "path": {
       io.out(defaultDbPath());
+      return 0;
+    }
+    case "doctor": {
+      // 自检：库文件 + 检索模式 + 三家客户端接线，一眼定位「agent 怎么不记事」
+      const dbPath = defaultDbPath();
+      if (existsSync(dbPath)) {
+        const store = makeStore();
+        const { total, searches } = await store.stats();
+        io.out(`库文件：  ${dbPath}（${total} 条记忆，${searches} 次检索）`);
+        io.out(`检索模式：${store.retrieval === "keyword" ? "keyword（配 EMBEDDING_API_* 启用语义检索）" : store.retrieval}`);
+      } else {
+        io.out(`库文件：  ${dbPath}（尚未创建——第一次 save 时自动建库）`);
+        io.out(`检索模式：${process.env.EMBEDDING_API_BASE ? "semantic" : "keyword（配 EMBEDDING_API_* 启用语义检索）"}`);
+      }
+      for (const d of [detectCodex(), detectPi(), detectClaude()]) {
+        io.out(`${d.client}:     ${d.configured ? "已接线" : "未接线"}  ${d.detail}`);
+      }
       return 0;
     }
     case "query": {
@@ -198,7 +234,7 @@ export async function runCli(
       const sinceRaw = flags.get("since");
       const since = sinceRaw !== undefined ? parseSince(sinceRaw) : undefined;
       if (Number.isNaN(since)) {
-        io.err(`bad --since "${sinceRaw}" — use 7d / 12h / 30m or an ISO date`);
+        io.err(`--since "${sinceRaw}" 格式不对——用 7d / 12h / 30m 或 ISO 日期`);
         return 1;
       }
       const kind = flags.get("kind");
@@ -216,7 +252,7 @@ export async function runCli(
       if (since !== undefined) rows = rows.filter((m) => m.createdAt >= since);
       const cut = rows.slice(0, limit);
       if (flags.has("json")) io.out(JSON.stringify(cut, null, 2));
-      else if (cut.length === 0) io.out("(no rows)");
+      else if (cut.length === 0) io.out("(无结果)");
       else
         io.out(
           renderTable(
@@ -235,33 +271,33 @@ export async function runCli(
     case "get": {
       const id = pos[1];
       if (!id) {
-        io.err("usage: memobox get <id>");
+        io.err("用法：memobox get <id>");
         return 1;
       }
       const m = await makeStore().get(id);
       if (!m) {
-        io.err(`not found: ${id}`);
+        io.err(`未找到：${id}`);
         return 1;
       }
       io.out(JSON.stringify(m, null, 2));
       return 0;
     }
     case "sql": {
-      // 只读 SQL 透传：直接查 SQLite 本体（schema 见 --json 的列名或源码）
+      // 只读 SQL 透传：直接查 SQLite 本体
       const stmt = pos.slice(1).join(" ");
       if (!stmt) {
-        io.err('usage: memobox sql "SELECT ..." [--json]');
+        io.err('用法：memobox sql "SELECT ..." [--json]');
         return 1;
       }
       if (!/^\s*(select|with|pragma)\b/i.test(stmt)) {
-        io.err("read-only: only SELECT / WITH / PRAGMA statements are allowed");
+        io.err("只读模式：仅允许 SELECT / WITH / PRAGMA 语句");
         return 1;
       }
       let db: Database;
       try {
         db = new Database(defaultDbPath(), { readonly: true });
       } catch {
-        io.err(`cannot open ${defaultDbPath()} — save a memory first`);
+        io.err(`打不开 ${defaultDbPath()}——先存一条记忆建库`);
         return 1;
       }
       try {
@@ -275,59 +311,76 @@ export async function runCli(
         db.close();
       }
     }
-    case "doctor": {
-      // 自检：库文件 + 检索模式 + 三家客户端接线情况，一眼定位「agent 怎么不记事」
-      const dbPath = defaultDbPath();
-      if (existsSync(dbPath)) {
-        const store = makeStore();
-        const { total, searches } = await store.stats();
-        io.out(`db:        ${dbPath} (${total} memories, ${searches} searches)`);
-        io.out(`retrieval: ${store.retrieval}${store.retrieval === "keyword" ? " (set EMBEDDING_API_* for semantic)" : ""}`);
-      } else {
-        io.out(`db:        ${dbPath} (not created yet — first save creates it)`);
-        io.out(`retrieval: ${process.env.EMBEDDING_API_BASE ? "semantic" : "keyword (set EMBEDDING_API_* for semantic)"}`);
-      }
-      for (const d of [detectCodex(), detectPi(), detectClaude()]) {
-        io.out(`${d.client}:${" ".repeat(Math.max(1, 9 - d.client.length))}${d.configured ? "configured  " : "NOT wired    "}${d.detail}`);
-      }
-      return 0;
-    }
     case "export": {
       const file = pos[1];
       if (!file) {
-        io.err("usage: memobox export <file.json>");
+        io.err("用法：memobox export <file.json>");
         return 1;
       }
       const backup = buildBackup(await makeStore().exportAll());
       writeFileSync(file, JSON.stringify(backup, null, 2), "utf-8");
-      io.out(`exported ${backup.memories.length} memories -> ${file}`);
+      io.out(`已导出 ${backup.memories.length} 条记忆 -> ${file}`);
       return 0;
     }
     case "import": {
       const file = pos[1];
       if (!file) {
-        io.err("usage: memobox import <file.json>");
+        io.err("用法：memobox import <file.json>");
         return 1;
       }
       let parsed;
       try {
         parsed = parseBackup(readFileSync(file, "utf-8"));
       } catch (e) {
-        io.err(`cannot read ${file}: ${e instanceof Error ? e.message : String(e)}`);
+        io.err(`无法读取 ${file}：${e instanceof Error ? e.message : String(e)}`);
         return 1;
       }
       if (!parsed.ok) {
-        io.err(`import failed: ${parsed.error}`);
+        io.err(`导入失败：${parsed.error}`);
         return 1;
       }
       const { imported, skipped } = await makeStore().importMemories(parsed.items);
-      io.out(`import done: ${imported} added, ${skipped} skipped (already present)`);
+      io.out(`导入完成：新增 ${imported} 条，跳过 ${skipped} 条（已存在）`);
+      return 0;
+    }
+    case "import-codex": {
+      // 迁移 Codex 原生记忆：MEMORY.md（任务组）+ memory_summary.md（用户画像）
+      const file = flags.get("file") ?? join(homedir(), ".codex", "memories", "MEMORY.md");
+      if (!existsSync(file)) {
+        io.err(`找不到 ${file}（用 --file 指定 Codex 的 MEMORY.md 路径）`);
+        return 1;
+      }
+      const items = parseCodexMemoryMd(readFileSync(file, "utf-8"));
+      const summaryPath = join(dirname(file), "memory_summary.md");
+      if (existsSync(summaryPath)) {
+        items.push(...parseCodexSummary(readFileSync(summaryPath, "utf-8")));
+      }
+      if (items.length === 0) {
+        io.err("没解析出任何任务——文件格式可能变了，看看 --file 是否指对");
+        return 1;
+      }
+      if (flags.has("dry-run")) {
+        io.out(`[试运行] 将导入 ${items.length} 条：`);
+        io.out(
+          renderTable(
+            items.map((m) => ({
+              id: m.id,
+              kind: m.kind ?? "",
+              entities: (m.entities ?? []).join(","),
+              content: m.content.split("\n")[0],
+            }))
+          )
+        );
+        return 0;
+      }
+      const { imported, skipped } = await makeStore().importMemories(items);
+      io.out(`Codex 记忆迁移：解析 ${items.length} 条 → 新增 ${imported}，跳过 ${skipped}（已存在）`);
       return 0;
     }
     case "install": {
       const client = pos[1] as ClientKind | undefined;
       if (client !== "claude" && client !== "codex" && client !== "pi") {
-        io.err("usage: memobox install <claude|codex|pi>");
+        io.err("用法：memobox install <claude|codex|pi>");
         return 1;
       }
       const result = await installClient(client);
@@ -341,11 +394,22 @@ export async function runCli(
       return 0;
     case "help":
     case "--help":
-    case "-h":
+    case "-h": {
+      const target = pos[1];
+      if (target) {
+        const help = cmdHelp(target);
+        if (help) {
+          io.out(help);
+          return 0;
+        }
+        io.err(`未知命令：${target}\n\n${USAGE}`);
+        return 1;
+      }
       io.out(USAGE);
       return 0;
+    }
     default:
-      io.err(`unknown command: ${cmd}\n\n${USAGE}`);
+      io.err(`未知命令：${cmd}\n\n${USAGE}`);
       return 1;
   }
 }

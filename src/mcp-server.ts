@@ -62,7 +62,7 @@ export async function handleLine(
 export async function serveStdio(store?: MemoryStore): Promise<void> {
   // embedder 走构造器默认（createEmbedder 读 env，配了 EMBEDDING_API_* 即语义模式）
   const s = store ?? new SQLiteStore(undefined, defaultDbPath());
-  console.error(`[memobox] stdio MCP server ready, db: ${defaultDbPath()}`);
+  console.error(`[memobox] stdio MCP 服务就绪，库文件：${defaultDbPath()}`);
   const rl = createInterface({ input: process.stdin });
   for await (const line of rl) {
     const outcome = await handleLine(s, line);
