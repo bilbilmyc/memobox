@@ -88,6 +88,7 @@ agent 不会主动调记忆工具——在你的 `AGENTS.md` / `CLAUDE.md` 里�
 memobox save "这个仓库用 tab 缩进" --entities style
 memobox search "缩进"
 memobox list / forget <id> / entities / stats / path
+memobox doctor                       # 自检：库、检索模式、客户端接线状态
 memobox export backup.json     # 全量备份（memobox-backup v1 格式）
 memobox import backup.json     # 幂等导入——相同 id 自动跳过
 ```

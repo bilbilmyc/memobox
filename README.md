@@ -92,6 +92,7 @@ Agents don't call memory tools unprompted — add an activation line to your
 memobox save "prefer tabs in this repo" --entities style
 memobox search "tabs"
 memobox list / forget <id> / entities / stats / path
+memobox doctor                       # health check: db, retrieval, client wiring
 memobox export backup.json     # full backup (memobox-backup v1 format)
 memobox import backup.json     # idempotent — same ids are skipped
 ```

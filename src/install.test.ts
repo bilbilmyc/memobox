@@ -11,6 +11,9 @@ import { join } from "node:path";
 import {
   claudeAddArgs,
   codexTomlBlock,
+  detectClaude,
+  detectCodex,
+  detectPi,
   installCodex,
   installPi,
   piMerge,
@@ -126,5 +129,46 @@ describe("install 文件操作（临时家目录）", () => {
     const bad = await installPi(entry, home);
     expect(bad.ok).toBe(false);
     expect(bad.message).toContain("not valid JSON");
+  });
+});
+
+describe("detect 探测（临时家目录）", () => {
+  test("三家：未配置 → configured false 且给出安装提示", () => {
+    const home = newHome();
+    expect(detectCodex(home)).toMatchObject({ client: "codex", configured: false });
+    expect(detectPi(home)).toMatchObject({ client: "pi", configured: false });
+    expect(detectClaude(home)).toMatchObject({ client: "claude", configured: false });
+    expect(detectCodex(home).detail).toContain("memobox install codex");
+  });
+
+  test("安装后探测变绿，且不误报别家条目", async () => {
+    const home = newHome();
+    await installCodex(entry, home);
+    await installPi(entry, home);
+    expect(detectCodex(home).configured).toBe(true);
+    expect(detectPi(home).configured).toBe(true);
+    // claude 家目录里没有它的配置文件——仍报未配置
+    expect(detectClaude(home).configured).toBe(false);
+  });
+
+  test("别家同名键不误报：只有 other 条目时 codex 未配置", () => {
+    const home = newHome();
+    mkdirSync(join(home, ".codex"), { recursive: true });
+    writeFileSync(
+      join(home, ".codex", "config.toml"),
+      "[mcp_servers.other]\ncommand = 'foo'\n",
+      "utf-8"
+    );
+    expect(detectCodex(home).configured).toBe(false);
+  });
+
+  test("claude：~/.claude.json 里有 mcpServers.memobox 即配置", () => {
+    const home = newHome();
+    writeFileSync(
+      join(home, ".claude.json"),
+      JSON.stringify({ mcpServers: { memobox: { command: "bun" } } }),
+      "utf-8"
+    );
+    expect(detectClaude(home).configured).toBe(true);
   });
 });

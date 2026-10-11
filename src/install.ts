@@ -194,3 +194,64 @@ export async function installClient(
   if (kind === "pi") return installPi(entry);
   return installClaude(entry);
 }
+
+// ---- 客户端接线探测（doctor 用；与安装器同一批路径和判据） ----
+
+/** 各客户端「是否已配置 memobox」的探测结果 */
+export type DetectResult = {
+  client: ClientKind;
+  configured: boolean;
+  detail: string;
+};
+
+export function detectCodex(home: string = homedir()): DetectResult {
+  const path = join(home, ".codex", "config.toml");
+  const configured =
+    existsSync(path) && CODEX_MARK.test(readFileSync(path, "utf-8"));
+  return {
+    client: "codex",
+    configured,
+    detail: configured ? path : `${path} has no [mcp_servers.memobox] — run: memobox install codex`,
+  };
+}
+
+export function detectPi(home: string = homedir()): DetectResult {
+  const path = join(home, ".pi", "agent", "mcp.json");
+  if (!existsSync(path)) {
+    return { client: "pi", configured: false, detail: `${path} missing — run: memobox install pi` };
+  }
+  try {
+    const cfg = JSON.parse(readFileSync(path, "utf-8")) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    const configured = cfg.mcpServers?.memobox !== undefined;
+    return {
+      client: "pi",
+      configured,
+      detail: configured ? path : `${path} has no mcpServers.memobox — run: memobox install pi`,
+    };
+  } catch {
+    return { client: "pi", configured: false, detail: `${path} is not valid JSON` };
+  }
+}
+
+export function detectClaude(home: string = homedir()): DetectResult {
+  // user 级 MCP 配置在 ~/.claude.json 的 mcpServers 键里
+  const path = join(home, ".claude.json");
+  if (!existsSync(path)) {
+    return { client: "claude", configured: false, detail: `${path} missing — run: memobox install claude` };
+  }
+  try {
+    const cfg = JSON.parse(readFileSync(path, "utf-8")) as {
+      mcpServers?: Record<string, unknown>;
+    };
+    const configured = cfg.mcpServers?.memobox !== undefined;
+    return {
+      client: "claude",
+      configured,
+      detail: configured ? path : `${path} has no memobox entry — run: memobox install claude`,
+    };
+  } catch {
+    return { client: "claude", configured: false, detail: `${path} is not valid JSON` };
+  }
+}

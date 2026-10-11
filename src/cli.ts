@@ -21,12 +21,12 @@
  * import.meta.main 时才接 process。env：MEMOBOX_DB_PATH 改库文件，
  * EMBEDDING_API_* 启用语义检索（不配 = 关键词模式）。
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { SQLiteStore } from "@/db/sqlite-store";
 import { buildBackup, parseBackup } from "@/lib/backup";
 import { defaultDbPath } from "@/lib/paths";
 import type { Memory, MemoryStore } from "@/lib/memory-store";
-import { installClient, type ClientKind } from "@/install";
+import { detectClaude, detectCodex, detectPi, installClient, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
 export const VERSION = "2.1.0";
@@ -44,6 +44,7 @@ usage:
   memobox entities [--limit 20]
   memobox stats
   memobox path                         print database file location
+  memobox doctor                       health check: db, retrieval, client wiring
   memobox export <file.json>           export all memories (backup)
   memobox import <file.json>           import backup (idempotent)
   memobox install <claude|codex|pi>    wire up an MCP client
@@ -154,6 +155,23 @@ export async function runCli(
     }
     case "path": {
       io.out(defaultDbPath());
+      return 0;
+    }
+    case "doctor": {
+      // 自检：库文件 + 检索模式 + 三家客户端接线情况，一眼定位「agent 怎么不记事」
+      const dbPath = defaultDbPath();
+      if (existsSync(dbPath)) {
+        const store = makeStore();
+        const { total, searches } = await store.stats();
+        io.out(`db:        ${dbPath} (${total} memories, ${searches} searches)`);
+        io.out(`retrieval: ${store.retrieval}${store.retrieval === "keyword" ? " (set EMBEDDING_API_* for semantic)" : ""}`);
+      } else {
+        io.out(`db:        ${dbPath} (not created yet — first save creates it)`);
+        io.out(`retrieval: ${process.env.EMBEDDING_API_BASE ? "semantic" : "keyword (set EMBEDDING_API_* for semantic)"}`);
+      }
+      for (const d of [detectCodex(), detectPi(), detectClaude()]) {
+        io.out(`${d.client}:${" ".repeat(Math.max(1, 9 - d.client.length))}${d.configured ? "configured  " : "NOT wired    "}${d.detail}`);
+      }
       return 0;
     }
     case "export": {

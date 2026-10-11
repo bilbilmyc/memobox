@@ -91,4 +91,13 @@ describe("runCli", () => {
     expect(await runCli(["install", "vscode"], h.io, h.store)).toBe(1);
     expect(h.err[0]).toContain("claude|codex|pi");
   });
+
+  test("doctor 输出库/检索模式/三家客户端状态", async () => {
+    const h = harness();
+    expect(await runCli(["doctor"], h.io, h.store)).toBe(0);
+    const text = h.text();
+    expect(text).toContain("db:");
+    expect(text).toContain("retrieval:");
+    for (const c of ["codex:", "pi:", "claude:"]) expect(text).toContain(c);
+  });
 });
