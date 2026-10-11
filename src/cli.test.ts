@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cmdHelp, parseArgs, parseSince, renderTable, runCli, USAGE, VERSION } from "./cli";
 import { StubStore } from "./lib/memory-store";
+import { loadConfig, saveConfig } from "./lib/config";
 import type { Memory, MemoryStore } from "./lib/memory-store";
 
 /** 收集输出的假 io + 新 StubStore——runCli 全注入，不起真进程 */
@@ -16,6 +17,28 @@ function harness() {
     err: (s: string) => err.push(s),
   };
   return { out, err, store, io, text: () => out.join("\n") };
+}
+
+/** doctor / model 测试用的「没有 Ollama」假工具集（不碰真网络/进程） */
+const noOllamaTools = () => ({
+  probeOllama: async () => null,
+  ollamaVersion: async () => null,
+  ensureServer: async () => false,
+  listModels: async () => null,
+  pull: async () => false,
+});
+
+/** 把配置文件指向不存在的临时路径并删掉 env 干扰；返回还原函数 */
+function isolateConfig(): () => void {
+  const prevBase = process.env.EMBEDDING_API_BASE;
+  const prevCfg = process.env.MEMOBOX_CONFIG_PATH;
+  delete process.env.EMBEDDING_API_BASE;
+  process.env.MEMOBOX_CONFIG_PATH = join(tmpdir(), "memobox-test-no-config.json");
+  return () => {
+    if (prevBase !== undefined) process.env.EMBEDDING_API_BASE = prevBase;
+    if (prevCfg !== undefined) process.env.MEMOBOX_CONFIG_PATH = prevCfg;
+    else delete process.env.MEMOBOX_CONFIG_PATH;
+  };
 }
 
 /** 造几条带显式 createdAt 的记忆（时间过滤的确定性靠它） */
@@ -149,27 +172,41 @@ describe("runCli 基础命令", () => {
 
   test("doctor 输出库/检索模式/三家客户端状态", async () => {
     const h = harness();
-    // 注入「没探测到 Ollama」保持输出确定（否则真探测要碰网络）
-    expect(await runCli(["doctor"], h.io, h.store, async () => null)).toBe(0);
-    const text = h.text();
-    expect(text).toContain("库文件：");
-    expect(text).toContain("检索模式：");
-    for (const c of ["codex:", "pi:", "claude:"]) expect(text).toContain(c);
-    expect(text).not.toContain("Ollama");
+    // 注入「没探测到 Ollama」+ 隔离配置文件，保持输出确定（否则要碰网络/真配置）
+    const restore = isolateConfig();
+    try {
+      expect(await runCli(["doctor"], h.io, h.store, noOllamaTools())).toBe(0);
+      const text = h.text();
+      expect(text).toContain("库文件：");
+      expect(text).toContain("检索模式：");
+      for (const c of ["codex:", "pi:", "claude:"]) expect(text).toContain(c);
+      expect(text).not.toContain("Ollama");
+    } finally {
+      restore();
+    }
   });
 
-  test("doctor：keyword 模式探测到本机 Ollama 时给升级提示", async () => {
+  test("doctor：keyword 模式探测到本机 Ollama 时给一键升级提示", async () => {
     const h = harness();
-    const prev = process.env.EMBEDDING_API_BASE;
-    delete process.env.EMBEDDING_API_BASE;
+    const restore = isolateConfig();
     try {
-      await runCli(["doctor"], h.io, h.store, async () => "bge-m3");
+      await runCli(["doctor"], h.io, h.store, { ...noOllamaTools(), probeOllama: async () => "bge-m3" });
       const text = h.text();
       expect(text).toContain("检测到本机 Ollama");
-      expect(text).toContain("EMBEDDING_MODEL=bge-m3");
-      expect(text).toContain("无需 EMBEDDING_API_KEY");
+      expect(text).toContain("memobox model enable");
     } finally {
-      if (prev !== undefined) process.env.EMBEDDING_API_BASE = prev;
+      restore();
+    }
+  });
+
+  test("doctor：装了 Ollama 但服务没跑 → 提示 enable 会拉起", async () => {
+    const h = harness();
+    const restore = isolateConfig();
+    try {
+      await runCli(["doctor"], h.io, h.store, { ...noOllamaTools(), ollamaVersion: async () => "0.5.7" });
+      expect(h.text()).toContain("服务未运行");
+    } finally {
+      restore();
     }
   });
 });
@@ -345,6 +382,141 @@ applies_to: cwd=D:\\workspace\\Java
       await runCli(["import-codex", "--file", "Z:/nope/MEMORY.md"], h.io, h.store)
     ).toBe(1);
     expect(h.err[0]).toContain("找不到");
+  });
+});
+
+describe("model 子命令（v2.4，本地小模型管理）", () => {
+  const CFG = join(tmpdir(), "memobox-model-test-config.json");
+
+  /** 指向临时配置文件 + 清掉 env 干扰；返回还原函数 */
+  function setup(): () => void {
+    const restore = isolateConfig();
+    process.env.MEMOBOX_CONFIG_PATH = CFG;
+    rmSync(CFG, { force: true });
+    return restore;
+  }
+
+  test("缺子命令 / 未知子命令报用法", async () => {
+    const restore = setup();
+    try {
+      const h = harness();
+      expect(await runCli(["model"], h.io, h.store, noOllamaTools())).toBe(1);
+      expect(h.err[0]).toContain("status|enable|disable");
+      expect(await runCli(["model", "frob"], h.io, h.store, noOllamaTools())).toBe(1);
+    } finally {
+      restore();
+    }
+  });
+
+  test("enable 全链路：装好→起服务→拉模型→写配置（桩库补算 0）", async () => {
+    const restore = setup();
+    try {
+      const pulled: string[] = [];
+      const tools = {
+        ...noOllamaTools(),
+        ollamaVersion: async () => "0.5.7",
+        ensureServer: async () => true,
+        listModels: async () => [],
+        pull: async (
+          name: string,
+          onStatus: (s: { status: string; completed?: number; total?: number }) => void
+        ) => {
+          pulled.push(name);
+          onStatus({ status: "pulling manifest" });
+          onStatus({ status: "success" });
+          return true;
+        },
+      };
+      const h = harness();
+      expect(await runCli(["model", "enable"], h.io, h.store, tools)).toBe(0);
+      const text = h.text();
+      expect(pulled).toEqual(["bge-m3"]);
+      expect(text).toContain("拉取模型 bge-m3");
+      expect(text).toContain("语义检索已启用");
+      expect(text).toContain("自动生效");
+      expect(JSON.parse(readFileSync(CFG, "utf-8"))).toEqual({
+        embedding: { base: "http://localhost:11434/v1", model: "bge-m3" },
+      });
+    } finally {
+      restore();
+    }
+  });
+
+  test("enable：模型已在库时跳过拉取；--model 可换默认", async () => {
+    const restore = setup();
+    try {
+      const pulled: string[] = [];
+      const tools = {
+        ...noOllamaTools(),
+        ollamaVersion: async () => "0.5.7",
+        ensureServer: async () => true,
+        listModels: async () => ["bge-m3"],
+        pull: async (name: string) => {
+          pulled.push(name);
+          return true;
+        },
+      };
+      const h = harness();
+      expect(await runCli(["model", "enable", "--model", "all-minilm"], h.io, h.store, tools)).toBe(0);
+      expect(pulled).toEqual(["all-minilm"]);
+      expect(h.text()).toContain("all-minilm");
+      expect(loadConfig(CFG).embedding?.model).toBe("all-minilm");
+    } finally {
+      restore();
+    }
+  });
+
+  test("enable：没装 Ollama 报错且不写配置", async () => {
+    const restore = setup();
+    try {
+      const h = harness();
+      expect(await runCli(["model", "enable"], h.io, h.store, noOllamaTools())).toBe(1);
+      expect(h.err[0]).toContain("未检测到 Ollama");
+      expect(existsSync(CFG)).toBe(false);
+    } finally {
+      restore();
+    }
+  });
+
+  test("disable：删配置段回到关键词；没启用过时明说", async () => {
+    const restore = setup();
+    try {
+      saveConfig({ embedding: { base: "http://x/v1", model: "m" } }, CFG);
+      const h = harness();
+      expect(await runCli(["model", "disable"], h.io, h.store, noOllamaTools())).toBe(0);
+      expect(h.text()).toContain("已停用");
+      expect(loadConfig(CFG)).toEqual({});
+      const h2 = harness();
+      await runCli(["model", "disable"], h2.io, h2.store, noOllamaTools());
+      expect(h2.text()).toContain("本来就是");
+    } finally {
+      restore();
+    }
+  });
+
+  test("status：安装/服务/检索模式与配置来源", async () => {
+    const restore = setup();
+    try {
+      const tools = {
+        ...noOllamaTools(),
+        ollamaVersion: async () => "0.5.7",
+        listModels: async () => ["bge-m3", "llama3.2"],
+      };
+      const h = harness();
+      expect(await runCli(["model", "status"], h.io, h.store, tools)).toBe(0);
+      const text = h.text();
+      expect(text).toContain("已安装（0.5.7）");
+      expect(text).toContain("运行中（2 个模型");
+      expect(text).toContain("keyword");
+      // 配置文件启用后显示 semantic + 来源
+      saveConfig({ embedding: { base: "http://localhost:11434/v1", model: "bge-m3" } }, CFG);
+      const h2 = harness();
+      await runCli(["model", "status"], h2.io, h2.store, tools);
+      expect(h2.text()).toContain("semantic");
+      expect(h2.text()).toContain("来源");
+    } finally {
+      restore();
+    }
   });
 });
 

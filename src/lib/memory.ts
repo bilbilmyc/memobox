@@ -85,6 +85,14 @@ export interface MemoryStore {
   importMemories(
     items: Memory[]
   ): Promise<{ imported: number; skipped: number }>;
+  /**
+   * 补算向量（v2.4）：给所有缺 embedding 的记忆现算并落库——
+   * `memobox model enable` 之后让存量记忆也能被语义检索命中。
+   * 返回补算成功的条数。keyword 模式 / 桩实现直接返回 0。
+   */
+  backfillEmbeddings(
+    onProgress?: (done: number, total: number) => void
+  ): Promise<number>;
 }
 
 /** 余弦相似度：本地模式（SQLite）的向量检索用 */

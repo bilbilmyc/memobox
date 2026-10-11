@@ -11,6 +11,8 @@ export interface EmbeddingProvider {
   embed(text: string): Promise<number[]>;
 }
 
+import { loadConfig } from "./config";
+
 export function openAICompatibleEmbedder(
   opts: {
     base: string;
@@ -50,16 +52,31 @@ export function openAICompatibleEmbedder(
   };
 }
 
-/** 环境变量驱动的工厂；只设 EMBEDDING_API_BASE 即启用（KEY 可选，本地端点免鉴权） */
+/**
+ * 环境变量驱动的工厂。两处来源，env 优先：
+ * 1. EMBEDDING_API_*（老用法；只设 BASE 即启用，KEY 可选——本地端点免鉴权）
+ * 2. ~/.memobox/config.json 的 embedding 段（`memobox model enable` 写的，
+ *    v2.4 起——这样被客户端拉起的 MCP 服务也能拿到配置，不用重装）
+ */
 export function createEmbedder(): EmbeddingProvider | null {
-  const base = process.env.EMBEDDING_API_BASE;
-  if (!base) return null;
-  return openAICompatibleEmbedder({
-    base,
-    key: process.env.EMBEDDING_API_KEY,
-    model: process.env.EMBEDDING_MODEL ?? "text-embedding-3-small",
-    dimensions: Number(process.env.EMBEDDING_DIM ?? 1536),
-  });
+  if (process.env.EMBEDDING_API_BASE) {
+    return openAICompatibleEmbedder({
+      base: process.env.EMBEDDING_API_BASE,
+      key: process.env.EMBEDDING_API_KEY,
+      model: process.env.EMBEDDING_MODEL ?? "text-embedding-3-small",
+      dimensions: Number(process.env.EMBEDDING_DIM ?? 1536),
+    });
+  }
+  const cfg = loadConfig().embedding;
+  if (cfg?.base) {
+    return openAICompatibleEmbedder({
+      base: cfg.base,
+      key: cfg.key,
+      model: cfg.model ?? "text-embedding-3-small",
+      dimensions: Number(process.env.EMBEDDING_DIM ?? 1536),
+    });
+  }
+  return null;
 }
 
 /**

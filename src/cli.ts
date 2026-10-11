@@ -26,11 +26,39 @@ import { buildBackup, parseBackup } from "@/lib/backup";
 import { parseCodexMemoryMd, parseCodexSummary } from "@/lib/codex-import";
 import { defaultDbPath } from "@/lib/paths";
 import type { Memory, MemoryStore } from "@/lib/memory-store";
-import { probeOllama } from "@/lib/embeddings";
+import { createEmbedder, probeOllama } from "@/lib/embeddings";
+import { defaultConfigPath, loadConfig, saveConfig } from "@/lib/config";
+import {
+  DEFAULT_EMBED_MODEL,
+  OLLAMA_HOST,
+  ensureOllamaServer,
+  formatPullStatus,
+  ollamaModels,
+  ollamaVersion,
+  pullOllamaModel,
+  type PullStatus,
+} from "@/lib/ollama";
 import { detectClaude, detectCodex, detectPi, installClient, serverEntry, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
-export const VERSION = "2.3.1";
+export const VERSION = "2.4.0";
+
+/** doctor / model 子命令的外部依赖（真入口用默认值；单测注入假实现不碰网络） */
+export type CliTools = {
+  probeOllama: () => Promise<string | null>;
+  ollamaVersion: () => Promise<string | null>;
+  ensureServer: () => Promise<boolean>;
+  listModels: () => Promise<string[] | null>;
+  pull: (name: string, onStatus: (s: PullStatus) => void) => Promise<boolean>;
+};
+
+export const defaultCliTools: CliTools = {
+  probeOllama,
+  ollamaVersion,
+  ensureServer: () => ensureOllamaServer(),
+  listModels: () => ollamaModels(),
+  pull: (name, onStatus) => pullOllamaModel(name, onStatus),
+};
 
 /** 子命令规格表：--help / help <命令> / 总帮助都从这里渲染 */
 type CmdSpec = { name: string; usage: string; desc: string };
@@ -48,6 +76,7 @@ const COMMANDS: CmdSpec[] = [
   { name: "stats", usage: "memobox stats", desc: "库统计（记忆数 / 检索数）" },
   { name: "path", usage: "memobox path", desc: "打印库文件位置" },
   { name: "doctor", usage: "memobox doctor", desc: "自检：库文件 / 检索模式 / 三家客户端接线状态" },
+  { name: "model", usage: "memobox model <status|enable|disable> [--model bge-m3]", desc: "本地嵌入模型管理：enable 自动拉起 Ollama、拉模型、启用语义检索并补算历史向量" },
   { name: "export", usage: "memobox export <file.json>", desc: "全量备份（memobox-backup v1 格式，向量不入备份可重算）" },
   { name: "import", usage: "memobox import <file.json>", desc: "导入备份（幂等：相同 id 跳过）" },
   { name: "import-codex", usage: "memobox import-codex [--file <MEMORY.md路径>] [--dry-run]", desc: "迁移 Codex 原生记忆（~/.codex/memories/，任务+用户画像；重复导入幂等）" },
@@ -137,8 +166,7 @@ export async function runCli(
   argv: string[],
   io: CliIo,
   makeStore: () => MemoryStore,
-  /** doctor 用的 Ollama 探测（默认真探测；测试注入假实现保持确定性） */
-  probeOllamaFn: () => Promise<string | null> = probeOllama
+  tools: CliTools = defaultCliTools
 ): Promise<number> {
   const { pos, flags } = parseArgs(argv);
   const cmd = pos[0] ?? "serve";
@@ -221,24 +249,103 @@ export async function runCli(
         const store = makeStore();
         const { total, searches } = await store.stats();
         io.out(`库文件：  ${dbPath}（${total} 条记忆，${searches} 次检索）`);
-        io.out(`检索模式：${store.retrieval === "keyword" ? "keyword（配 EMBEDDING_API_* 启用语义检索）" : store.retrieval}`);
+        io.out(`检索模式：${store.retrieval === "keyword" ? "keyword（memobox model enable 可启用语义检索）" : store.retrieval}`);
       } else {
         io.out(`库文件：  ${dbPath}（尚未创建——第一次 save 时自动建库）`);
-        io.out(`检索模式：${process.env.EMBEDDING_API_BASE ? "semantic" : "keyword（配 EMBEDDING_API_* 启用语义检索）"}`);
+        io.out(`检索模式：${createEmbedder() ? "semantic" : "keyword（memobox model enable 可启用语义检索）"}`);
       }
       for (const d of [detectCodex(), detectPi(), detectClaude()]) {
         io.out(`${d.client}:     ${d.configured ? "已接线" : "未接线"}  ${d.detail}`);
       }
-      // keyword 模式下探测本机 Ollama：装了就提示零成本升级语义检索（只提示，不自动启用）
-      if (!process.env.EMBEDDING_API_BASE) {
-        const model = await probeOllamaFn();
+      // 语义检索没启用时探测本机 Ollama：装了就给一键升级提示（只提示，不自动启用）
+      if (!createEmbedder()) {
+        const model = await tools.probeOllama();
         if (model) {
-          io.out(`提示：    检测到本机 Ollama（推荐模型 ${model}）——语义检索可零成本启用：`);
-          io.out(`         设 EMBEDDING_API_BASE=http://localhost:11434/v1 与 EMBEDDING_MODEL=${model}，`);
-          io.out(`         然后重跑 memobox install <client>（本地端点无需 EMBEDDING_API_KEY）`);
+          io.out(`提示：    检测到本机 Ollama 服务（推荐模型 ${model}）——一条命令启用本地语义检索：`);
+          io.out(`         memobox model enable（自动拉模型、写配置、补算历史向量）`);
+        } else if (await tools.ollamaVersion()) {
+          io.out(`提示：    本机装了 Ollama 但服务未运行——memobox model enable 会自动拉起`);
         }
       }
       return 0;
+    }
+    case "model": {
+      // 本地嵌入模型管理（v2.4，CherryStudio 式）：
+      // enable = 检测 Ollama → 没跑就拉起 serve → 缺模型就流式拉取 → 写配置 → 补算存量向量
+      const sub = pos[1];
+      if (sub === "status") {
+        const ver = await tools.ollamaVersion();
+        io.out(`本机 Ollama：${ver ? `已安装（${ver}）` : "未安装（https://ollama.com 下载）"}`);
+        const models = ver ? await tools.listModels() : null;
+        io.out(`Ollama 服务：${models ? `运行中（${models.length} 个模型${models.length ? "：" + models.join(", ") : ""}）` : "未运行"}`);
+        const fromEnv = Boolean(process.env.EMBEDDING_API_BASE);
+        const fromCfg = Boolean(loadConfig().embedding?.base);
+        io.out(
+          `检索模式：  ${fromEnv || fromCfg ? "semantic" : "keyword（memobox model enable 可启用本地语义检索）"}` +
+            (fromEnv ? "（来源：环境变量 EMBEDDING_API_*）" : fromCfg ? `（来源：${defaultConfigPath()}）` : "")
+        );
+        return 0;
+      }
+      if (sub === "enable") {
+        const model = flags.get("model") ?? DEFAULT_EMBED_MODEL;
+        const ver = await tools.ollamaVersion();
+        if (!ver) {
+          io.err("未检测到 Ollama——先去 https://ollama.com 下载安装；或改用云端端点（.env.example 有示例）");
+          return 1;
+        }
+        io.out(`Ollama 已安装（${ver}）`);
+        if (!(await tools.ensureServer())) {
+          io.err("Ollama 服务拉不起来——手动跑 `ollama serve` 后重试");
+          return 1;
+        }
+        const models = await tools.listModels();
+        if (models && !models.includes(model)) {
+          io.out(`拉取模型 ${model}（首次约 1.2GB，取决于网速）…`);
+          // 进度节流：状态词变化必打；纯下载进度每 +10% 打一行
+          let lastStatus = "";
+          let lastPct = -100;
+          const ok = await tools.pull(model, (s) => {
+            const pct = s.total ? Math.floor(((s.completed ?? 0) / s.total) * 100) : null;
+            if (s.status !== lastStatus || (pct !== null && pct - lastPct >= 10)) {
+              io.out(`  ${formatPullStatus(s)}`);
+              lastStatus = s.status;
+              if (pct !== null) lastPct = pct;
+            }
+          });
+          if (!ok) {
+            io.err("模型拉取失败（网络中断？）——重试 memobox model enable 会续传");
+            return 1;
+          }
+        } else {
+          io.out(`模型 ${model} 已就绪`);
+        }
+        // 先写配置再造 store——store 构造时读配置才能拿到刚启用的 embedder
+        saveConfig({ ...loadConfig(), embedding: { base: `${OLLAMA_HOST}/v1`, model } });
+        const backfilled = await makeStore().backfillEmbeddings((done, total) => {
+          if (done % 10 === 0 || done === total) io.out(`  补算向量 ${done}/${total}`);
+        });
+        if (backfilled > 0) io.out(`已补算 ${backfilled} 条历史记忆的向量`);
+        io.out(`✓ 语义检索已启用：${model} @ ${OLLAMA_HOST}/v1（写入 ${defaultConfigPath()}）`);
+        io.out(`  所有 memobox 进程（含 MCP 服务）下次启动自动生效，无需重装客户端`);
+        return 0;
+      }
+      if (sub === "disable") {
+        if (process.env.EMBEDDING_API_BASE) {
+          io.out("环境变量 EMBEDDING_API_BASE 还配着——它优先于配置文件；先从 shell / 客户端配置里删掉再 disable");
+          return 0;
+        }
+        const cfg = loadConfig();
+        if (!cfg.embedding) {
+          io.out("本来就是关键词检索（没启用过语义模式）");
+          return 0;
+        }
+        delete cfg.embedding;
+        saveConfig(cfg);
+        io.out("已停用语义检索，回到关键词模式（已算的向量留在库里不碍事；重启客户端生效）");
+        return 0;
+      }
+      io.err("用法：memobox model <status|enable|disable> [--model 名]");
+      return 1;
     }
     case "query": {
       // 结构化过滤（AND 组合）：文本子串 + kind/source 精确 + entity 包含 + 时间下限

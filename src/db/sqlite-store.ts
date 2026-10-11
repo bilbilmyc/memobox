@@ -519,6 +519,40 @@ export class SQLiteStore implements MemoryStore {
     return computeBenchmark(rows);
   }
 
+  // ---- v2.4 语义模式启用链路 ----
+
+  /**
+   * 补算向量：给所有缺 embedding 的记忆现算（`memobox model enable` 用）。
+   * 单条失败跳过不中断（与 save 的可用性优先策略一致）；不动 updated_at
+   * ——补算不是编辑，不应扰动排序。
+   */
+  async backfillEmbeddings(
+    onProgress?: (done: number, total: number) => void
+  ): Promise<number> {
+    if (!this.embedder) return 0;
+    const rows = this.db
+      .select()
+      .from(schema.memories)
+      .all()
+      .filter((r) => !r.embedding);
+    let done = 0;
+    for (const r of rows) {
+      try {
+        const vec = await this.embedder.embed(r.content);
+        this.db
+          .update(schema.memories)
+          .set({ embedding: JSON.stringify(vec) })
+          .where(eq(schema.memories.id, r.id))
+          .run();
+        done++;
+      } catch {
+        // 单条失败跳过——下次 enable 还能补
+      }
+      onProgress?.(done, rows.length);
+    }
+    return done;
+  }
+
   // ---- v1.6 备份/迁移 ----
 
   async exportAll(): Promise<Memory[]> {

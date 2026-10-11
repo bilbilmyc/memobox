@@ -142,6 +142,11 @@ export class StubStore implements MemoryStore {
     }
     return { imported, skipped };
   }
+
+  /** 桩不存向量，补算恒为 0 */
+  async backfillEmbeddings(): Promise<number> {
+    return 0;
+  }
 }
 
 /** 工厂：stub 逃生口优先，否则 SQLite（库文件见 defaultDbPath） */

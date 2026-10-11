@@ -105,6 +105,10 @@ memobox search "tabs"
 memobox list / forget <id> / entities / stats / path
 memobox doctor                       # health check: db, retrieval, wiring (also detects local Ollama)
 
+# one-command local semantic search (CherryStudio-style: starts Ollama,
+# pulls bge-m3, writes ~/.memobox/config.json, backfills vectors)
+memobox model enable                 # also: model status / model disable
+
 # structured filter (AND-combined), terminal table or --json
 memobox query "port" --kind preference --entity ports --since 7d
 memobox get <id>                     # one memory, full JSON
@@ -128,20 +132,23 @@ memobox import-codex
 - **Retrieval**: entity-graph expansion always on; semantic search (cosine
   over embeddings) when an OpenAI-compatible endpoint is configured, keyword
   scoring as the zero-config fallback (Chinese full-sentence queries work).
-- **Semantic mode (optional upgrade)**: set `EMBEDDING_API_BASE` and
-  `EMBEDDING_MODEL` to enable (OpenAI, SiliconFlow, Ollama…; `_KEY` is
-  optional — local endpoints need none). `memobox install` passes them
-  through to the client config automatically.
+- **Semantic mode (optional upgrade)**: with Ollama installed it's one
+  command — `memobox model enable` (starts the Ollama server, pulls bge-m3,
+  writes `~/.memobox/config.json`, backfills vectors for existing memories;
+  every memobox process including MCP servers picks it up automatically, no
+  client reinstall needed). Or set `EMBEDDING_API_BASE` / `EMBEDDING_MODEL`
+  manually (OpenAI, SiliconFlow, Ollama…; `_KEY` optional — local endpoints
+  need none).
 - **Why can't it reuse the agent's own model?** An MCP server is a child
   process spawned by the client; the protocol has no channel to call back
   into the client's model. Semantic search only needs text→vector math — a
-  local Ollama covers it at zero cost (`memobox doctor` auto-detects it and
-  prints the exact settings).
+  local Ollama covers it at zero cost, and `memobox model enable` wires it
+  all up.
 
 ## Development
 
 ```bash
-bun test          # 94 tests
+bun test          # 110 tests
 bun run typecheck
 ```
 

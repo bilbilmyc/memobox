@@ -82,6 +82,9 @@ function fakeStore(): MemoryStore {
       }
       return { imported, skipped: items.length - imported };
     },
+    async backfillEmbeddings() {
+      return 0;
+    },
   };
 }
 

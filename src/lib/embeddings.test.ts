@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createEmbedder, openAICompatibleEmbedder, probeOllama } from "./embeddings";
+import { saveConfig } from "./config";
 
 describe("openAICompatibleEmbedder", () => {
   test("posts to {base}/embeddings and parses the vector", async () => {
@@ -95,25 +99,46 @@ describe("createEmbedder", () => {
   const keys = ["EMBEDDING_API_BASE", "EMBEDDING_API_KEY", "EMBEDDING_MODEL"];
   const original: Record<string, string | undefined> = {};
   for (const k of keys) original[k] = process.env[k];
+  // 配置文件是第二来源（v2.4）——测试统一指到临时路径，隔离真机的 ~/.memobox/config.json
+  const CFG = join(tmpdir(), "memobox-emb-test-config.json");
 
   afterEach(() => {
     for (const k of keys) {
       if (original[k] === undefined) delete process.env[k];
       else process.env[k] = original[k];
     }
+    delete process.env.MEMOBOX_CONFIG_PATH;
+    rmSync(CFG, { force: true });
   });
 
   test("没有 BASE 就返回 null（KEY 单独存在也没用）", () => {
+    process.env.MEMOBOX_CONFIG_PATH = CFG;
     delete process.env.EMBEDDING_API_BASE;
     process.env.EMBEDDING_API_KEY = "sk-x";
     expect(createEmbedder()).toBeNull();
   });
 
   test("只配 BASE（本地端点免鉴权）也建出 provider", () => {
+    process.env.MEMOBOX_CONFIG_PATH = CFG;
     delete process.env.EMBEDDING_API_KEY;
     process.env.EMBEDDING_API_BASE = "http://localhost:11434/v1";
     process.env.EMBEDDING_MODEL = "bge-m3";
     expect(createEmbedder()?.model).toBe("bge-m3");
+  });
+
+  test("配置文件的 embedding 段也能启用（memobox model enable 写的路径）", () => {
+    process.env.MEMOBOX_CONFIG_PATH = CFG;
+    delete process.env.EMBEDDING_API_BASE;
+    saveConfig({ embedding: { base: "http://localhost:11434/v1", model: "bge-m3" } }, CFG);
+    expect(createEmbedder()?.model).toBe("bge-m3");
+  });
+
+  test("env 优先于配置文件", () => {
+    process.env.MEMOBOX_CONFIG_PATH = CFG;
+    process.env.EMBEDDING_API_BASE = "https://api.openai.com/v1";
+    process.env.EMBEDDING_MODEL = "text-embedding-3-small";
+    saveConfig({ embedding: { base: "http://localhost:11434/v1", model: "bge-m3" } }, CFG);
+    expect(createEmbedder()?.model).toBe("text-embedding-3-small");
   });
 });
 
