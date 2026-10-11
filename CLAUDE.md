@@ -18,8 +18,9 @@ MCP server + Web 管理后台 + Postgres(pgvector)。
 | Bun | 全运行时 `bun --bun`；Docker 用 standalone 多阶段；**锁 Bun ≥1.4 + Next 16.x**，升级 Next 小版本先跑完整构建 |
 | 备选 | ②自托管转写/字幕工作台 = 下季度候选（骨架可复用）；③CC 生态中枢已否决 |
 
-差异化护栏（对竞品 mem0/letta/codebase-memory-mcp）：自托管体验（一条
-docker compose）、图谱质量检索、治理后台（编辑/遗忘/来源追溯）、中文文档、评测集。
+差异化护栏（对竞品 mem0/letta/codebase-memory-mcp）：自托管体验（本地零依赖
+SQLite / 服务端一条 docker compose）、图谱质量检索、治理后台（编辑/遗忘/来源
+追溯）、中文文档、评测集。
 
 ## 路线图
 
@@ -28,7 +29,8 @@ docker compose）、图谱质量检索、治理后台（编辑/遗忘/来源追�
 - v0.3 ✅ 可插拔 embedding（OpenAI 兼容 `/embeddings` 通吃：OpenAI/SiliconFlow bge-m3/Ollama；env `EMBEDDING_API_BASE/KEY/MODEL`，不配=关键词模式）+ pgvector cosine 语义检索（provider 挂了自动回退关键词、未嵌入行兜底关键词）+ /admin「最近检索」台账卡片（查询/命中/延迟）+ 版本 0.3.0（21 测试全绿）。**维度首次迁移已锁定 1536，改维度=破坏性迁移**，旋钮 `EMBEDDING_DIM` 留给全新部署
 - v0.4 评测集报表（query_log → 标注 → 检索质量基准）
 - v1.0 ✅ 发布闭环：Dockerfile 多阶段（bun standalone，启动自动迁移 `scripts/migrate.ts`）+ compose `app` 服务（depends_on db healthy、restart、healthcheck）+ README.md / README.zh-CN.md 双语。剩余：MCP 注册表提交（需 Soren 本人操作）、LICENSE 待定名
-- v1.1 图谱检索（entity_nodes / memory_entity_edges 启用）
+- v1.1 ✅ SQLite 本地模式（2026-10-11 Soren 提议）：`bun:sqlite` 零依赖 + JS 余弦（本地规模全表扫即可）+ 双模式选择（`DATABASE_URL` 有=Postgres 服务端模式，无=SQLite 本地模式，默认 `data/memobox.db`，`MEMOBOX_DB_PATH` 可改，`MEMOBOX_BACKEND=stub` 兜底）+ 内联幂等 DDL（无 drizzle-kit sqlite 迁移负担）（25 测试全绿，sqlite e2e 过）
+- v1.2 图谱检索（entity_nodes / memory_entity_edges 启用）、后台编辑与遗忘、检索评测报表
 
 ## 常用命令
 
@@ -51,3 +53,4 @@ MCP 接入：`claude mcp add --transport http memobox http://localhost:3100/mcp`
 - 本机没配 EMBEDDING_API_* 时 dev 走关键词模式；语义模式已用 fake embedder 对真实 pgvector 验证过（store.test.ts）
 - **Turbopack standalone 会把服务端依赖打进 bundle**——`.next/standalone/node_modules` 里没有 drizzle-orm/postgres.js 可解析副本，Dockerfile 里从 deps 阶段 COPY 这两个包给 migrator 用（两者零运行时依赖）。踩过：容器 crash-loop `Cannot find module 'drizzle-orm/postgres-js'`
 - dev server 和 compose app 共用宿主机 3100（APP_PORT 可改）——两者别同时起；当前姿势：`docker compose stop app` 后跑 `bun run dev`
+- 本地想临时切 SQLite 模式 dev：`DATABASE_URL= bun run dev`（空串覆盖 .env；或干脆删 .env 里的 DATABASE_URL）；SQLite 库文件被 dev 进程锁住（WAL）属正常，停进程才能删

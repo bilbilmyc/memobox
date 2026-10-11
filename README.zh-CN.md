@@ -13,8 +13,10 @@ Agent 会忘事。memobox 给任何支持 MCP（Model Context Protocol）的客�
 - **MCP 优先。** 不是某人 API 的包装，而是一个独立的
   [Streamable HTTP](https://modelcontextprotocol.io) MCP 服务，暴露
   `memory_save` / `memory_search` 两个工具。
-- **只要 Postgres。** 一条 `docker compose up` 搞定。不需要 Redis、不需要
-  Neo4j、没有任何额外组件；向量就存在 [pgvector](https://github.com/pgvector/pgvector) 里。
+- **双部署模式。** *本地模式*：零依赖——Bun 内置的 `bun:sqlite`，一个进程 +
+  一个文件。*服务端模式*：一条 `docker compose up`，Postgres +
+  [pgvector](https://github.com/pgvector/pgvector)。两种模式都不需要 Redis、
+  Neo4j 或任何额外组件。
 - **可插拔 embedding。** 任何 OpenAI 兼容的 `/embeddings` 端点都能用
   （OpenAI、SiliconFlow `bge-m3`、Ollama……）。没配 key？自动降级为关键词检索，
   不会罢工。
@@ -24,12 +26,26 @@ Agent 会忘事。memobox 给任何支持 MCP（Model Context Protocol）的客�
 
 ## 快速开始
 
+### 本地模式 —— 不用 Docker、不用 Postgres（需要 [Bun](https://bun.sh) ≥ 1.4）
+
 ```bash
 git clone https://github.com/your-name/memobox && cd memobox
+bun install
+bun run build && bun run start
+```
+
+单进程跑在 **http://localhost:3100**；记忆落在一个 `./data/memobox.db`
+文件里（`MEMOBOX_DB_PATH` 可挪位置）。
+
+### 服务端模式 —— Docker Compose
+
+```bash
 docker compose up -d
 ```
 
 会启动 Postgres（pgvector）、自动执行迁移，应用跑在 **http://localhost:3100**。
+
+两种模式下都是：
 
 - MCP 端点：`http://localhost:3100/mcp`
 - 治理后台：`http://localhost:3100/admin` —— 口令来自
@@ -51,11 +67,14 @@ claude mcp add --transport http memobox http://localhost:3100/mcp
 | 变量 | 默认值 | 用途 |
 |---|---|---|
 | `ADMIN_PASSWORD` | `memobox-dev` | 单管理员后台口令 |
+| `DATABASE_URL` | — | 配了 = 服务端模式（Postgres）；不配 = 本地模式（SQLite） |
+| `MEMOBOX_DB_PATH` | `data/memobox.db` | SQLite 文件路径（本地模式） |
+| `MEMOBOX_BACKEND` | — | `stub` = 内存演示模式，不落盘 |
 | `APP_PORT` | `3100` | 应用容器映射到宿主机的端口 |
 | `EMBEDDING_API_BASE` | — | OpenAI 兼容端点 base URL；不配 = 关键词检索 |
 | `EMBEDDING_API_KEY` | — | embedding 端点的 API key |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | 模型名 |
-| `EMBEDDING_DIM` | `1536` | 向量维度——**由首次迁移锁定**，只有全新库才能改 |
+| `EMBEDDING_DIM` | `1536` | 向量维度——**由首次迁移锁定**（服务端模式），只有全新库才能改 |
 
 ### Embedding 服务商
 
@@ -100,4 +119,5 @@ bun run build             # 生产构建（standalone）
 - [x] v0.2 — Postgres 接线、检索日志、关键词检索
 - [x] v0.3 — 可插拔 embedding、pgvector 语义检索、检索日志后台
 - [x] v1.0 — Dockerfile（standalone、自动迁移）、中英双语文档
-- [ ] v1.1 — 图谱检索（`entity_nodes` / `memory_entity_edges`）、后台编辑与遗忘、检索评测报告
+- [x] v1.1 — SQLite 本地模式（`bun:sqlite`、JS 余弦、零依赖）
+- [ ] v1.2 — 图谱检索（`entity_nodes` / `memory_entity_edges`）、后台编辑与遗忘、检索评测报告

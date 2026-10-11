@@ -14,8 +14,10 @@ what your agents remember.
 - **MCP-first.** Not a wrapper around someone's API — a standalone
   [Streamable HTTP](https://modelcontextprotocol.io) MCP server exposing
   `memory_save` / `memory_search`.
-- **Postgres-only.** One `docker compose up`. No Redis, no Neo4j, no extra
-  moving parts; embeddings live in [pgvector](https://github.com/pgvector/pgvector).
+- **Two deployment modes.** *Local mode*: zero dependencies — SQLite via
+  Bun's built-in `bun:sqlite`, one process + one file. *Server mode*: one
+  `docker compose up` with Postgres + [pgvector](https://github.com/pgvector/pgvector).
+  No Redis, no Neo4j, no extra moving parts either way.
 - **Pluggable embeddings.** Any OpenAI-compatible `/embeddings` endpoint works
   (OpenAI, SiliconFlow `bge-m3`, Ollama, ...). No key configured? memobox
   degrades gracefully to keyword retrieval instead of breaking.
@@ -26,13 +28,27 @@ what your agents remember.
 
 ## Quickstart
 
+### Local mode — no Docker, no Postgres (needs [Bun](https://bun.sh) ≥ 1.4)
+
 ```bash
 git clone https://github.com/your-name/memobox && cd memobox
+bun install
+bun run build && bun run start
+```
+
+Everything runs in one process on **http://localhost:3100**; memories are
+persisted to `./data/memobox.db` (move it with `MEMOBOX_DB_PATH`).
+
+### Server mode — Docker Compose
+
+```bash
 docker compose up -d
 ```
 
 That starts Postgres (pgvector), applies migrations, and serves the app on
 **http://localhost:3100**.
+
+Either way:
 
 - MCP endpoint: `http://localhost:3100/mcp`
 - Admin console: `http://localhost:3100/admin` — password from
@@ -55,11 +71,14 @@ Everything is env-driven (`.env` for compose, see `.env.example`):
 | Variable | Default | Purpose |
 |---|---|---|
 | `ADMIN_PASSWORD` | `memobox-dev` | Password for the single-admin console |
+| `DATABASE_URL` | — | Set = server mode (Postgres). Unset = local mode (SQLite) |
+| `MEMOBOX_DB_PATH` | `data/memobox.db` | SQLite file path (local mode) |
+| `MEMOBOX_BACKEND` | — | `stub` = in-memory demo store, nothing persisted |
 | `APP_PORT` | `3100` | Host port for the app container |
 | `EMBEDDING_API_BASE` | — | OpenAI-compatible base URL; unset = keyword retrieval |
 | `EMBEDDING_API_KEY` | — | API key for the embedding endpoint |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | Model name |
-| `EMBEDDING_DIM` | `1536` | Vector dimensions — **locked by the first migration**, only changeable on a fresh database |
+| `EMBEDDING_DIM` | `1536` | Vector dimensions — **locked by the first migration** (server mode), only changeable on a fresh database |
 
 ### Embedding providers
 
@@ -105,5 +124,6 @@ bun run build             # production build (standalone)
 - [x] v0.2 — Postgres wiring, query log, keyword retrieval
 - [x] v0.3 — pluggable embeddings, pgvector semantic search, query-log console
 - [x] v1.0 — Dockerfile (standalone, auto-migrations), bilingual docs
-- [ ] v1.1 — graph retrieval (`entity_nodes` / `memory_entity_edges`), memory
+- [x] v1.1 — SQLite local mode (`bun:sqlite`, JS cosine, zero dependencies)
+- [ ] v1.2 — graph retrieval (`entity_nodes` / `memory_entity_edges`), memory
       editing & forgetting in the console, retrieval eval report

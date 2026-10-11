@@ -35,6 +35,21 @@ export interface MemoryStore {
   stats(): Promise<{ total: number; searches: number }>;
 }
 
+/** Cosine similarity for local-mode (SQLite) vector search. */
+export function cosineSim(a: number[], b: number[]): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  const norm = Math.sqrt(na) * Math.sqrt(nb);
+  return norm === 0 ? 0 : dot / norm;
+}
+
 /** Naive keyword scoring — the fallback retrieval mode (v0.2). */
 export function scoreMemories(
   rows: Memory[],

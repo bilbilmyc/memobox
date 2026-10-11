@@ -1,8 +1,11 @@
 /**
- * Store selection: DATABASE_URL set → DrizzleStore (Postgres), otherwise
- * the in-memory StubStore keeps the app runnable without a database.
+ * Store selection: DATABASE_URL set → DrizzleStore (Postgres, server
+ * mode); otherwise SQLiteStore (local mode, zero dependencies — the
+ * database file defaults to ./data/memobox.db). StubStore stays exported
+ * for tests and as an explicit MEMOBOX_BACKEND=stub escape hatch.
  */
 import { DrizzleStore } from "@/db/store";
+import { SQLiteStore } from "@/db/sqlite-store";
 import {
   scoreMemories,
   type Memory,
@@ -11,7 +14,7 @@ import {
 
 export type { Memory, MemoryStore } from "./memory";
 
-class StubStore implements MemoryStore {
+export class StubStore implements MemoryStore {
   readonly backend = "stub";
   readonly retrieval = "keyword" as const;
   private rows = new Map<string, Memory>();
@@ -57,7 +60,8 @@ class StubStore implements MemoryStore {
 }
 
 export function createStore(): MemoryStore {
-  return process.env.DATABASE_URL ? new DrizzleStore() : new StubStore();
+  if (process.env.MEMOBOX_BACKEND === "stub") return new StubStore();
+  return process.env.DATABASE_URL ? new DrizzleStore() : new SQLiteStore();
 }
 
 const g = globalThis as unknown as { __memoboxStore?: MemoryStore };

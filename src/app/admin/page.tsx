@@ -52,14 +52,22 @@ export default async function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-semibold">
-              {memoryStore.backend === "postgres" ? "Postgres" : "Stub"}
+              {memoryStore.backend === "postgres"
+                ? "Postgres"
+                : memoryStore.backend === "sqlite"
+                  ? "SQLite"
+                  : "Stub"}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {memoryStore.backend === "postgres"
                 ? memoryStore.retrieval === "semantic"
-                  ? `pgvector 语义检索（${memoryStore.retrieval === "semantic" ? "cosine" : ""}）`
+                  ? "pgvector 语义检索（cosine）"
                   : "关键词检索（近 500 条窗口）· 配置 EMBEDDING_API_* 升级语义检索"
-                : "内存桩，重启即清——设置 DATABASE_URL 并 docker compose up -d 切到 Postgres"}
+                : memoryStore.backend === "sqlite"
+                  ? memoryStore.retrieval === "semantic"
+                    ? "本地模式 · JS 余弦语义检索"
+                    : "本地模式 · 关键词检索 · 配置 EMBEDDING_API_* 升级语义检索"
+                  : "内存桩（MEMOBOX_BACKEND=stub），重启即清"}
             </p>
           </CardContent>
         </Card>
