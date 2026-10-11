@@ -26,16 +26,47 @@ Agent 会忘事。memobox 给任何支持 MCP（Model Context Protocol）的客�
 
 ## 快速开始
 
-### 本地模式 —— 不用 Docker、不用 Postgres（需要 [Bun](https://bun.sh) ≥ 1.4）
+### 本地模式 —— 连服务都不用起（需要 [Bun](https://bun.sh) ≥ 1.4）
+
+最简部署：MCP 客户端通过 stdio 直接把服务拉起来。没有端口、没有要守护的
+进程、没有 Postgres——就一个 SQLite 文件。
 
 ```bash
 git clone https://github.com/bilbilmyc/memobox && cd memobox
 bun install
+```
+
+Codex CLI——写在 `~/.codex/config.toml`：
+
+```toml
+[mcp_servers.memobox]
+command = 'C:/Users/you/.bun/bin/bun.exe'
+args = ['D:/memobox/scripts/mcp-local.ts']
+```
+
+Claude Code：
+
+```bash
+claude mcp add memobox -- bun D:/memobox/scripts/mcp-local.ts
+```
+
+记忆落在 `data/memobox.db`（`MEMOBOX_DB_PATH` 可挪位置）。想要 web 后台？
+`bun run dev` 会在 **http://localhost:3100** 打开它，读写同一个 SQLite
+文件——可选，不是必需。不碰 web 也能备份/迁移：
+
+```bash
+bun scripts/mcp-local.ts --export backup.json
+bun scripts/mcp-local.ts --import backup.json
+```
+
+### 本地带后台 —— 单进程
+
+```bash
 bun run build && bun run start
 ```
 
-单进程跑在 **http://localhost:3100**；记忆落在一个 `./data/memobox.db`
-文件里（`MEMOBOX_DB_PATH` 可挪位置）。
+MCP（`/mcp`）+ 管理后台同进程跑在 **http://localhost:3100**；同样落
+`./data/memobox.db`。
 
 ### 服务端模式 —— Docker Compose
 
@@ -181,4 +212,5 @@ bun run build             # 生产构建（standalone）
 - [x] v1.4 — stdio 桥：给只支持 stdio 传输的客户端的零依赖单文件适配器（`scripts/stdio-bridge.ts`）
 - [x] v1.5 — 管理后台认证（Better Auth，ADMIN_PASSWORD 播种首个管理员；注册默认关、`MEMOBOX_ENABLE_SIGNUP=1` 开团队模式）+ 可选 `MCP_TOKEN` 令牌认证（公网部署防线，桥与 registry 清单已带）
 - [x] v1.6 — 备份与迁移：后台一键导出全部记忆为单 JSON 文件，幂等导入（已有 id 跳过）——也是 SQLite 本地模式 ↔ Postgres 服务端模式的整体搬家通道
+- [x] v1.7 — stdio 直连本地模式：`scripts/mcp-local.ts` 让 MCP 服务直接跑在客户端进程里（Codex / Claude）——无 HTTP 服务、无端口、无 Postgres；SQLite 文件存储 + CLI 备份/导入
 - [ ] 待定 — 听用户的

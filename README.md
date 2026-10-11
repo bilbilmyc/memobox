@@ -28,16 +28,48 @@ what your agents remember.
 
 ## Quickstart
 
-### Local mode — no Docker, no Postgres (needs [Bun](https://bun.sh) ≥ 1.4)
+### Local mode — no server at all (needs [Bun](https://bun.sh) ≥ 1.4)
+
+The simplest deployment: your MCP client launches the server itself over
+stdio. No port, no process to keep running, no Postgres — one SQLite file.
 
 ```bash
 git clone https://github.com/bilbilmyc/memobox && cd memobox
 bun install
+```
+
+Codex CLI — in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.memobox]
+command = 'C:/Users/you/.bun/bin/bun.exe'
+args = ['D:/memobox/scripts/mcp-local.ts']
+```
+
+Claude Code:
+
+```bash
+claude mcp add memobox -- bun D:/memobox/scripts/mcp-local.ts
+```
+
+Memories persist to `data/memobox.db` (move it with `MEMOBOX_DB_PATH`).
+Want the web console too? `bun run dev` serves it on
+**http://localhost:3100** against the same SQLite file — optional, not
+required. Backup / migrate without any web:
+
+```bash
+bun scripts/mcp-local.ts --export backup.json
+bun scripts/mcp-local.ts --import backup.json
+```
+
+### Local mode with the console — one process
+
+```bash
 bun run build && bun run start
 ```
 
-Everything runs in one process on **http://localhost:3100**; memories are
-persisted to `./data/memobox.db` (move it with `MEMOBOX_DB_PATH`).
+Serves MCP (`/mcp`) + admin console on **http://localhost:3100**; same
+`./data/memobox.db`.
 
 ### Server mode — Docker Compose
 
@@ -203,4 +235,7 @@ bun run build             # production build (standalone)
 - [x] v1.6 — backup & migration: one-click JSON export of all memories in the
       console, idempotent import (existing ids skipped) — also the path for
       moving a store between SQLite local mode and Postgres server mode
+- [x] v1.7 — direct stdio local mode: `scripts/mcp-local.ts` runs the MCP
+      server inside your client's process (Codex / Claude) — no HTTP server,
+      no port, no Postgres; SQLite file storage, CLI backup/import flags
 - [ ] next — what users ask for

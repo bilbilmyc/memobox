@@ -12,7 +12,7 @@ export default async function Home() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-background px-6 py-16 text-center font-sans">
       <div>
-        <p className="font-mono text-sm text-muted-foreground">memobox v1.6.0</p>
+        <p className="font-mono text-sm text-muted-foreground">memobox v1.7.0</p>
         <h1 className="mt-3 max-w-2xl text-4xl font-semibold tracking-tight sm:text-5xl">
           给 AI agent 装上跨会话记忆
         </h1>

@@ -36,7 +36,8 @@ SQLite / 服务端一条 docker compose）、图谱质量检索、治理后台�
 - v1.5 ✅ 多管理员 + MCP 令牌：引入开源 **Better Auth**（「先引入开源的别人的，再考虑自研」——2026-10-11 Soren 拍板），邮箱+密码、账号与记忆同库（pg 迁移 0002 / sqlite AUTH_TABLES_SQL）；ADMIN_PASSWORD 首启播种初始管理员（admin@memobox.local，老部署口令无缝迁移）；注册默认关（v1.6 后翻转，原来默认开+DISABLE 关；现 `MEMOBOX_ENABLE_SIGNUP=1` 才开团队模式，零用户引导态例外放行一次）；`MCP_TOKEN` 可选 Bearer 令牌护 /mcp（桥用同名 MEMOBOX_TOKEN）；registry 物料 `server.json` + `docs/mcp-registry.md`（51 测试全绿，e2e：播种→登录→新用户注册→CSV 401→令牌 401/200→桥降级）
 - 发布就绪 ✅（v1.5 后的加固，协议版本不动）：容器链路全量复验（迁移自动应用→播种→登录→注册→CSV 鉴权→MCP 令牌→桥降级，全绿）+ **认证旁路封堵**（详见已知事项的 PPR 泄漏条目）+ store 惰性单例（Proxy，next build 收集页面数据不再真建库）+ Dockerfile 钉 `oven/bun:1.4.2` + LICENSE(MIT，版权行占位 bilbilmyc) + `.github/workflows/ci.yml`（bun test/build + main 分支推 GHCR）。52 测试全绿。仓库已推 https://github.com/bilbilmyc/memobox（main 分支）
 - v1.6 ✅ 备份与迁移：后台 /admin/backup 一键导出全部记忆为单 JSON（格式 `memobox-backup` v1，`src/lib/backup.ts`；向量刻意不进备份——可重算且维度随部署变），导入幂等（id 已存在跳过不覆盖，上限 5 万条/64MB）；保留原 id/createdAt（迁移后引用不断），非 UUID id（stub 来源）导入 pg 时就地换新 UUID；实体边导入后重长。66 测试全绿，e2e 含真实 multipart 上传往返与坏文件报错。也是 SQLite↔pg 换模式的搬家通道。落地页改版（真实首用户反馈「不知道用处在哪儿」）：中文价值主张 + 三步接入卡 + 实时库统计（动态渲染）
-- v1.6+ 候选：听用户反馈（可能方向：记忆压缩/摘要、更多检索策略）。已确认的真实痛点：**关键词模式对 CJK 查询基本失效**——scoreMemories 按空白切词，中文整句「端口有什么偏好」切成单 term 子串匹配必落空（语义模式无此问题）；修法方向：CJK 检测 + 字符 bigram 切词
+- v1.7 ✅ stdio 直连本地模式（2026-10-11 Soren 提议「做成 cli 服务、不要 pgsql、本地启动工具可用」）：`scripts/mcp-local.ts` 复用 handleRpcBody + SQLiteStore，客户端（Codex/Claude）直接把脚本当 MCP server 拉起——无 HTTP、无端口、无 Postgres、无需守护进程；库文件按脚本位置解析（不是 CWD，客户端拉起时 CWD 不可控）；`--export/--import` CLI 备份不依赖 web。72 测试全绿，e2e 直连 init/tools/save/search + 双库 CLI 迁移往返全过。**架构含义：web/Next/pg 全部退化为「服务端模式可选件」，本地首选路径零服务**
+- v1.8+ 候选：听用户反馈（可能方向：记忆压缩/摘要、更多检索策略）。已确认的真实痛点：**关键词模式对 CJK 查询基本失效**——scoreMemories 按空白切词，中文整句「端口有什么偏好」切成单 term 子串匹配必落空（语义模式无此问题）；修法方向：CJK 检测 + 字符 bigram 切词
 
 ## 约定
 
