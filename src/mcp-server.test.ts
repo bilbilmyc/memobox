@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { handleLine } from "./mcp-server";
+import { VERSION } from "./cli";
 import { StubStore } from "./lib/memory-store";
 import type { MemoryStore } from "./lib/memory-store";
 
@@ -23,7 +24,7 @@ describe("mcp-server handleLine", () => {
     );
     const parsed = out && JSON.parse(out);
     expect(parsed.result.serverInfo.name).toBe("memobox");
-    expect(parsed.result.serverInfo.version).toBe("2.0.0");
+    expect(parsed.result.serverInfo.version).toBe(VERSION);
   });
 
   test("空行与通知保持沉默", async () => {

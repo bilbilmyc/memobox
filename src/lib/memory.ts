@@ -102,13 +102,39 @@ export function cosineSim(a: number[], b: number[]): number {
   return norm === 0 ? 0 : dot / norm;
 }
 
-/** 朴素关键词打分 —— 回退检索模式（v0.2 起用） */
+/**
+ * 查询切词（v2.1）：拉丁部分按空白切、CJK 部分成对切 bigram。
+ * 旧实现整句按空白切——中文查询整句成一个 term，子串匹配必落空
+ * （「端口有什么偏好」永远匹配不到「…用 3100 端口」）。bigram 后
+ * 「端口」「偏好」都是独立 term，`includes` 子串语义直接命中。
+ * 单个 CJK 字符的片段原样保留（单字即 term）。
+ */
+const CJK_RUN = /[㐀-䶿一-鿿]+/g;
+
+export function tokenize(query: string): string[] {
+  const terms: string[] = [];
+  // 先摘出 CJK 连续段做 bigram，再从剥掉 CJK 的原文里捞拉丁 token
+  for (const run of query.toLowerCase().match(CJK_RUN) ?? []) {
+    if (run.length === 1) {
+      terms.push(run);
+      continue;
+    }
+    for (let i = 0; i < run.length - 1; i++) terms.push(run.slice(i, i + 2));
+  }
+  const stripped = query.toLowerCase().replace(CJK_RUN, " ");
+  for (const t of stripped.split(/[^\p{L}\p{N}_.-]+/u)) {
+    if (t) terms.push(t);
+  }
+  return terms;
+}
+
+/** 朴素关键词打分 —— 回退检索模式（v0.2 起用；v2.1 起支持 CJK） */
 export function scoreMemories(
   rows: Memory[],
   query: string,
   limit: number
 ): Memory[] {
-  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const terms = tokenize(query);
   return rows
     .map((row) => {
       const text = row.content.toLowerCase();

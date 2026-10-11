@@ -29,7 +29,7 @@ import type { Memory, MemoryStore } from "@/lib/memory-store";
 import { installClient, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
-export const VERSION = "2.0.0";
+export const VERSION = "2.1.0";
 
 const USAGE = `memobox ${VERSION} — local long-term memory for AI agents
 

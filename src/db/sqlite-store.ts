@@ -9,6 +9,7 @@ import {
   expandByEntities,
   percentile,
   scoreMemories,
+  tokenize,
   type EntityCount,
   type EvalStats,
   type Label,
@@ -211,10 +212,11 @@ export class SQLiteStore implements MemoryStore {
     }
 
     // v1.2 图谱扩展：锚点 = 直接命中记忆的实体 ∪ 查询词
+    //（v2.1 起查询词走 tokenize——中文整句也能锚到短实体名）
     const anchors = [
       ...new Set([
         ...hits.flatMap((h) => h.entities ?? []),
-        ...query.toLowerCase().split(/\s+/).filter(Boolean),
+        ...tokenize(query),
       ]),
     ];
     if (anchors.length > 0) {
