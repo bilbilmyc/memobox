@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "memobox": "./src/cli.ts"
+    "memobox": "./bin/memobox.js"
   },
   "engines": {
     "bun": ">=1.4"
@@ -30,6 +30,7 @@
     "ai-agents"
   ],
   "files": [
+    "bin",
     "src",
     "tsconfig.json",
     "README.md",
