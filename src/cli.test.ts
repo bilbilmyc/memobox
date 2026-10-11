@@ -543,6 +543,22 @@ describe("model 子命令（v2.4，本地小模型管理）", () => {
       expect(await runCli(["model", "enable", "--lite"], h2.io, h2.store, fail)).toBe(1);
       expect(h2.err[0]).toContain("加载失败");
       expect(existsSync(CFG)).toBe(false);
+
+      // v2.6.1：npm 版不带 transformers——缺包给专属安装指引，不写配置
+      rmSync(CFG, { force: true });
+      const missing = {
+        ...noOllamaTools(),
+        loadLocalModel: async () => {
+          throw new Error(
+            "Cannot find package '@huggingface/transformers' from 'D:\\memobox\\src\\lib\\local-embedder.ts'"
+          );
+        },
+      };
+      const h3 = harness();
+      expect(await runCli(["model", "enable", "--lite"], h3.io, h3.store, missing)).toBe(1);
+      expect(h3.err[0]).toContain("未安装");
+      expect(h3.err.some((l) => l.includes("npm i -g @huggingface/transformers"))).toBe(true);
+      expect(existsSync(CFG)).toBe(false);
     } finally {
       restore();
     }

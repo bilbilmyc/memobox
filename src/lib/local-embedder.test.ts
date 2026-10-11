@@ -3,6 +3,7 @@ import {
   LOCAL_EMBED_DIM,
   LOCAL_EMBED_MODEL,
   createLocalEmbedder,
+  isTransformersMissing,
   resetLocalExtractor,
 } from "./local-embedder";
 
@@ -80,5 +81,27 @@ describe("内置嵌入模型（v2.5，mock transformers）", () => {
     await expect(e.embed("你好")).rejects.toThrow("boom");
     failHosts.clear();
     await expectUnitVec(e, "重试");
+  });
+});
+
+describe("isTransformersMissing（v2.6.1 缺包识别）", () => {
+  test("命中 Bun / Node 两种动态 import 缺包文案", () => {
+    expect(
+      isTransformersMissing(
+        new Error("Cannot find package '@huggingface/transformers' from 'D:/x/local-embedder.ts'")
+      )
+    ).toBe(true);
+    expect(
+      isTransformersMissing(
+        new Error("[ERR_MODULE_NOT_FOUND] Cannot find package '@huggingface/transformers' imported from /x/y.js")
+      )
+    ).toBe(true);
+  });
+
+  test("网络等其它错误不误判", () => {
+    expect(isTransformersMissing(new Error("network down"))).toBe(false);
+    expect(isTransformersMissing(new Error("Cannot find package 'other-pkg'"))).toBe(false);
+    expect(isTransformersMissing("字符串错误")).toBe(false);
+    expect(isTransformersMissing(null)).toBe(false);
   });
 });

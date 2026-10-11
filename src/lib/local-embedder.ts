@@ -79,3 +79,15 @@ export function createLocalEmbedder(
 export function resetLocalExtractor(): void {
   extractorPromise = null;
 }
+
+/**
+ * 识别「transformers 未安装」的加载失败（v2.6.1 起它不在 npm 包的
+ * dependencies 里——发布版默认轻量，lite 用户按需补装）。
+ * Bun 与 Node 的动态 import 缺包都抛含这段文案的错误。
+ */
+export function isTransformersMissing(e: unknown): boolean {
+  return (
+    e instanceof Error &&
+    e.message.includes("Cannot find package '@huggingface/transformers'")
+  );
+}

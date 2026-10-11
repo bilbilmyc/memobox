@@ -1,26 +1,52 @@
 {
   "name": "memobox",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "Local long-term memory for AI coding agents — stdio MCP server + CLI for Claude Code / Codex / pi",
   "license": "MIT",
   "type": "module",
   "bin": {
     "memobox": "./src/cli.ts"
   },
+  "engines": {
+    "bun": ">=1.4"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bilbilmyc/memobox.git"
   },
+  "homepage": "https://github.com/bilbilmyc/memobox#readme",
+  "bugs": {
+    "url": "https://github.com/bilbilmyc/memobox/issues"
+  },
+  "keywords": [
+    "mcp",
+    "memory",
+    "agent-memory",
+    "long-term-memory",
+    "claude-code",
+    "codex",
+    "cli",
+    "sqlite",
+    "ai-agents"
+  ],
+  "files": [
+    "src",
+    "tsconfig.json",
+    "README.md",
+    "README.zh-CN.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun test && tsc --noEmit"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.3.1",
     "drizzle-orm": "^0.45.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@huggingface/transformers": "^4.3.1",
     "@types/bun": "^1.4.2",
     "typescript": "^5"
   },

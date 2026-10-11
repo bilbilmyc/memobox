@@ -20,14 +20,22 @@ agent: (calls memory_search) — 3100
 Requires [Bun](https://bun.sh) ≥ 1.4.
 
 ```bash
+npm i -g memobox         # from npm — keyword retrieval works out of the box
+```
+
+Or run from source:
+
+```bash
 git clone https://github.com/bilbilmyc/memobox
 cd memobox
 bun install
 bun src/cli.ts            # that's the whole binary — no server to start
 ```
 
-Optionally make it global: `bun link` (then `memobox` works anywhere).
-`npm i -g memobox` once published to npm.
+Note: the npm package stays dependency-light on purpose (~a few MB — no ML
+runtime). If you later enable the built-in lite model
+(`memobox model enable --lite`), it will ask you to also run
+`npm i -g @huggingface/transformers` (~25MB model downloads on first use).
 
 ## Wire up your agent
 

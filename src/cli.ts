@@ -27,7 +27,11 @@ import { parseCodexMemoryMd, parseCodexSummary } from "@/lib/codex-import";
 import { defaultDbPath } from "@/lib/paths";
 import type { Memory, MemoryStore } from "@/lib/memory-store";
 import { createEmbedder, probeOllama } from "@/lib/embeddings";
-import { createLocalEmbedder, LOCAL_EMBED_MODEL } from "@/lib/local-embedder";
+import {
+  createLocalEmbedder,
+  isTransformersMissing,
+  LOCAL_EMBED_MODEL,
+} from "@/lib/local-embedder";
 import { defaultConfigPath, loadConfig, saveConfig } from "@/lib/config";
 import {
   DEFAULT_EMBED_MODEL,
@@ -42,7 +46,7 @@ import {
 import { detectClaude, detectCodex, detectPi, installClient, serverEntry, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
-export const VERSION = "2.6.0";
+export const VERSION = "2.6.1";
 
 /** doctor / model 子命令的外部依赖（真入口用默认值；单测注入假实现不碰网络） */
 export type CliTools = {
@@ -82,7 +86,7 @@ const COMMANDS: CmdSpec[] = [
   { name: "stats", usage: "memobox stats", desc: "库统计（记忆数 / 检索数）" },
   { name: "path", usage: "memobox path", desc: "打印库文件位置" },
   { name: "doctor", usage: "memobox doctor", desc: "自检：库文件 / 检索模式 / 三家客户端接线状态" },
-  { name: "model", usage: "memobox model <status|enable|disable> [--model bge-m3] [--lite]", desc: "语义检索管理：enable 用 Ollama（能力强）；enable --lite 用内置小模型（约 25MB 进程内推理，零外部依赖）" },
+  { name: "model", usage: "memobox model <status|enable|disable> [--model bge-m3] [--lite]", desc: "语义检索管理：enable 用 Ollama（能力强）；enable --lite 用内置小模型（约 25MB 进程内推理，零外部服务）" },
   { name: "export", usage: "memobox export <file.json>", desc: "全量备份（memobox-backup v1 格式，向量不入备份可重算）" },
   { name: "import", usage: "memobox import <file.json>", desc: "导入备份（幂等：相同 id 跳过）" },
   { name: "import-codex", usage: "memobox import-codex [--file <MEMORY.md路径>] [--dry-run]", desc: "迁移 Codex 原生记忆（~/.codex/memories/，任务+用户画像；重复导入幂等）" },
@@ -272,7 +276,7 @@ export async function runCli(
         } else if (await tools.ollamaVersion()) {
           io.out(`提示：    本机装了 Ollama 但服务未运行——memobox model enable 会自动拉起`);
         } else {
-          io.out(`提示：    轻量语义检索可用内置小模型启用（零外部依赖）：memobox model enable --lite`);
+          io.out(`提示：    轻量语义检索可用内置小模型启用（零外部服务）：memobox model enable --lite`);
         }
       }
       return 0;
@@ -305,6 +309,14 @@ export async function runCli(
           try {
             await tools.loadLocalModel((m) => io.out(`  ${m}`));
           } catch (e) {
+            if (isTransformersMissing(e)) {
+              // v2.6.1 起 npm 包默认不带 transformers（保持轻量）——按需补装
+              io.err("内置模型依赖 @huggingface/transformers 未安装：");
+              io.err("  npm 全局安装 memobox 的用户：npm i -g @huggingface/transformers");
+              io.err("  源码仓库运行的用户：        bun add @huggingface/transformers");
+              io.err("装好后重试：memobox model enable --lite");
+              return 1;
+            }
             io.err(`内置模型加载失败：${e instanceof Error ? e.message : e}`);
             io.err("检查网络后重试（默认源 hf-mirror.com；可用环境变量 HF_ENDPOINT 换源）");
             return 1;

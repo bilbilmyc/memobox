@@ -18,14 +18,21 @@ agent：（调用 memory_search）—— 3100
 需要 [Bun](https://bun.sh) ≥ 1.4。
 
 ```bash
+npm i -g memobox         # 从 npm 安装——关键词检索开箱即用
+```
+
+或从源码运行：
+
+```bash
 git clone https://github.com/bilbilmyc/memobox
 cd memobox
 bun install
 bun src/cli.ts            # 这就是全部——没有服务要启动
 ```
 
-想全局可用：`bun link`（之后任何目录都能敲 `memobox`）。
-发布到 npm 后可直接 `npm i -g memobox`。
+说明：npm 包刻意保持轻量（仅几 MB，不带 ML 运行时）。之后若启用内置
+小模型（`memobox model enable --lite`），它会提示再执行
+`npm i -g @huggingface/transformers`（首次使用时另下约 25MB 模型）。
 
 ## 接入你的 agent
 
