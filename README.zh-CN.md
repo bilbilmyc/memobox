@@ -123,9 +123,10 @@ memobox import-codex
 
 - **存储**：单 SQLite 文件 `~/.memobox/memobox.db`（`MEMOBOX_DB_PATH` 可改）。
   无守护进程、无端口、无 Postgres。
-- **检索**：实体图谱扩展常开；关键词打分 v2.5 起升级为 BM25
-  （词频饱和 + 文档长度归一 + IDF + 实体加成），中文 bigram 天然适配；
-  配了语义模式则走向量余弦。
+- **检索（v2.6 混合式）**：BM25 关键词排名（进程内全库索引缓存、全库 IDF、
+  整句加成、实体加成）与语义余弦排名经 RRF 倒数融合——精确匹配与近义改写
+  都能上榜，互为补充；实体图谱扩展补满名额。语义模式下向量以 Float32 BLOB
+  落库（免 JSON 解析）并缓存于进程内：真实 85 条库实测热检索约 5-8ms。
 - **语义模式（可选增强）**：`memobox model enable --lite` = 内置量化小模型
   （bge-small-zh，约 25MB）进程内推理——无服务、无端口、无 Ollama，
   模型惰性加载（keyword 模式的进程不占任何资源）。
@@ -139,7 +140,7 @@ memobox import-codex
 ## 开发
 
 ```bash
-bun test          # 120 个测试
+bun test          # 130 个测试
 bun run typecheck
 ```
 

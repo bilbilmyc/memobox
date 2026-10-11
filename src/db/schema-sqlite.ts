@@ -1,4 +1,5 @@
 import {
+  customType,
   index,
   integer,
   sqliteTable,
@@ -7,8 +8,19 @@ import {
 } from "drizzle-orm/sqlite-core";
 
 /**
+ * v2.6：向量以 Float32 BLOB 落库（每维 4 字节，读出即 Float32Array 视图，
+ * 零 JSON.parse；旧库的 JSON 文本由 SQLiteStore 启动时自动迁移）。
+ * 列的 TEXT 亲和性不影响 BLOB 存储——SQLite 只把数值转文本，BLOB 原样保留。
+ */
+const float32Blob = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType() {
+    return "BLOB";
+  },
+});
+
+/**
  * SQLite 版 schema（v2.0 起是唯一存储后端）。
- * 向量存 JSON 文本列，余弦相似度在 JS 里算——个人规模（几千条）够用。
+ * 向量存 BLOB 列，余弦相似度在 JS 里算——个人规模（几千条）够用。
  */
 export const memories = sqliteTable(
   "memories",
@@ -18,7 +30,7 @@ export const memories = sqliteTable(
     kind: text("kind").notNull().default("fact"),
     source: text("source").notNull().default("mcp"),
     entities: text("entities").notNull().default("[]"),
-    embedding: text("embedding"), // JSON number[] | null
+    embedding: float32Blob("embedding"), // Float32 序列化 | null（无向量）
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },

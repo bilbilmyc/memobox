@@ -42,7 +42,7 @@ import {
 import { detectClaude, detectCodex, detectPi, installClient, serverEntry, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
-export const VERSION = "2.5.0";
+export const VERSION = "2.6.0";
 
 /** doctor / model 子命令的外部依赖（真入口用默认值；单测注入假实现不碰网络） */
 export type CliTools = {

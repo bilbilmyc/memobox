@@ -12,7 +12,7 @@ SQLite 单文件存储，零服务、零端口、零依赖。
 | 架构 | **v2.0 转向：纯 CLI 工具（Bun 单运行时）**。默认动作 = stdio MCP 服务；Postgres / Next Web 后台 / HTTP 端点 / Docker 全部移除（2026-10-11 Soren 拍板「pgsql 完全不要、不看管理后台、整体做成 cli 工具」） |
 | 存储 | 仅 SQLite（bun:sqlite 内置，零依赖），默认 `~/.memobox/memobox.db`（`MEMOBOX_DB_PATH` 可改） |
 | 客户端 | 首发三件套：Claude Code / Codex / pi（`memobox install <client>` 自动接线） |
-| 检索 | JS 余弦语义检索（配 `EMBEDDING_API_*` 启用）+ 关键词回退 + 实体图谱扩展 |
+| 检索 | BM25 关键词 + 语义余弦 RRF 混合（v2.6）+ 实体图谱扩展；语义为可选增强（内置小模型 / Ollama / 端点） |
 | 分发 | npm 名 `memobox` 已确认空闲；bin 入口 `src/cli.ts`（`#!/usr/bin/env bun`，要求用户装 Bun） |
 | 测试 | bun:test 单测（协议 / 存储 / 备份 / CLI / 安装器）+ 真 CLI 进程 e2e |
 | 备选 | ②自托管转写/字幕工作台 = 下季度候选；③CC 生态中枢已否决 |
@@ -37,6 +37,7 @@ SQLite 单文件存储，零服务、零端口、零依赖。
 - v2.3.1 ✅ **端点可选化 + 通用接法**（2026-10-11，Soren 问「mcp 工具还用接入 ai 端点吗？直接用 ai 工具自身不可以吗」）：①`EMBEDDING_API_KEY` 变可选——本地 Ollama（OpenAI 兼容、无鉴权）只设 `EMBEDDING_API_BASE` 即启用语义检索，无 key 时不送 authorization 头；②`memobox doctor` keyword 模式下自动探测本机 Ollama（`probeOllama`，500ms 超时，优先推荐 bge/m3/embed/gte 类模型），打印完整 env 提示——只提示不自动启用；runCli 第 4 参注入探测函数保测试确定性；③`memobox install` 无参数 = 打印任意 stdio MCP 客户端通用接法（command/args；env 只列键名防 KEY 泄漏）；④`.env.example` / README 双语改写：零配置优先 + 解释为什么不能借用 agent 自带模型（MCP 是被客户端拉起的子进程，协议无回调通道）。94 测试全绿
 - v2.4.0 ✅ **本地小模型自管理（Soren 要求「像 CherryStudio 那样自己启动小模型，做成可配置项」）**：①`~/.memobox/config.json` 配置文件（src/lib/config.ts，MEMOBOX_CONFIG_PATH 可覆盖）——`createEmbedder()` 改为 env 优先、其次配置文件，**被客户端拉起的 MCP 服务也能拿到配置，不用重装客户端**；②`memobox model <status|enable|disable>`——enable 全链路：检测 Ollama（PATH 上 --version，ollama/ollama.exe 双名）→ 没起服务就后台 spawn `ollama serve` 并轮询端口（≤20s）→ 缺模型就 POST /api/pull 流式拉取（NDJSON 解析 + 进度节流）→ 写配置 → `backfillEmbeddings()` 补算存量向量（新加的 MemoryStore 接口方法；单条失败跳过、不动 updated_at）；disable 只删配置段（env 还配着会提醒它优先）；③doctor 的 Ollama 提示改为指向 `memobox model enable`，服务没跑但装了也给提示；④runCli 第 4 参改为 CliTools 注入对象（probeOllama/ollamaVersion/ensureServer/listModels/pull），测试零网络。110 测试全绿
 - v2.5.0 ✅ **轻量化双管齐下（Soren：「有没有更轻量的方案，本身就是一个 mcp 现在越来越重了」→ 选定 1+2 一起做）**：①**BM25** 替换朴素命中计数（scoreMemories：k1=1.2 / b=0.75、候选集内 IDF、实体命中 ×1.5 加成、子串实体匹配保留）——零依赖，keyword 模式排序质量实质提升；②**内置小模型 `memobox model enable --lite`**——@huggingface/transformers@4.3.1（**动态 import**：keyword 模式进程完全不加载 transformers）+ Xenova/bge-small-zh-v1.5 q8（约 25MB、512 维、中英），缓存在 ~/.memobox/models，源 hf-mirror.com 优先、失败自动换 huggingface.co、HF_ENDPOINT 可覆盖；**Bun 1.4.2 实测 3-8ms/条**（先写探针脚本验证可行才接线）；③config.embedding 二态：base（端点）/ local（内置）；enable --lite 先预检（真加载模型 embed 一条自检，失败不写配置不留半启用状态）再写配置 + 补算；doctor 无 Ollama 时提示 --lite。**已在本机实启 lite：85 条全量补算，近义查询（「怎么装 jdk」→「Windows 开发环境与全量工具链升级」）命中，doctor=semantic**。120 测试全绿
+- v2.6.0 ✅ **检索双路优化：BM25 全库索引 + RRF 混合融合 + BLOB 向量**（2026-10-11，Soren 要求「关键词 语义都要优化，看看找算法还是自己写算法」→ 全部自写、零新依赖）：①**KeywordIndex**（src/lib/memory.ts）——BM25 中间产物（tokenize/词频表/df/avgdl）缓存在进程内，save/forget/update/import 增量维护，砍掉旧「只搜最近 500 条」上限，IDF 升为全库口径；新增整句子串加成（查 id/精确串不被 bigram 稀释）；scoreMemories 改为现挖现建索引的薄封装（单一 BM25 实现防漂移）；②**RRF 混合检索**——语义模式下 BM25 与余弦两路排名 1/(60+rank) 倒数融合（旧版语义模式下关键词分完全丢弃），桩测试验证「关键词命中的与语义命中的都进榜」；③**向量存储 Float32 BLOB**（旧 JSON 文本启动时自动迁移，实测 85/85 转换）+ 进程内向量缓存（写路径增量维护，update 失效有桩测试防过期向量霸榜）；本机实测常驻进程热检索 5-8ms（冷启 245ms 含模型加载）。**评估过不引入的**：HNSW/ANN（个人规模 <1 万条全量扫描够快，引库不值）、int8 量化（JS 里 Float32Array 才有 SIMD 优化，int8 反而慢）。SQLiteStore 新增 close()（Windows 不关句柄锁库文件）。130 测试全绿
 - v2.4+ 候选：npm 发布（待 Soren 注册 npm 账号）；memobox 自己的记忆压缩/摘要（需 LLM，或复用 Codex 式 agent 端总结）
 
 ## 约定

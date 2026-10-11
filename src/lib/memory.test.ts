@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { scoreMemories, tokenize, type Memory } from "./memory";
+import {
+  KeywordIndex,
+  rrfFuse,
+  scoreMemories,
+  tokenize,
+  type Memory,
+} from "./memory";
 
 const mem = (id: string, content: string, entities?: string[]): Memory => ({
   id,
@@ -90,5 +96,64 @@ describe("scoreMemories BM25（v2.5）", () => {
       mem("tagged", "端口另外的内容", ["端口"]),
     ];
     expect(scoreMemories(rows, "端口", 5)[0].id).toBe("tagged");
+  });
+
+  test("整句子串加成：完整查询串出现的文档排最前", () => {
+    const rows = [
+      mem("scatter", "端口 与 偏好 的 种种 讨论汇总"),
+      mem("exact", "项目约定：端口偏好=3100"),
+    ];
+    // 两篇都命中「端口」「偏好」bigram，但只有 exact 包含整句「端口偏好」
+    expect(scoreMemories(rows, "端口偏好", 5)[0].id).toBe("exact");
+  });
+});
+
+describe("KeywordIndex（v2.6 全库缓存索引）", () => {
+  test("增量 add/remove 维护词频统计：新词入库后 IDF 立即生效", () => {
+    const idx = new KeywordIndex();
+    idx.rebuild([mem("a", "端口常规"), mem("b", "端口日常")]);
+    expect(idx.search("carlife", 5)).toHaveLength(0);
+    idx.add(mem("c", "carlife 投屏很稳"));
+    // 「端口」在 2 篇出现（IDF 低），「carlife」只有 1 篇（IDF 高）
+    expect(idx.search("端口 carlife", 5)[0].id).toBe("c");
+    idx.remove("c");
+    expect(idx.search("carlife", 5)).toHaveLength(0);
+    // remove 后词频回滚，常用词检索不受影响
+    expect(idx.search("端口", 5).map((h) => h.id).sort()).toEqual(["a", "b"]);
+  });
+
+  test("重复 add 同一 id = 覆盖而非重复计数", () => {
+    const idx = new KeywordIndex();
+    idx.add(mem("a", "旧内容端口"));
+    idx.add(mem("a", "全新内容"));
+    expect(idx.search("端口", 5)).toHaveLength(0); // 旧 token 已随覆盖消失
+  });
+});
+
+describe("rrfFuse（v2.6 RRF 混合融合）", () => {
+  const m = (id: string, createdAt = 1): Memory => ({ id, content: id, createdAt });
+
+  test("两路都靠前的排最前；单路命中的也能进榜", () => {
+    const kw = [m("both"), m("kw-only")];
+    const sem = [m("both"), m("sem-only")];
+    const fused = rrfFuse([kw, sem], 3);
+    expect(fused[0].id).toBe("both"); // 1/61 + 1/61
+    expect([...new Set(fused.map((f) => f.id))].sort()).toEqual(
+      ["both", "kw-only", "sem-only"].sort()
+    );
+  });
+
+  test("limit 截断；平分按创建时间新者先", () => {
+    expect(rrfFuse([[m("a", 10)], [m("b", 20)]], 1).map((f) => f.id)).toEqual([
+      "b",
+    ]);
+  });
+
+  test("单路为空 = 退化为另一路排名；全空 = 空结果", () => {
+    expect(rrfFuse([[], [m("x"), m("y")]], 5).map((f) => f.id)).toEqual([
+      "x",
+      "y",
+    ]);
+    expect(rrfFuse([[], []], 5)).toEqual([]);
   });
 });

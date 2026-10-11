@@ -1,4 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Database } from "bun:sqlite";
 import { SQLiteStore } from "./sqlite-store";
 import type { EmbeddingProvider } from "@/lib/embeddings";
 import { computeBenchmark, cosineSim } from "@/lib/memory";
@@ -281,5 +285,112 @@ describe("SQLiteStore 备份/迁移 (v1.6)", () => {
     const hits = await b.search("aurora", 5);
     expect(hits.length).toBeGreaterThanOrEqual(1);
     expect(hits[0].content).toContain("aurora");
+  });
+});
+
+describe("SQLiteStore v2.6：BLOB 向量 + 混合检索 + 进程内缓存", () => {
+  test("向量以 Float32 BLOB 落库；旧 JSON 文本重开时自动迁移", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "memobox-v26-"));
+    const dbPath = join(dir, "t.db");
+    const store = new SQLiteStore(fakeEmbedder(), dbPath);
+    let store2: SQLiteStore | null = null;
+    try {
+      // 新库：save 直接写 BLOB
+      await store.save({ content: "legacy migration anchor row", source: "test" });
+      const probe = new Database(dbPath);
+      expect(
+        (
+          probe
+            .query("SELECT typeof(embedding) AS t FROM memories")
+            .all() as { t: string }[]
+        )[0].t
+      ).toBe("blob");
+      probe.close();
+
+      // 仿造 v2.5 旧格式：把向量改写成 JSON 文本
+      const writer = new Database(dbPath);
+      writer.exec("UPDATE memories SET embedding = '[0.5,0.5,0.5,0.5]'");
+      writer.close();
+
+      // 重开 → 构造函数迁移为 BLOB，检索照常
+      store2 = new SQLiteStore(fakeEmbedder(), dbPath);
+      const probe2 = new Database(dbPath);
+      expect(
+        (
+          probe2
+            .query("SELECT typeof(embedding) AS t FROM memories")
+            .all() as { t: string }[]
+        )[0].t
+      ).toBe("blob");
+      probe2.close();
+      const hits = await store2.search("legacy migration anchor", 5);
+      expect(hits.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      // Windows：句柄关闭后目录项可能延迟释放，重试几下再兜底放过
+      store.close();
+      store2?.close();
+      for (let i = 0; i < 5; i++) {
+        try {
+          rmSync(dir, { recursive: true, force: true });
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 30));
+        }
+      }
+    }
+  });
+
+  test("混合检索：关键词命中的与语义命中的都进结果（RRF 融合）", async () => {
+    // 桩 embedder：查询 semaphore → [1,0]；含「向量」的文本 → [1,0]；其余 → [0,1]
+    const stub: EmbeddingProvider = {
+      model: "stub",
+      dimensions: 2,
+      async embed(text: string) {
+        if (text === "semaphore") return [1, 0];
+        return text.includes("向量") ? [1, 0] : [0, 1];
+      },
+    };
+    const store = new SQLiteStore(stub, ":memory:");
+    const semOnly = await store.save({ content: "向量检索的底层原理速记", source: "test" });
+    const kwOnly = await store.save({ content: "docker semaphore 速查表", source: "test" });
+    // 「semaphore」：关键词只命中 kwOnly，余弦只把 semOnly 排前——两路互补都进榜
+    const hits = await store.search("semaphore", 2);
+    expect(new Set(hits.map((h) => h.id))).toEqual(
+      new Set([semOnly.id, kwOnly.id])
+    );
+    expect(hits[0].id).toBe(kwOnly.id); // 双路得分者第一
+  });
+
+  test("向量缓存随 update 失效，不留过期向量", async () => {
+    const stub: EmbeddingProvider = {
+      model: "stub",
+      dimensions: 2,
+      async embed(text: string) {
+        if (text === "alpha topic" || text === "query") return [1, 0];
+        return [0, 1];
+      },
+    };
+    const store = new SQLiteStore(stub, ":memory:");
+    // 显式 createdAt 造数：同毫秒 save 的并列会破坏排序断言
+    await store.importMemories([
+      { id: "alpha", content: "alpha topic", createdAt: 10 }, // 向量 [1,0]
+      { id: "newer", content: "gamma filler", createdAt: 20 }, // 向量 [0,1]
+    ]);
+    expect((await store.search("query", 5))[0].id).toBe("alpha");
+
+    await store.update("alpha", { content: "beta topic" }); // 新向量 [0,1]
+    const after = await store.search("query", 5);
+    // 缓存若过期：alpha 仍 sim=1 会霸榜；正确时应平分后按时间 newer 先
+    expect(after[0].id).toBe("newer");
+  });
+
+  test("关键词索引增量维护：save 后立即可查，forget 后立即消失", async () => {
+    const store = new SQLiteStore(null, ":memory:");
+    await store.save({ content: "initial anchor row", source: "test" });
+    await store.search("anchor", 5); // 触发建索引
+    const later = await store.save({ content: "zebra crossing added later", source: "test" });
+    expect((await store.search("zebra", 5)).some((h) => h.id === later.id)).toBe(true);
+    await store.forget(later.id);
+    expect(await store.search("zebra", 5)).toHaveLength(0);
   });
 });

@@ -95,8 +95,11 @@ export interface MemoryStore {
   ): Promise<number>;
 }
 
-/** 余弦相似度：本地模式（SQLite）的向量检索用 */
-export function cosineSim(a: number[], b: number[]): number {
+/**
+ * 余弦相似度：本地模式（SQLite）的向量检索用。
+ * v2.6 起接受 ArrayLike——BLOB 向量解码出的 Float32Array 视图零拷贝直传。
+ */
+export function cosineSim(a: ArrayLike<number>, b: ArrayLike<number>): number {
   let dot = 0;
   let na = 0;
   let nb = 0;
@@ -137,66 +140,156 @@ export function tokenize(query: string): string[] {
 }
 
 /**
- * BM25 关键词打分（v2.5，替换 v0.2 的朴素命中计数）：
+ * BM25 关键词打分（v2.5 引入，v2.6 重构为索引）：
  * - 词频饱和（k1）：同一个词出现 10 次不会线性加 10 倍分
  * - 文档长度归一（b）：长文档的命中打折，短而准的排前面
- * - 候选集内 IDF：稀有词权重大，常用词（「的」「使用」类 bigram）权重小
+ * - 全库 IDF：稀有词权重大，常用词（「的」「使用」类 bigram）权重小
  * - 实体命中加成：entities 是人工标注的强信号，额外 ×1.5
+ * - 整句子串加成（v2.6）：完整查询串在正文出现时额外加分——
+ *   查 id / 精确串时不会被 bigram 切碎后的词频稀释
  * 零依赖；中文经 tokenize() 的 bigram 天然适配。
  */
 const BM25_K1 = 1.2;
 const BM25_B = 0.75;
 const ENTITY_BOOST = 1.5;
+const EXACT_BOOST = 5;
 
+/** KeywordIndex 内部的预计算文档 */
+type KeywordDoc = {
+  m: Memory;
+  /** term → 出现次数（查询期 O(1) 查词频，不再线性扫 token 列表） */
+  tf: Map<string, number>;
+  /** 文档长度（token 数） */
+  dl: number;
+  /** 实体名的 token 集 */
+  entityTokens: Set<string>;
+  /** 小写实体原串（子串匹配用） */
+  entityRaw: string[];
+  /** 小写全文（整句子串加成用） */
+  textLower: string;
+};
+
+/**
+ * 全库关键词索引（v2.6）：把 tokenize/BM25 的中间产物缓存在进程内，
+ * add/remove 增量维护 df 与总长——常驻的 MCP 服务每次 search 只做
+ * 查询侧切词 + 打分，不再对全库内容重复 tokenize。
+ * IDF/avgdl 基于全库而非候选子集，也砍掉了旧实现「只搜最近 500 条」的上限。
+ */
+export class KeywordIndex {
+  private docs = new Map<string, KeywordDoc>();
+  private df = new Map<string, number>();
+  private totalLen = 0;
+
+  rebuild(rows: Memory[]): void {
+    this.docs.clear();
+    this.df.clear();
+    this.totalLen = 0;
+    for (const m of rows) this.add(m);
+  }
+
+  add(m: Memory): void {
+    if (this.docs.has(m.id)) this.remove(m.id);
+    const tokens = tokenize(m.content);
+    const tf = new Map<string, number>();
+    for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
+    const doc: KeywordDoc = {
+      m,
+      tf,
+      dl: tokens.length,
+      entityTokens: new Set((m.entities ?? []).flatMap((e) => tokenize(e))),
+      entityRaw: (m.entities ?? []).map((e) => e.toLowerCase()),
+      textLower: m.content.toLowerCase(),
+    };
+    this.docs.set(m.id, doc);
+    for (const t of tf.keys()) this.df.set(t, (this.df.get(t) ?? 0) + 1);
+    this.totalLen += doc.dl;
+  }
+
+  remove(id: string): void {
+    const doc = this.docs.get(id);
+    if (!doc) return;
+    for (const t of doc.tf.keys()) {
+      const n = (this.df.get(t) ?? 1) - 1;
+      if (n <= 0) this.df.delete(t);
+      else this.df.set(t, n);
+    }
+    this.totalLen -= doc.dl;
+    this.docs.delete(id);
+  }
+
+  search(query: string, limit: number): Memory[] {
+    const terms = [...new Set(tokenize(query))];
+    const N = this.docs.size;
+    if (terms.length === 0 || N === 0) return [];
+    const avgdl = this.totalLen / N || 1;
+    const idf = (t: string) =>
+      Math.log(
+        1 + (N - (this.df.get(t) ?? 0) + 0.5) / ((this.df.get(t) ?? 0) + 0.5)
+      );
+    const q = query.trim().toLowerCase();
+    const out: { m: Memory; score: number }[] = [];
+    for (const doc of this.docs.values()) {
+      let score = 0;
+      for (const t of terms) {
+        const f = doc.tf.get(t) ?? 0;
+        if (f > 0) {
+          score +=
+            (idf(t) * (f * (BM25_K1 + 1))) /
+            (f + BM25_K1 * (1 - BM25_B + (BM25_B * doc.dl) / avgdl));
+        }
+        // 实体命中：精确 token 或子串（查询 port 命中实体 ports）
+        if (
+          doc.entityTokens.has(t) ||
+          doc.entityRaw.some((e) => e.includes(t) || t.includes(e))
+        ) {
+          score += idf(t) * ENTITY_BOOST;
+        }
+      }
+      if (q.length >= 2 && doc.textLower.includes(q)) score += EXACT_BOOST;
+      if (score > 0) out.push({ m: doc.m, score });
+    }
+    return out
+      .sort((a, b) => b.score - a.score || b.m.createdAt - a.m.createdAt)
+      .slice(0, limit)
+      .map((x) => x.m);
+  }
+}
+
+/**
+ * 无状态打分入口（StubStore / 一次性调用用）：
+ * 现挖现建索引，保证与常驻索引走完全同一套 BM25 实现（防两套公式漂移）。
+ */
 export function scoreMemories(
   rows: Memory[],
   query: string,
   limit: number
 ): Memory[] {
-  const terms = [...new Set(tokenize(query))];
-  if (terms.length === 0 || rows.length === 0) return [];
-  const docTokens = rows.map((r) => tokenize(r.content));
-  const entityTokens = rows.map((r) =>
-    new Set((r.entities ?? []).flatMap((e) => tokenize(e)))
-  );
-  const entityRaw = rows.map((r) =>
-    (r.entities ?? []).map((e) => e.toLowerCase())
-  );
-  // 候选集内文档频率 → IDF（BM25 变体，恒正）
-  const N = rows.length;
-  const df = new Map<string, number>();
-  for (const tokens of docTokens) {
-    for (const t of new Set(tokens)) df.set(t, (df.get(t) ?? 0) + 1);
+  const index = new KeywordIndex();
+  index.rebuild(rows);
+  return index.search(query, limit);
+}
+
+/**
+ * RRF 混合融合（v2.6）：Reciprocal Rank Fusion——多路排名按名次倒数
+ * 求和（1/(k+rank)，k=60 是惯例值），不依赖各路分数量纲可比。
+ * 关键词命中的精确匹配与语义命中的近义改写都能进榜，互为补充；
+ * 单路为空时自然退化为另一路的排名。
+ */
+const RRF_K = 60;
+
+export function rrfFuse(rankings: Memory[][], limit: number): Memory[] {
+  const scores = new Map<string, { m: Memory; s: number }>();
+  for (const ranking of rankings) {
+    ranking.forEach((m, i) => {
+      const cur = scores.get(m.id) ?? { m, s: 0 };
+      cur.s += 1 / (RRF_K + i + 1);
+      scores.set(m.id, cur);
+    });
   }
-  const idf = (t: string) =>
-    Math.log(1 + (N - (df.get(t) ?? 0) + 0.5) / ((df.get(t) ?? 0) + 0.5));
-  const avgdl = docTokens.reduce((s, d) => s + d.length, 0) / N || 1;
-  return rows
-    .map((row, i) => {
-      const dl = docTokens[i].length;
-      let score = 0;
-      for (const t of terms) {
-        let f = 0;
-        for (const x of docTokens[i]) if (x === t) f++;
-        if (f > 0) {
-          score +=
-            (idf(t) * (f * (BM25_K1 + 1))) /
-            (f + BM25_K1 * (1 - BM25_B + (BM25_B * dl) / avgdl));
-        }
-        // 实体命中：精确 token 或子串（查询 port 命中实体 ports）
-        if (
-          entityTokens[i].has(t) ||
-          entityRaw[i].some((e) => e.includes(t) || t.includes(e))
-        ) {
-          score += idf(t) * ENTITY_BOOST;
-        }
-      }
-      return { row, score };
-    })
-    .filter((r) => r.score > 0)
-    .sort((a, b) => b.score - a.score || b.row.createdAt - a.row.createdAt)
+  return [...scores.values()]
+    .sort((a, b) => b.s - a.s || b.m.createdAt - a.m.createdAt)
     .slice(0, limit)
-    .map((r) => r.row);
+    .map((x) => x.m);
 }
 
 /**

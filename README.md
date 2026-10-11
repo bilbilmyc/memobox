@@ -129,10 +129,13 @@ memobox import-codex
 
 - **Storage**: single SQLite file at `~/.memobox/memobox.db`
   (`MEMOBOX_DB_PATH` to move it). No daemon, no port, no Postgres.
-- **Retrieval**: entity-graph expansion always on; keyword scoring upgraded
-  to BM25 in v2.5 (term-frequency saturation, document-length normalization,
-  IDF, entity boost) with CJK bigram tokenization; semantic mode adds cosine
-  over embeddings.
+- **Retrieval** (v2.6): hybrid. BM25 keyword ranking (full-corpus index
+  cached in-process, IDF over the whole library, exact-phrase boost,
+  entity boost) fused with semantic cosine ranking via Reciprocal Rank
+  Fusion — exact matches and paraphrases both surface. Entity-graph
+  expansion tops up the result list. In semantic mode, vectors are stored
+  as Float32 BLOBs (no JSON parsing) and cached in-process: warm searches
+  measure ~5-8ms on a real 85-memory library.
 - **Semantic mode (optional upgrade)**: `memobox model enable --lite` =
   built-in quantized small model (bge-small-zh, ~25MB) running in-process —
   no server, no port, no Ollama; the model is lazily loaded (keyword-mode
@@ -147,7 +150,7 @@ memobox import-codex
 ## Development
 
 ```bash
-bun test          # 120 tests
+bun test          # 130 tests
 bun run typecheck
 ```
 
