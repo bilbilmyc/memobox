@@ -16,7 +16,7 @@ if (!process.env.MEMOBOX_QUALITY_CHILD) {
   process.exit(await child.exited);
 }
 type EvaluationQuery = { id: string; category: string; query: string; relevant: string[] };
-const bytes = readFileSync(join(import.meta.dir, "fixtures/retrieval-bilingual.json")), fixture = JSON.parse(bytes.toString("utf8")) as { description: string; memories: Memory[]; training: EvaluationQuery[]; heldout: EvaluationQuery[] };
+const bytes = readFileSync(join(import.meta.dir, "fixtures/retrieval-bilingual.json"), "utf8").replace(/\r\n/g, "\n"), fixture = JSON.parse(bytes) as { description: string; memories: Memory[]; training: EvaluationQuery[]; heldout: EvaluationQuery[] };
 const queries = args.split === "training" ? fixture.training : fixture.heldout, rows = fixture.memories.filter(row => row.id.startsWith(args.split === "training" ? "t-" : "h-"));
 const cache = JSON.parse(readFileSync(args.vectors!, "utf8")) as { model: string; dimensions: number; space?: string; minimumSimilarity?: number; fixtureSha256: string; vectors: Record<string, number[]>; queryVectors?: Record<string, number[]>; timings: { ms: number; split: string }[] };
 const fixtureSha256 = createHash("sha256").update(bytes).digest("hex"); if (cache.fixtureSha256 !== fixtureSha256) throw Error("Evaluation vectors do not match immutable fixture");

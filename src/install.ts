@@ -21,6 +21,7 @@ import { writeInstallFile, removeCodexSection } from "./lib/install-file";
 import piExtension from "./lib/pi-extension.txt" with { type: "text" };
 import { TOOLS } from "./lib/mcp";
 import { piAgentPath } from "./lib/paths";
+import { isDeepStrictEqual } from "node:util";
 
 export type ClientKind = "claude" | "codex" | "pi";
 
@@ -122,6 +123,16 @@ export type InstallResult = { ok: boolean; message: string };
 /** 已经配置过的判据：文本里出现过自己的键 */
 const CODEX_MARK = /^\[mcp_servers\.memobox\]/m;
 
+/** 接线之外的解析结果必须保持，防止文本分段遗漏 TOML 特殊语法。 */
+function unrelatedCodexSettings(value: Record<string, unknown>): Record<string, unknown> {
+  const copy = { ...value }, servers = copy.mcp_servers;
+  if (servers && typeof servers === "object" && !Array.isArray(servers)) {
+    const rest = { ...servers } as Record<string, unknown>; delete rest.memobox;
+    if (Object.keys(rest).length) copy.mcp_servers = rest; else delete copy.mcp_servers;
+  }
+  return copy;
+}
+
 /** 写文件前把目录建好（~/.codex、~/.pi/agent 可能不存在） */
 /** codex：往 ~/.codex/config.toml 追加块（幂等：见到标记就跳过） */
 export async function installCodex(
@@ -137,7 +148,10 @@ export async function installCodex(
   }
   if (parsed.mcp_servers?.memobox && !CODEX_MARK.test(existing)) return { ok: false, message: "现有 memobox 使用非标准 TOML 段名，请先手动备份并移除该段：" + path };
   const next = (force ? removeCodexSection(existing) : existing) + codexTomlBlock(entry);
-  try { Bun.TOML.parse(next); } catch { return { ok: false, message: "接线合并未通过 TOML 校验，未修改原文件：" + path }; }
+  try {
+    const after = Bun.TOML.parse(next) as Record<string, unknown>;
+    if (!isDeepStrictEqual(unrelatedCodexSettings(parsed), unrelatedCodexSettings(after))) return { ok: false, message: "接线更新将影响其他设置，未修改原文件，请手动核对：" + path };
+  } catch { return { ok: false, message: "接线合并未通过 TOML 校验，未修改原文件：" + path }; }
   const backup = writeInstallFile(path, next);
   return { ok: true, message: `已写入 [mcp_servers.memobox] -> ${path}` + (backup ? "；原配置备份：" + backup : "") };
 }

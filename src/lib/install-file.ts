@@ -17,11 +17,24 @@ export function writeInstallFile(path: string, content: string): string | undefi
 export function removeCodexSection(text: string): string {
   const lines = text.split(/\r?\n/); let own = false, multiline: string | undefined; const kept: string[] = [];
   for (const line of lines) {
-    const heading = !multiline ? /^\s*\[([^\]]+)\]\s*(?:#.*)?$/.exec(line) : null;
-    if (heading) own = /^mcp_servers\.memobox(?:\.|$)/.test(heading[1]);
+    const heading = !multiline ? /^\s*(?:\[\[([^\]]+)\]\]|\[([^\]]+)\])\s*(?:#.*)?$/.exec(line) : null;
+    if (heading) own = /^mcp_servers\.memobox(?:\.|$)/.test(heading[1] ?? heading[2]);
     if (!own) kept.push(line);
-    if (!line.trimStart().startsWith("#")) for (const marker of line.match(/(?<!\\)"""|'''/g) ?? []) {
-      if (!multiline) multiline = marker; else if (multiline === marker) multiline = undefined;
+    for (let at = 0; at < line.length;) {
+      if (multiline) {
+        if (multiline === '"""' && line[at] === "\\") { at += 2; continue; }
+        if (line.startsWith(multiline, at)) { at += 3; multiline = undefined; } else at++;
+      } else {
+        if (line[at] === "#") break;
+        const quote = line[at];
+        if (quote !== '"' && quote !== "'") { at++; continue; }
+        const marker = quote.repeat(3);
+        if (line.startsWith(marker, at)) { multiline = marker; at += 3; continue; }
+        for (at++; at < line.length; at++) {
+          if (quote === '"' && line[at] === "\\") { at++; continue; }
+          if (line[at] === quote) { at++; break; }
+        }
+      }
     }
   }
   return kept.join("\n");

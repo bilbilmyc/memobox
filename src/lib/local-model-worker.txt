@@ -28,6 +28,8 @@ for await (const line of input) {
     request = JSON.parse(line);
     const extract = await load();
     const result = await extract(request.text, { pooling: "cls", normalize: true });
-    process.stdout.write(JSON.stringify({ id: request.id, vector: Array.from(result.data) }) + "\n");
+    // Float32 原始位保持精度；约 2.7KB 的消息避免 Windows 管道拆分大 JSON。
+    const vector = new Float32Array(result.data);
+    process.stdout.write(JSON.stringify({ id: request.id, vectorBase64: Buffer.from(vector.buffer).toString("base64") }) + "\n");
   } catch { process.stdout.write(JSON.stringify({ id: request?.id, error: "local_model_failed" }) + "\n"); }
 }

@@ -8,7 +8,7 @@ import { modelCachePath } from "../src/lib/optional-runtime";
 
 const args = parseArgs({ options: { split: { type: "string", default: "training" }, pipeline: { type: "string", default: "current" }, out: { type: "string", default: "artifacts/quality/vectors-current.json" } } }).values;
 if (!["training", "heldout"].includes(args.split!)) throw Error("split must be training or heldout");
-const bytes = readFileSync(resolve(import.meta.dir, "fixtures/retrieval-bilingual.json")), fixture = JSON.parse(bytes.toString("utf8"));
+const bytes = readFileSync(resolve(import.meta.dir, "fixtures/retrieval-bilingual.json"), "utf8").replace(/\r\n/g, "\n"), fixture = JSON.parse(bytes);
 const fixtureSha256 = createHash("sha256").update(bytes).digest("hex"), output = resolve(args.out!);
 if (!["legacy", "current"].includes(args.pipeline!)) throw Error("pipeline must be legacy or current");
 const current = createLocalEmbedder(message => console.error(message)), legacy = args.pipeline === "legacy";

@@ -4,6 +4,23 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve, basename } from "node:path";
 import { installCodex, installPi, installClaude } from "./install";
 
+test("Codex 强制更新保留数组表和注释中的三引号后的其他配置", async () => {
+  const root = mkdtempSync(join(tmpdir(), "memobox-install-lexical-")), path = join(root, ".codex", "config.toml");
+  mkdirSync(dirname(path), { recursive: true });
+  try {
+    for (const suffix of ['[[skills.config]]\npath = "custom/SKILL.md"\nenabled = false\n', '[model_providers.private]\nbase_url = "https://example.test"\n']) {
+      const original = '[mcp_servers.memobox]\ncommand = "old" # """ user note\nargs = []\n\n' + suffix;
+      writeFileSync(path, original); const before = Bun.TOML.parse(original) as Record<string, unknown>;
+      expect((await installCodex({ command: process.execPath, args: [] }, root, true)).ok).toBe(true);
+      const after = Bun.TOML.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+      delete before.mcp_servers; delete after.mcp_servers; expect(after).toEqual(before);
+    }
+  } finally {
+    if (dirname(resolve(root)) !== resolve(tmpdir()) || !basename(root).startsWith("memobox-install-lexical-")) throw Error("清理路径越界");
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("三家客户端的旧接线仅在 --force 后更新，保留其他配置并备份完整原文件", async () => {
   const root = mkdtempSync(join(tmpdir(), "memobox-install-upgrade-")), next = { command: join(root, "中文 '原生程序.exe"), args: [], env: { MEMOBOX_DB_PATH: join(root, "新库.db") } };
   try {

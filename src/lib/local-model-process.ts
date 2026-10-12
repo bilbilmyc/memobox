@@ -33,9 +33,12 @@ export function createLocalModelProcess(onProgress?: (message: string) => void) 
       try {
         const response = JSON.parse(line), item = pending.get(response.id); if (!item) return;
         pending.delete(response.id); clearTimeout(item.timer);
-        if (response.error) item.reject(failure());
-        else if (!Array.isArray(response.vector) || response.vector.length !== 512 || response.vector.some((v: unknown) => typeof v !== "number" || !Number.isFinite(v))) item.reject(Error("内置模型返回无效向量"));
-        else item.resolve(response.vector);
+        if (response.error) { item.reject(failure()); return; }
+        const bytes = typeof response.vectorBase64 === "string" && response.vectorBase64.length <= 2800 ? Buffer.from(response.vectorBase64, "base64") : null;
+        if (!bytes || bytes.length !== 512 * 4) { item.reject(Error("内置模型返回无效向量")); return; }
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const vector = Array.from({ length: 512 }, (_, index) => view.getFloat32(index * 4, true));
+        if (vector.some(value => !Number.isFinite(value))) item.reject(Error("内置模型返回无效向量")); else item.resolve(vector);
       } catch { disconnect(); }
     });
     progress.on("line", line => { try { const message = JSON.parse(line); if (typeof message.progress === "string") onProgress?.(message.progress); if (typeof message.diagnostic === "string") diagnostic = message.diagnostic.slice(-4000); } catch { diagnostic = (diagnostic + "\n" + line).slice(-4000); } });
