@@ -15,9 +15,10 @@ export function runProcess(command, args, { env = process.env, cwd = process.cwd
 /** 真 stdio MCP 测试客户端；stdout 中任何非 JSON 都是验收失败。 */
 export function mcpClient(command, args, env) {
   const child = spawn(command, args, { env, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-  const pending = new Map(); let sequence = 0, protocolError;
+  const pending = new Map(); let sequence = 0, protocolError, stderr = "";
   const fail = error => { for (const item of pending.values()) { clearTimeout(item.timer); item.reject(error); } pending.clear(); };
-  child.on("error", fail); child.on("exit", () => fail(Error("MCP exited"))); child.stderr.resume();
+  child.on("error", fail); child.on("exit", () => fail(Error("MCP exited")));
+  child.stderr.setEncoding("utf8"); child.stderr.on("data", text => { stderr = (stderr + text).slice(-16000); });
   const closed = new Promise(resolve => child.once("close", (code, signal) => resolve({ code, signal })));
   const lines = createInterface({ input: child.stdout });
   lines.on("line", line => {
@@ -29,6 +30,7 @@ export function mcpClient(command, args, env) {
   });
   return {
     child,
+    diagnostics() { return stderr; },
     call(method, params, timeout = 20000) {
       const id = ++sequence;
       return new Promise((resolve, reject) => {

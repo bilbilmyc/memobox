@@ -35,48 +35,16 @@ jobs:
   verify:
     needs: plan
     if: needs.plan.outputs.publish == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version: '24'
-          package-manager-cache: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: '1.4.2'
-      - name: 安装锁定依赖
-        run: bun install --frozen-lockfile --ignore-scripts
-      - name: 回归测试及类型检查
-        run: bun run prepublishOnly
-      - name: 验证实际安装包、中文 CLI 和两个 MCP 进程
-        run: node scripts/release/package.mjs pack-and-test
-        env:
-          EXPECTED_VERSION: ${{ needs.plan.outputs.version }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: npm-package-${{ matrix.os }}
-          path: |
-            artifacts/*.tgz
-            artifacts/receipt.json
-          if-no-files-found: error
-          retention-days: 7
+    uses: ./.github/workflows/ci.yml
 
   publish:
     needs: [plan, verify]
     if: needs.plan.outputs.publish == 'true' && github.repository == 'bilbilmyc/memobox' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     environment: npm
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -90,7 +58,19 @@ jobs:
         run: npm install --global npm@12.1.0 --ignore-scripts --no-audit --no-fund
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: npm-package-ubuntu-latest
+          name: npm-candidate
           path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: '*64'
+          path: artifacts
+      - name: 发布五个平台已验收的 GitHub Release 资产并核对上传字节
+        run: node scripts/release/assets.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: 用 OIDC 发布已验证的 tarball，核对 registry
         run: node scripts/release/package.mjs publish
+      - name: 从公开 npm/GitHub 重新安装并验收
+        run: node scripts/native/test-package.mjs release
+        env:
+          PUBLIC_RELEASE_TEST: '1'

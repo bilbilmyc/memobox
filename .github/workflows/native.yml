@@ -108,3 +108,35 @@ jobs:
           path: artifacts/${{ matrix.platform }}
       - name: 仅 Node/npm 安装同一份 tarball，无外部 Bun 运行
         run: node scripts/native/test-package.mjs release artifacts
+
+  acceptance:
+    needs: native
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.4.2'
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: linux-x64
+          path: artifacts/linux-x64
+      - name: 解压已验收原生程序
+        run: node --input-type=module -e "import{readFileSync,writeFileSync,chmodSync}from'node:fs';import{gunzipSync}from'node:zlib';const r=JSON.parse(readFileSync('artifacts/linux-x64/receipt.json'));writeFileSync('artifacts/linux-x64/memobox',gunzipSync(readFileSync('artifacts/linux-x64/'+r.asset)));chmodSync('artifacts/linux-x64/memobox',0o700)"
+      - name: 真实模型留出集与 100/1000/10000 记忆磁盘 MCP 新旧对比门禁
+        run: node scripts/run-acceptance.mjs artifacts/linux-x64/memobox
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: acceptance-reports
+          path: artifacts/acceptance/*.json
+          if-no-files-found: error
+          retention-days: 7

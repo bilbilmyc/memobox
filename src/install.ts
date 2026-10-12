@@ -3,22 +3,24 @@
  * `memobox install <client>` —— 把 memobox 接进各 MCP 客户端（v2.0）。
  *
  * 支持三家：
- *   claude → `claude mcp add --scope user`（依赖 PATH 上有 claude CLI）
+ *   claude → 合并 ~/.claude.json 的用户级 MCP 接线
  *   codex  → 往 ~/.codex/config.toml 追加 [mcp_servers.memobox] 块
- *   pi     → 合并 ~/.pi/agent/mcp.json 的 mcpServers.memobox 键
+ *   pi     → MCP 配置 + 可自动发现的薄扩展（pi 不原生读取 mcp.json）
  *
  * 设计约束：
  * - 幂等：已配置过就明说，不重复追加；
  * - 只动自己那一小块配置（codex/pi 是合并写，不动用户其他条目）；
  * - 纯函数部分（块生成 / JSON 合并 / claude 参数拼装）独立导出，测试注入临时目录。
  */
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { IS_COMPILED } from "./runtime";
 import { writeInstallFile, removeCodexSection } from "./lib/install-file";
+import piExtension from "./lib/pi-extension.txt" with { type: "text" };
+import { TOOLS } from "./lib/mcp";
+import { piAgentPath } from "./lib/paths";
 
 export type ClientKind = "claude" | "codex" | "pi";
 
@@ -121,11 +123,6 @@ export type InstallResult = { ok: boolean; message: string };
 const CODEX_MARK = /^\[mcp_servers\.memobox\]/m;
 
 /** 写文件前把目录建好（~/.codex、~/.pi/agent 可能不存在） */
-function writeCreatingDirs(path: string, content: string) {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, content, "utf-8");
-}
-
 /** codex：往 ~/.codex/config.toml 追加块（幂等：见到标记就跳过） */
 export async function installCodex(
   entry: ServerEntry,
@@ -150,7 +147,7 @@ export async function installPi(
   entry: ServerEntry,
   home: string = homedir(), force = false
 ): Promise<InstallResult> {
-  const path = join(home, ".pi", "agent", "mcp.json");
+  const path = join(piAgentPath(home), "mcp.json");
   let existing: unknown = {};
   if (existsSync(path)) {
     try {
@@ -168,12 +165,13 @@ export async function installPi(
       (existing as Record<string, unknown>).mcpServers &&
       ((existing as { mcpServers: Record<string, unknown> }).mcpServers.memobox !== undefined)
   );
-  if (has && !force) {
-    return { ok: true, message: `已配置过：${path} 里已有 mcpServers.memobox` };
-  }
   if (!existing || typeof existing !== "object" || Array.isArray(existing) || ((existing as { mcpServers?: unknown }).mcpServers !== undefined && (!((existing as { mcpServers: unknown }).mcpServers) || typeof (existing as { mcpServers: unknown }).mcpServers !== "object" || Array.isArray((existing as { mcpServers: unknown }).mcpServers)))) return { ok: false, message: "客户端配置必须是 JSON 对象，未修改：" + path };
-  const backup = writeInstallFile(path, JSON.stringify(piMerge(existing, entry), null, 2) + "\n");
-  return { ok: true, message: `已写入 mcpServers.memobox -> ${path}` + (backup ? "；原配置备份：" + backup : "") };
+  const extensionPath = join(piAgentPath(home), "extensions", "memobox.js");
+  if (has && existsSync(extensionPath) && !force) return { ok: true, message: `已配置过：${path}；升级后用 install pi --force 更新并备份` };
+  const extension = piExtension.replace("__MEMOBOX_CONFIG__", JSON.stringify(path)).replace("__MEMOBOX_TOOLS__", JSON.stringify(TOOLS));
+  const extensionBackup = writeInstallFile(extensionPath, extension);
+  const backup = has && !force ? undefined : writeInstallFile(path, JSON.stringify(piMerge(existing, entry), null, 2) + "\n");
+  return { ok: true, message: `已写入 pi MCP 接线和自动加载扩展 -> ${path}` + (backup ? "；原配置备份：" + backup : "") + (extensionBackup ? "；扩展备份：" + extensionBackup : "") };
 }
 
 /** Claude 用户级 JSON 与官方 CLI 使用同一接线字段；无需启动 agent 写配置。 */

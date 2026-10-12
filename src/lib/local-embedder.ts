@@ -1,7 +1,7 @@
 /**
- * 进程内嵌入模型（v2.5 轻量语义方案）：
+ * 本机嵌入模型：源码进程内加载，编译版按需启动同一程序的模型助手。
  * transformers.js + 量化 ONNX 小模型（默认 bge-small-zh-v1.5，约 25MB，
- * 512 维，中英都好使），CPU/WASM 推理——无服务、无端口、无 Ollama。
+ * 512 维），CPU 推理，无端口或共享模型服务。
  *
  * 重量控制：transformers.js 只在第一次真正 embed 时才动态 import，
  * keyword 模式的进程（绝大多数 MCP 拉起）完全不加载它。
@@ -28,6 +28,7 @@ type Extractor = (
 /** 模块级单例：同一进程里 probe/补算/store 共用一个加载好的模型 */
 let extractorPromise: Promise<Extractor> | null = null;
 let modelProcess: ReturnType<typeof createLocalModelProcess> | null = null;
+const queryCache = new Map<string, Promise<number[]>>();
 
 async function loadExtractor(
   onProgress?: (msg: string) => void
@@ -80,19 +81,33 @@ export function createLocalEmbedder(
       const out = await extract(text, { pooling: "cls", normalize: true });
       return Array.from(out.data);
   }
+  async function embedQuery(text: string): Promise<number[]> {
+    const input = "为这个句子生成表示以用于检索相关文章：" + text;
+    if (text.length > 4096) return embed(input);
+    let result = queryCache.get(text);
+    if (result) { queryCache.delete(text); queryCache.set(text, result); }
+    else {
+      result = embed(input).catch(error => { if (queryCache.get(text) === result) queryCache.delete(text); throw error; });
+      queryCache.set(text, result);
+      if (queryCache.size > 128) queryCache.delete(queryCache.keys().next().value!);
+    }
+    // 缓存的是固定模型的查询向量，不缓存召回结果；范围和外部写入仍实时生效。
+    return [...await result];
+  }
   return {
     model: LOCAL_EMBED_MODEL, dimensions: LOCAL_EMBED_DIM,
     space: "transformers-feature-extraction-v2:cls:query-instruction:normalize:q8",
     // 在训练集上固定；不把内置模型的分布阈值套给其他端点模型。
     minimumSimilarity: 0.45,
     embed,
-    embedQuery: text => embed("为这个句子生成表示以用于检索相关文章：" + text),
+    embedQuery,
   };
 }
 
 /** 仅测试用：清掉模型单例，让下一个用例可以注入假的 transformers */
 export function resetLocalExtractor(): void {
   extractorPromise = null;
+  queryCache.clear();
   modelProcess?.stop(); modelProcess = null;
 }
 

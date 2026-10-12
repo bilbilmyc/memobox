@@ -1,15 +1,16 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import type { ClientKind } from "../install";
+import { piAgentPath } from "./paths";
 
 export type ClientDiagnostics = { client: ClientKind; configured: boolean; path: string; dbPath?: string; configPath?: string; dbMatches?: boolean;
-  configMatches?: boolean; commandExists?: boolean; error?: "invalid_config" | "relative_path"; explicitDb?: boolean; explicitConfig?: boolean };
+  configMatches?: boolean; commandExists?: boolean; extensionExists?: boolean; error?: "invalid_config" | "relative_path" | "missing_extension"; explicitDb?: boolean; explicitConfig?: boolean };
 const canonical = (path: string) => { let result = existsSync(path) ? realpathSync(path) : resolve(path); if (process.platform === "win32") result = result.toLowerCase(); return result; };
 
 /** 只读白名单字段，不把客户端其他模型、密钥和配置内容放进报告。 */
 export function inspectClients(home: string, expectedDb: string, expectedConfig: string): ClientDiagnostics[] {
   return (["codex", "pi", "claude"] as const).map(client => {
-    const path = client === "codex" ? join(home, ".codex", "config.toml") : client === "pi" ? join(home, ".pi", "agent", "mcp.json") : join(home, ".claude.json");
+    const path = client === "codex" ? join(home, ".codex", "config.toml") : client === "pi" ? join(piAgentPath(home), "mcp.json") : join(home, ".claude.json");
     const report: ClientDiagnostics = { client, configured: false, path };
     if (!existsSync(path)) return report;
     try {
@@ -29,6 +30,7 @@ export function inspectClients(home: string, expectedDb: string, expectedConfig:
       if (!isAbsolute(report.dbPath) || !isAbsolute(report.configPath)) report.error = "relative_path";
       else { report.dbMatches = canonical(report.dbPath) === canonical(expectedDb); report.configMatches = canonical(report.configPath) === canonical(expectedConfig); }
       if (typeof entry.command === "string") report.commandExists = isAbsolute(entry.command) ? existsSync(entry.command) : Bun.which(entry.command) !== null;
+      if (client === "pi") { report.extensionExists = existsSync(join(piAgentPath(home), "extensions", "memobox.js")); if (!report.extensionExists && !report.error) report.error = "missing_extension"; }
     } catch { report.error = "invalid_config"; }
     return report;
   });

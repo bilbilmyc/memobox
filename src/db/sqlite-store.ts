@@ -888,14 +888,12 @@ export class SQLiteStore implements MemoryStore {
     items: Memory[]
   ): Promise<{ imported: number; skipped: number }> {
     // 整批先校验，不能在遇到坏条目之前写入半份备份。
-    items.forEach(item => validateMemoryInput(item));
-    let imported = 0;
-    let skipped = 0;
+    items.forEach(item => validateRestoreItems([item]));
+    const existing = new Set(this.db.select({ id: schema.memories.id }).from(schema.memories).all().map(row => row.id));
+    const prepared: { item: Memory; vec: Float32Array | null }[] = [];
     for (const item of items) {
-      if (this.readRow(item.id)) {
-        skipped++;
-        continue;
-      }
+      if (existing.has(item.id)) continue;
+      existing.add(item.id);
       let vec: Float32Array | null = null;
       if (this.embedder) {
         try {
@@ -904,27 +902,21 @@ export class SQLiteStore implements MemoryStore {
           // 与 save 同策略：embedding 失败按无向量落库
         }
       }
-      const inserted = this.writeMemory(() => {
-        // SELECT 与 INSERT 在同一写事务，防止并发导入误算计数或覆盖实体。
-        if (this.readRow(item.id)) return null;
-        const row = {
-          id: item.id,
-          content: item.content,
-          kind: item.kind ?? "fact",
-          source: item.source ?? "mcp",
-          entities: JSON.stringify(item.entities ?? []),
-          embedding: vec ? encodeEmbedding(vec) : null,
-          embeddingSpace: vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null,
-          createdAt: item.createdAt,
-          updatedAt: Date.now(),
-        };
-        this.db.insert(schema.memories).values(row).run();
-        this.syncEdges(item.id, item.entities ?? []);
-        return row;
-      }, (row) => { if (row) this.cacheRow(row); });
-      if (inserted) imported++;
-      else skipped++;
+      prepared.push({ item, vec });
     }
-    return { imported, skipped };
+    // 模型请求不持有写锁；一个事务与一个复用语句避免每条 fsync/prepare。
+    // 并发新增编号仍保留对方已提交的内容，图谱故障则回滚整份导入。
+    const insert = this.client.prepare("INSERT INTO memories (id, content, kind, source, entities, embedding, embedding_space, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING");
+    try {
+      return this.writeMemory(() => {
+        let imported = 0;
+        for (const { item, vec } of prepared) {
+          const result = insert.run(item.id, item.content, item.kind ?? "fact", item.source ?? "mcp", JSON.stringify(item.entities ?? []),
+            vec ? encodeEmbedding(vec) : null, vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null, item.createdAt, Date.now());
+          if (result.changes) { this.syncEdges(item.id, item.entities ?? []); imported++; }
+        }
+        return { imported, skipped: items.length - imported };
+      }, () => { if (prepared.length) { this.kwIndex = null; this.vecCache = null; } });
+    } finally { insert.finalize(); }
   }
 }

@@ -72,13 +72,13 @@ export async function runModelCommand(
       : cfg?.base
         ? `混合检索（来源：${defaultConfigPath()}，端点 ${safeEndpoint(cfg.base)}）`
         : cfg?.local
-          ? `混合检索（来源：内置模型 ${cfg.model ?? LOCAL_EMBED_MODEL}，进程内推理）`
+          ? `混合检索（来源：内置模型 ${cfg.model ?? LOCAL_EMBED_MODEL}，本机 CPU 推理）`
           : "关键词检索（memobox model enable --lite 可最轻启用语义检索）";
     io.out(`检索模式：  ${mode}`);
     return 0;
   }
   if (sub === "enable") {
-    // --lite：内置小模型（v2.5 轻量方案）——不碰 Ollama，进程内推理
+    // --lite：内置小模型（v2.5 轻量方案）——不碰 Ollama，本机 CPU 推理
     if (flags.has("lite")) {
       io.out(`启用内置嵌入模型 ${LOCAL_EMBED_MODEL}（约 25MB，缓存在 ~/.memobox/models）…`);
       try {

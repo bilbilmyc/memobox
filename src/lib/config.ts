@@ -21,7 +21,7 @@ export type MemoboxConfig = {
     model?: string;
     /** 云端端点才需要；本地端点免鉴权 */
     key?: string;
-    /** 内置小模型（进程内推理，零外部依赖）——`model enable --lite` 写的 */
+    /** 本机小模型，按需安装运行库和模型；`model enable --lite` 写入 */
     local?: boolean;
     dimensions?: number;
     timeoutMs?: number;

@@ -1,9 +1,18 @@
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, copyFileSync, chmodSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { mcpClient, runProcess } from "./process.mjs";
+import { validateEndpoint } from "./endpoint.mjs";
+import { processMemory } from "./process-memory.mjs";
+
+const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+async function assertExited(pids) {
+  const deadline = Date.now() + 5000;
+  while (pids.some(alive) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
+  assert(pids.every(pid => !alive(pid)), "Model/launcher descendant remained after MCP exit");
+}
 
 export async function validateProduct(command, prefix, { root = mkdtempSync(join(tmpdir(), "memobox-native-")), version, env: extra = {}, lite = false } = {}) {
   mkdirSync(root, { recursive: true });
@@ -36,6 +45,12 @@ export async function validateProduct(command, prefix, { root = mkdtempSync(join
   assert.deepEqual(pi.args, []); assert.deepEqual(codexEntry.args, []);
   const claudeEntry = JSON.parse(readFileSync(join(root, ".claude.json"), "utf8")).mcpServers.memobox;
   assert.deepEqual(claudeEntry, pi);
+  const piTools = [], piHandlers = new Map();
+  const piAdapter = (await import(pathToFileURL(join(root, ".pi", "agent", "extensions", "memobox.js")).href)).default;
+  piAdapter({ registerTool: tool => piTools.push(tool), on: (name, handler) => piHandlers.set(name, handler) });
+  assert.equal(piTools.length, 10);
+  try { assert.equal((await piTools.find(tool => tool.name === "memobox_memory_get").execute("test", { id: saved[0].id })).details.memory.content, "发行物验证：中文目录已修订"); }
+  finally { await piHandlers.get("session_shutdown")(); }
   const a = mcpClient(codexEntry.command, codexEntry.args, { ...env, ...codexEntry.env }), b = mcpClient(pi.command, pi.args, { ...env, ...pi.env });
   const c = mcpClient(claudeEntry.command, claudeEntry.args, { ...env, ...claudeEntry.env });
   try {
@@ -66,21 +81,35 @@ export async function validateProduct(command, prefix, { root = mkdtempSync(join
   await signal.call("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "signal-test", version: "1" } });
   await signal.close("SIGTERM");
   const doctor = JSON.parse(await cli(["doctor", "--json", "--strict"])); assert.equal(doctor.database.integrity, "ok");
+  await validateEndpoint(command, prefix, root, env);
   if (lite) {
     env.MEMOBOX_RUNTIME_PATH = extra.MEMOBOX_RUNTIME_PATH ?? join(root, "optional-runtime");
     env.MEMOBOX_MODELS_PATH = extra.MEMOBOX_MODELS_PATH ?? join(root, "models");
     await cli(["model", "enable", "--lite", "--debug"], 0, 240000);
     const check = JSON.parse(await cli(["doctor", "--json", "--strict"])); assert.equal(check.model.mode, "local"); assert.equal(check.database.vectors.missing, 0);
+    for (const signal of [undefined, "SIGTERM"]) {
     const local = mcpClient(command, prefix, env);
+    let descendants = [];
     try {
       await local.call("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "real-model-test", version: "1" } });
+      const started = performance.now();
       const result = await local.tool("memory_search", { query: "中文文件夹中的发行测试", explain: true }, 240000);
+      assert(performance.now() - started < 2500, "Cached model cold search regressed above 2.5s");
       assert.equal(result.isError, undefined); assert.equal(result.structuredContent.explanation.mode, "hybrid");
       assert.equal(result.structuredContent.explanation.semantic.status, "used");
       assert(result.structuredContent.memories.some(memory => memory.id === saved[0].id));
-    } finally { await local.close(); }
+      descendants = processMemory(local.child.pid).pids;
+      assert(descendants.length >= 2, "Compiled local model helper was not exercised");
+    } finally { await local.close(signal); await assertExited(descendants); }
+    }
+    // 原生启动器和模型助手都必须支持 shell 元字符、中文及空格路径。
+    const punctuated = join(root, "中文 %MEMOBOX_NOT_SET% & ' ! 目录"); mkdirSync(punctuated);
+    const escaped = join(punctuated, process.platform === "win32" ? "memobox.exe" : "memobox");
+    copyFileSync(pi.command, escaped); chmodSync(escaped, 0o700);
+    const escapedSearch = JSON.parse((await runProcess(escaped, ["search", "中文文件夹中的发行测试", "--explain", "--json"], { env })).stdout);
+    assert.equal(escapedSearch.explanation.semantic.status, "used");
   }
-  return { root, version, cliPassed: true, twoProcessMcpPassed: true, generatedClientConfigsPassed: true, signalPassed: true, realLocalModelPassed: lite };
+  return { root, version, cliPassed: true, twoProcessMcpPassed: true, generatedClientConfigsPassed: true, piExtensionPassed: true, signalPassed: true, endpointPassed: true, realLocalModelPassed: lite };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 /**
  * 默认库文件位置：~/.memobox/memobox.db（v2.0 起）。
@@ -8,4 +8,9 @@ import { join } from "node:path";
  */
 export function defaultDbPath(): string {
   return process.env.MEMOBOX_DB_PATH || join(homedir(), ".memobox", "memobox.db");
+}
+
+/** 显式测试 home 不读取用户 pi 目录；实际安装尊重 pi 的官方目录覆盖。 */
+export function piAgentPath(home = homedir()): string {
+  return home === homedir() && process.env.PI_CODING_AGENT_DIR ? resolve(process.env.PI_CODING_AGENT_DIR) : join(home, ".pi", "agent");
 }

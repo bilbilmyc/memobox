@@ -8,11 +8,17 @@ import assert from "node:assert/strict";
 import { runProcess } from "./process.mjs";
 import { validateProduct } from "./validate.mjs";
 
-export async function validateTarball(tarball, assets, expectedVersion, lite = false) {
+export async function validateTarball(tarball, assets, expectedVersion, lite = false, registry = false) {
   const root = mkdtempSync(join(tmpdir(), "memobox-npm-native-")), consumer = join(root, "consumer");
   const npmCli = [join(dirname(process.execPath), "node_modules/npm/bin/npm-cli.js"), resolve(dirname(process.execPath), "../lib/node_modules/npm/bin/npm-cli.js")].find(existsSync);
   if (!npmCli) throw Error("npm CLI not found");
-  await runProcess(process.execPath, [npmCli, "install", "--prefix", consumer, "--cache", join(root, "npm-cache"), "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", resolve(tarball)], { timeout: 120000 });
+  const installEnv = { ...process.env, HOME: root, USERPROFILE: root, MEMOBOX_BINARY_CACHE: join(root, "native-cache") };
+  if (registry) for (const name of ["MEMOBOX_DOWNLOAD_BASE", "MEMOBOX_BINARY_PATH", "BUN_BE_BUN"]) delete installEnv[name];
+  await runProcess(process.execPath, [npmCli, "install", "--prefix", consumer, "--cache", join(root, "npm-cache"), ...(!registry ? ["--ignore-scripts"] : []), "--omit=dev", "--no-audit", "--no-fund", registry ? `memobox@${expectedVersion}` : resolve(tarball)], { env: installEnv, timeout: 240000 });
+  if (registry) {
+    const lock = JSON.parse(readFileSync(join(consumer, "package-lock.json"), "utf8"));
+    assert.equal(lock.packages["node_modules/memobox"].integrity, "sha512-" + createHash("sha512").update(readFileSync(tarball)).digest("base64"));
+  }
   const packageRoot = join(consumer, "node_modules", "memobox"), pkg = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"));
   assert.equal(pkg.version, expectedVersion); assert.equal(pkg.dependencies, undefined); assert.equal(pkg.devDependencies, undefined); assert.equal(pkg.engines.node, ">=22");
   const manifest = JSON.parse(readFileSync(join(packageRoot, "bin", "manifest.json"), "utf8")), platform = `${process.platform}-${process.arch}`, asset = manifest.platforms[platform];
@@ -38,5 +44,6 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const tarball = join(directory, receipt.filename);
   assert.equal("sha512-" + createHash("sha512").update(readFileSync(tarball)).digest("base64"), receipt.integrity);
   if (process.env.GITHUB_SHA) assert.equal(receipt.revision, process.env.GITHUB_SHA);
-  const result = await validateTarball(tarball, process.argv[3] ?? "artifacts", receipt.version); console.log(JSON.stringify(result));
+  const publicTest = process.env.PUBLIC_RELEASE_TEST === "1";
+  const result = await validateTarball(tarball, process.argv[3] ?? (publicTest ? null : "artifacts"), receipt.version, false, publicTest); console.log(JSON.stringify(result));
 }

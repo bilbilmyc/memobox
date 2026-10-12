@@ -51,6 +51,7 @@ async function publish() {
   const directory = resolve("release"), receipt = JSON.parse(readFileSync(join(directory, "receipt.json"), "utf8"));
   assert.equal(receipt.name, pkg.name); assert.equal(receipt.version, pkg.version);
   assert.equal(receipt.revision, process.env.GITHUB_SHA); assert.equal(receipt.cliAndMcpPassed, true);
+  assert.deepEqual([...receipt.platforms].sort(), ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "win32-x64"]);
   assert.equal(receipt.filename, `memobox-${pkg.version}.tgz`);
   assert.deepEqual(readdirSync(directory).filter(name => name.endsWith(".tgz")), [receipt.filename]);
   const tarball = join(directory, receipt.filename);
@@ -64,6 +65,7 @@ async function publish() {
     const response = await fetch(`https://registry.npmjs.org/memobox/${pkg.version}`, { signal: AbortSignal.timeout(10000) });
     if (response.ok) {
       const released = await response.json(); assert.equal(released.dist.integrity, receipt.integrity);
+      assert(released.dist.attestations?.url, "npm provenance attestation missing");
       const current = await readRegistry(); assert.equal(current.latest, pkg.version);
       console.log("已发布并核对 npm latest/integrity：" + pkg.version); return;
     }

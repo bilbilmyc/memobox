@@ -41,7 +41,7 @@ export async function runDoctorCommand(flags: Map<string, string>, io: CliIo, to
   if (!config.ok || modelError) io.err("模型配置不合法；运行 memobox config show 检查，config reset 会先保留备份。");
   if (dependency === "missing") io.err("内置模型依赖缺失，运行 memobox model enable --lite 安装并验证。");
   for (const client of clients) io.out(`${client.client}:     ${client.configured ? "已接线" : "未接线"}  ${client.path}` +
-    (client.error ? "（配置无效，请检查或重新 install）" : client.configured ? `（库${client.explicitDb ? client.dbMatches ? "一致" : "不一致" : "默认推断"}，配置${client.explicitConfig ? client.configMatches ? "一致" : "不一致" : "默认推断"}${client.commandExists === false ? "，启动命令不存在" : ""}）` : ` —— memobox install ${client.client}`));
+    (client.error ? client.error === "missing_extension" ? "（缺少 pi 自动加载扩展，运行 memobox install pi --force）" : "（配置无效，请检查或重新 install）" : client.configured ? `（库${client.explicitDb ? client.dbMatches ? "一致" : "不一致" : "默认推断"}，配置${client.explicitConfig ? client.configMatches ? "一致" : "不一致" : "默认推断"}${client.commandExists === false ? "，启动命令不存在" : ""}）` : ` —— memobox install ${client.client}`));
   if (clients.some(client => client.configured && (!client.explicitDb || !client.explicitConfig))) io.out("默认推断采用用户目录；客户端启动时可能继承其他环境变量，请核对实际进程。重新 install 会固化当前接线路径。");
   if (!provider && !modelError) {
     const model = await tools.probeOllama();
