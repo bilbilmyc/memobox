@@ -30,7 +30,7 @@
 
 ## 一次性账号绑定
 
-GitHub 环境限制已配置。npm Trusted Publisher 需绑定以下精确值：
+2026-10-12 已完成设备验证，npm CLI 确认 Trusted Publisher 创建成功。GitHub 环境限制已复核，仅允许 main 分支。绑定值如下：
 
 | 设置 | 值 |
 | --- | --- |
@@ -42,7 +42,7 @@ GitHub 环境限制已配置。npm Trusted Publisher 需绑定以下精确值：
 | Environment | `npm` |
 | Allowed action | 允许 `npm publish` 直接发布 |
 
-可在 [npm 包设置](https://www.npmjs.com/package/memobox/access) 配置，或使用：
+以下命令供以后重建绑定时参考；当前绑定已完成，无需重复执行。可在 [npm 包设置](https://www.npmjs.com/package/memobox/access) 管理：
 
 ```bash
 npm trust github memobox --repo bilbilmyc/memobox --file publish.yml --env npm --allow-publish --yes
@@ -73,4 +73,6 @@ git push origin main
 
 `node scripts/release/package.mjs pack-and-test` 使用隔离配置和合成记忆，实际 tarball 安装后的 CLI 与双进程 MCP 验证通过。无需发布真实新版本即可重复运行。
 
-账号绑定结果和 GitHub 实际运行结果以任务回执为准，不能以本地测试代替 OIDC 首次成功发布的证据。
+GitHub 实际验证：[CI](https://github.com/bilbilmyc/memobox/actions/runs/38231920695) 通过，136 个测试、415 次断言、类型检查及 CLI 冒烟通过；[发布工作流](https://github.com/bilbilmyc/memobox/actions/runs/38231920678) 从 main 正确触发，并将已发布的 2.6.1 判为幂等跳过。GitHub 当前源代码与尚未提交的 2.6.3 开发工作区分别验收，不能混用测试数量。
+
+npm 账号绑定已完成，正式 latest 仍为 2.6.2，本次没有发布新版本。第一个新正式版本的 OIDC 发布及 Linux/Windows 发行物矩阵将在版本号更新后的 main 推送中执行；现有绑定成功和跳过测试不代表该发布路径已实际运行。
