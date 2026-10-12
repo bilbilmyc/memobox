@@ -21,7 +21,7 @@ export async function runDoctorCommand(flags: Map<string, string>, io: CliIo, to
   const endpoint = process.env.EMBEDDING_API_BASE || (config.ok ? config.config.embedding?.base : undefined);
   const source = process.env.EMBEDDING_API_BASE ? "environment" : config.ok && config.config.embedding ? "config" : "keyword";
   const report = { dbPath, configPath, database, clients, model: { mode: provider ? local ? "local" : "endpoint" : "keyword", source,
-    ...(endpoint ? { endpoint: safeEndpoint(endpoint) } : {}), ...(provider ? { dimensions: provider.dimensions } : {}), dependency, valid: !modelError && config.ok } };
+    ...(endpoint ? { endpoint: safeEndpoint(endpoint) } : {}), ...(provider ? { dimensions: provider.dimensions, minimumSimilarity: provider.minimumSimilarity ?? 0.35 } : {}), dependency, valid: !modelError && config.ok } };
   const vectors = database.vectors;
   const unhealthy = database.integrity === "error" || database.foreignKeyErrors > 0 || database.invalidMemories > 0 || modelError || !config.ok || dependency === "missing" ||
     clients.some(client => client.error || client.configured && (client.commandExists === false || client.explicitDb && client.dbMatches === false || client.explicitConfig && client.configMatches === false)) ||

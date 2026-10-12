@@ -183,6 +183,7 @@ const BM25_K1 = 1.2;
 const BM25_B = 0.75;
 const ENTITY_BOOST = 1.5;
 const EXACT_BOOST = 5;
+const ENGLISH_FUNCTION_WORDS = new Set("a an the and or to of in on for from with is are be was were do does should can what where when how which this that it as at by".split(" "));
 
 /** KeywordIndex 内部的预计算文档 */
 type KeywordDoc = {
@@ -193,8 +194,6 @@ type KeywordDoc = {
   tf: Map<string, number>;
   /** 文档长度（token 数） */
   dl: number;
-  /** 实体名的 token 集 */
-  entityTokens: Set<string>;
   /** 小写实体原串（子串匹配用） */
   entityRaw: string[];
   /** 小写全文（整句子串加成用） */
@@ -235,13 +234,12 @@ export class KeywordIndex {
       order: this.nextOrder++,
       tf,
       dl: tokens.length,
-      entityTokens: new Set((m.entities ?? []).flatMap((e) => tokenize(e))),
       entityRaw: (m.entities ?? []).map((e) => e.toLowerCase()),
       textLower: m.content.toLowerCase(),
     };
     this.docs.set(m.id, doc);
     // 查询词倒排表按需建立；写入只维护已缓存词，避免冷启动全量扩张。
-    for (const [term, ids] of this.termDocs) if (tf.has(term) || doc.entityTokens.has(term)) ids.add(m.id);
+    for (const [term, ids] of this.termDocs) if (tf.has(term)) ids.add(m.id);
     for (const entity of new Set(doc.entityRaw)) {
       const ids = this.entityDocs.get(entity) ?? new Set<string>();
       ids.add(m.id); this.entityDocs.set(entity, ids);
@@ -283,7 +281,9 @@ export class KeywordIndex {
   }
 
   private match(query: string, limit: number, allow: ((memory: Memory) => boolean) | undefined, explain: boolean): (Memory | RankedMemory)[] {
-    const terms = [...new Set(tokenize(query))];
+    const allTerms = [...new Set(tokenize(query))], contentTerms = allTerms.filter(term => !ENGLISH_FUNCTION_WORDS.has(term));
+    // 否定词不在停用表中；纯功能词查询仍保留原来的直接检索行为。
+    const terms = contentTerms.length ? contentTerms : allTerms;
     const N = this.docs.size;
     const q = query.trim().toLowerCase();
     if (!q || N === 0) return [];
@@ -295,7 +295,7 @@ export class KeywordIndex {
       let ids = this.termDocs.get(term);
       if (!ids) {
         ids = new Set();
-        for (const doc of this.docs.values()) if (doc.tf.has(term) || doc.entityTokens.has(term)) ids.add(doc.m.id);
+        for (const doc of this.docs.values()) if (doc.tf.has(term)) ids.add(doc.m.id);
         if (this.termDocs.size >= 128) this.termDocs.delete(this.termDocs.keys().next().value!);
         this.termDocs.set(term, ids);
       }
@@ -310,27 +310,24 @@ export class KeywordIndex {
     if (!scanAll && exactEligible) for (const doc of this.docs.values()) if (doc.textLower.includes(q)) candidates.add(doc.m.id);
     const avgdl = this.totalLen / N || 1;
     // IDF 对同一个查询词是常量，不能在每份文档上重复计算 log。
-    const weights = new Map(terms.map(t => [t, Math.log(1 + (N - (this.df.get(t) ?? 0) + 0.5) / ((this.df.get(t) ?? 0) + 0.5))]));
-    const idf = (t: string) => weights.get(t)!;
+    const weights = terms.map(term => { const df = this.df.get(term) ?? 0; return { term, idf: Math.log(1 + (N - df + 0.5) / (df + 0.5)) }; });
     const out: { m: Memory; score: number; order: number }[] = [];
     const documents = scanAll ? this.docs.values() : [...candidates].map(id => this.docs.get(id)!);
     for (const doc of documents) {
       if (allow && !allow(doc.m)) continue;
       let score = 0;
-      for (const t of terms) {
+      const lengthNorm = BM25_K1 * (1 - BM25_B + (BM25_B * doc.dl) / avgdl);
+      for (const weight of weights) {
+        const t = weight.term;
         const f = doc.tf.get(t) ?? 0;
         if (f > 0) {
           score +=
-            (idf(t) * (f * (BM25_K1 + 1))) /
-            (f + BM25_K1 * (1 - BM25_B + (BM25_B * doc.dl) / avgdl));
+            (weight.idf * (f * (BM25_K1 + 1))) /
+            (f + lengthNorm);
         }
         // 实体命中：精确 token 或子串（查询 port 命中实体 ports）
-        if (
-          doc.entityTokens.has(t) ||
-          doc.entityRaw.some((e) => e.includes(t) || t.includes(e))
-        ) {
-          score += idf(t) * ENTITY_BOOST;
-        }
+        // 实体 token 总是原串的子串，无需每条记忆重复切词/建 Set。
+        for (const entity of doc.entityRaw) if (entity.includes(t) || t.includes(entity)) { score += weight.idf * ENTITY_BOOST; break; }
       }
       if (exactEligible && doc.textLower.includes(q)) score += EXACT_BOOST;
       if (score > 0) out.push({ m: doc.m, score, order: doc.order });

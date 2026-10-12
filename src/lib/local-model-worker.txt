@@ -27,7 +27,7 @@ for await (const line of input) {
   try {
     request = JSON.parse(line);
     const extract = await load();
-    const result = await extract(request.text, { pooling: "mean", normalize: true });
+    const result = await extract(request.text, { pooling: "cls", normalize: true });
     process.stdout.write(JSON.stringify({ id: request.id, vector: Array.from(result.data) }) + "\n");
   } catch { process.stdout.write(JSON.stringify({ id: request?.id, error: "local_model_failed" }) + "\n"); }
 }

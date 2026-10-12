@@ -408,7 +408,7 @@ export class SQLiteStore implements MemoryStore {
     let semanticStatus: SemanticStatus = { status: "disabled" };
     if (this.embedder) {
       try {
-        qv = toVector(await this.embedder.embed(query));
+        qv = toVector(await (this.embedder.embedQuery ?? this.embedder.embed).call(this.embedder, query));
         semanticStatus = { status: "no_matches", reason: "no_compatible_vectors" };
       } catch (e) {
         semanticStatus = { status: "unavailable", reason: "embedding_failed" };
@@ -439,7 +439,7 @@ export class SQLiteStore implements MemoryStore {
           if (!queryNorm || !savedNorm) continue;
           if (explain) compatible++;
           const sim = vectorDot(qv, vec) / Math.sqrt(queryNorm * savedNorm);
-          if (sim >= MIN_SEMANTIC_SIMILARITY) scored.push({ m, sim });
+          if (sim >= (this.embedder.minimumSimilarity ?? MIN_SEMANTIC_SIMILARITY)) scored.push({ m, sim });
         }
         scored.sort((a, b) => b.sim - a.sim || b.m.createdAt - a.m.createdAt);
         const selected = scored.slice(0, depth);

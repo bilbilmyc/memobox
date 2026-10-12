@@ -22,7 +22,7 @@ const HF_HOSTS = ["https://hf-mirror.com", "https://huggingface.co"];
 
 type Extractor = (
   text: string,
-  opts: { pooling: "mean"; normalize: boolean }
+  opts: { pooling: "cls"; normalize: boolean }
 ) => Promise<{ data: Float32Array }>;
 
 /** 模块级单例：同一进程里 probe/补算/store 共用一个加载好的模型 */
@@ -63,11 +63,7 @@ async function loadExtractor(
 export function createLocalEmbedder(
   onProgress?: (msg: string) => void
 ): EmbeddingProvider {
-  return {
-    model: LOCAL_EMBED_MODEL,
-    dimensions: LOCAL_EMBED_DIM,
-    space: "transformers-feature-extraction-v1:mean:normalize:q8",
-    async embed(text: string): Promise<number[]> {
+  async function embed(text: string): Promise<number[]> {
       if (IS_COMPILED) {
         if (!localRuntimeEntry()) throw Error("Cannot find package '@huggingface/transformers'");
         modelProcess ??= createLocalModelProcess(onProgress);
@@ -81,9 +77,16 @@ export function createLocalEmbedder(
         });
       }
       const extract = await extractorPromise;
-      const out = await extract(text, { pooling: "mean", normalize: true });
+      const out = await extract(text, { pooling: "cls", normalize: true });
       return Array.from(out.data);
-    },
+  }
+  return {
+    model: LOCAL_EMBED_MODEL, dimensions: LOCAL_EMBED_DIM,
+    space: "transformers-feature-extraction-v2:cls:query-instruction:normalize:q8",
+    // 在训练集上固定；不把内置模型的分布阈值套给其他端点模型。
+    minimumSimilarity: 0.45,
+    embed,
+    embedQuery: text => embed("为这个句子生成表示以用于检索相关文章：" + text),
   };
 }
 

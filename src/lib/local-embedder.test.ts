@@ -12,6 +12,7 @@ import {
  * failHosts 里的源抛错（测换源回退）。模型不真加载、不碰网络。
  */
 const calls: string[] = [];
+const encoded: { text: string; pooling: string }[] = [];
 const failHosts = new Set<string>();
 const fakeEnv = { remoteHost: "", cacheDir: "" };
 
@@ -19,7 +20,7 @@ mock.module("@huggingface/transformers", () => ({
   pipeline: async () => {
     calls.push(fakeEnv.remoteHost);
     if (failHosts.has(fakeEnv.remoteHost)) throw new Error(`boom ${fakeEnv.remoteHost}`);
-    return async () => ({ data: new Float32Array([0.6, 0.8]) });
+    return async (text: string, options: { pooling: string }) => { encoded.push({ text, pooling: options.pooling }); return { data: new Float32Array([0.6, 0.8]) }; };
   },
   env: fakeEnv,
 }));
@@ -27,6 +28,7 @@ mock.module("@huggingface/transformers", () => ({
 const reset = () => {
   resetLocalExtractor();
   calls.length = 0;
+  encoded.length = 0;
   failHosts.clear();
   fakeEnv.remoteHost = "";
 };
@@ -40,6 +42,12 @@ const expectUnitVec = async (e: { embed(t: string): Promise<number[]> }, text = 
 };
 
 describe("内置嵌入模型（v2.5，mock transformers）", () => {
+  test("BGE 使用官方 CLS 池化；只给检索查询加指令，预处理空间与旧 mean 向量分离", async () => {
+    reset(); const provider = createLocalEmbedder();
+    await provider.embed("文档原文"); await provider.embedQuery!("查询文本");
+    expect(encoded).toEqual([{ text: "文档原文", pooling: "cls" }, { text: "为这个句子生成表示以用于检索相关文章：查询文本", pooling: "cls" }]);
+    expect(provider.space).toContain("v2:cls:query-instruction"); expect(provider.minimumSimilarity).toBe(.45);
+  });
   test("embed 返回归一化向量；默认源是 hf-mirror；模型单例只加载一次", async () => {
     reset();
     const e = createLocalEmbedder();
