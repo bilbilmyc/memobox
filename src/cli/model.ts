@@ -5,9 +5,12 @@ import { createLocalEmbedder, isTransformersMissing, LOCAL_EMBED_MODEL } from ".
 import { defaultConfigPath, loadConfig, saveConfig } from "../lib/config";
 import { DEFAULT_EMBED_MODEL, OLLAMA_HOST, ensureOllamaServer, formatPullStatus, ollamaModels, ollamaVersion, pullOllamaModel, type PullStatus } from "../lib/ollama";
 import { safeEndpoint, formatCliError } from "./presentation";
+import { installLocalRuntime } from "../lib/optional-runtime";
 
 /** doctor / model 子命令的外部依赖（真入口用默认值；单测注入假实现不碰网络） */
 export type CliTools = {
+  /** 测试用临时客户端目录；生产默认使用系统家目录。 */
+  clientHome?: string;
   probeOllama: () => Promise<string | null>;
   ollamaVersion: () => Promise<string | null>;
   ensureServer: () => Promise<boolean>;
@@ -24,6 +27,7 @@ export const defaultCliTools: CliTools = {
   listModels: () => ollamaModels(),
   pull: (name, onStatus) => pullOllamaModel(name, onStatus),
   loadLocalModel: async (onProgress) => {
+    await installLocalRuntime(onProgress);
     await createLocalEmbedder(onProgress).embed("memobox 启动自检");
   },
 };
@@ -83,9 +87,8 @@ export async function runModelCommand(
         if (isTransformersMissing(e)) {
           // v2.6.1 起 npm 包默认不带 transformers（保持轻量）——按需补装
           io.err("内置模型依赖 @huggingface/transformers 未安装：");
-          io.err("  npm 全局安装 memobox 的用户：npm i -g @huggingface/transformers");
-          io.err("  源码仓库运行的用户：        bun add @huggingface/transformers");
-          io.err("装好后重试：memobox model enable --lite");
+          io.err("依赖按需装到 MEMOBOX_RUNTIME_PATH（默认 ~/.memobox/runtime），无需全局安装。");
+          io.err("检查网络、目录权限和是否有其他安装进程，重试：memobox model enable --lite");
           return 1;
         }
         io.err(formatCliError(e, "内置模型加载", flags.has("debug")));

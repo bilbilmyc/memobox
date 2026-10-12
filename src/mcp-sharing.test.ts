@@ -81,7 +81,7 @@ describe("两个真实 MCP 进程共享 SQLite", () => {
         EMBEDDING_API_BASE: server ? `http://127.0.0.1:${server.port}/v1` : "", EMBEDDING_API_KEY: "", EMBEDDING_MODEL: "installed-stub", EMBEDDING_DIM: "2" };
       let a: ReturnType<typeof mcpClient> | undefined, b: ReturnType<typeof mcpClient> | undefined;
       async function cli(args: string[]) {
-        const proc = Bun.spawn([process.execPath, fileURLToPath(new URL("../bin/memobox.js", import.meta.url)), ...args], { env, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+        const proc = Bun.spawn([process.execPath, fileURLToPath(new URL("./cli.ts", import.meta.url)), ...args], { env, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
         const stdout = new Response(proc.stdout).text(), stderr = new Response(proc.stderr).text();
         const [code, out, err] = await Promise.all([proc.exited, stdout, stderr]);
         expect(code).toBe(0); expect(err).toBe(""); return out;

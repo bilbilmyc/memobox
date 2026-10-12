@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { runCli, VERSION, renderTable } from "./cli";
 import { StubStore } from "./lib/memory-store";
 import { SQLiteStore } from "./db/sqlite-store";
+import { Database } from "bun:sqlite";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join, dirname, resolve, basename } from "node:path";
 import { tmpdir } from "node:os";
@@ -86,12 +87,13 @@ describe("中文输出与错误回归", () => {
     const db = join(root, "旧 中文记忆.db"), config = join(root, "配置.json");
     const names = ["MEMOBOX_DB_PATH", "MEMOBOX_CONFIG_PATH", "EMBEDDING_API_BASE", "EMBEDDING_API_KEY"];
     const previous = names.map(name => process.env[name]);
-    const store = new StubStore();
+    const store = new SQLiteStore(null, db);
     await store.save({ content: "应保留的旧库记录" });
+    const raw = new Database(db);
+    raw.exec("INSERT INTO memories(id,content,kind,source,entities,created_at,updated_at) VALUES ('legacy-blank','  ','fact','test','[]',1,1)");
+    raw.close(true);
     const valid = await store.exportAll();
-    store.exportAll = async () => [...valid, { id: "legacy-blank", content: "  ", createdAt: 1 }];
     try {
-      writeFileSync(db, "仅标记文件，测试注入存储");
       writeFileSync(config, JSON.stringify({ embedding: { base: "https://config-user:config-password@example.invalid/v1?token=config-token", key: "config-key" } }));
       process.env.MEMOBOX_DB_PATH = db;
       process.env.MEMOBOX_CONFIG_PATH = config;
@@ -100,7 +102,7 @@ describe("中文输出与错误回归", () => {
       for (const fromEnv of [false, true]) {
         if (fromEnv) process.env.EMBEDDING_API_BASE = "https://env-user:env-password@env.invalid/v1?token=env-token";
         const h = output();
-        expect(await runCli(["doctor"], h.io, () => store, noExternalTools)).toBe(0);
+        expect(await runCli(["doctor"], h.io, () => store, { ...noExternalTools, clientHome: root })).toBe(0);
         const text = h.out.join("\n");
         expect(text).toContain(db);
         expect(text).toContain(config);
@@ -110,8 +112,9 @@ describe("中文输出与错误回归", () => {
         expect(h.err.join("\n")).toContain("发现 1 条旧记忆");
         expect(h.err.join("\n")).toContain("不会自动清理");
       }
-      expect(await store.list(10)).toEqual(valid);
+      expect(await store.exportAll()).toEqual(valid);
     } finally {
+      store.close();
       names.forEach((name, i) => { if (previous[i] === undefined) delete process.env[name]; else process.env[name] = previous[i]; });
       if (dirname(resolve(root)) !== resolve(tmpdir()) || !basename(root).startsWith("memobox-doctor-")) throw Error("诊断测试目录越界");
       rmSync(root, { recursive: true, force: true });

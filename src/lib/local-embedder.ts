@@ -8,9 +8,11 @@
  * 模型缓存在 ~/.memobox/models；国内默认走 hf-mirror.com，
  * 可用 HF_ENDPOINT 换源（如 https://huggingface.co）。
  */
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { EmbeddingProvider } from "./embeddings";
+import { pathToFileURL } from "node:url";
+import { IS_COMPILED } from "../runtime";
+import { localRuntimeEntry, modelCachePath } from "./optional-runtime";
+import { createLocalModelProcess } from "./local-model-process";
 
 export const LOCAL_EMBED_MODEL = "Xenova/bge-small-zh-v1.5";
 export const LOCAL_EMBED_DIM = 512;
@@ -25,12 +27,16 @@ type Extractor = (
 
 /** 模块级单例：同一进程里 probe/补算/store 共用一个加载好的模型 */
 let extractorPromise: Promise<Extractor> | null = null;
+let modelProcess: ReturnType<typeof createLocalModelProcess> | null = null;
 
 async function loadExtractor(
   onProgress?: (msg: string) => void
 ): Promise<Extractor> {
-  const { pipeline, env } = await import("@huggingface/transformers");
-  env.cacheDir = join(homedir(), ".memobox", "models");
+  const external = IS_COMPILED || Boolean(process.env.MEMOBOX_RUNTIME_PATH);
+  const entry = external ? localRuntimeEntry() : null;
+  if (external && !entry) throw Error("Cannot find package '@huggingface/transformers'");
+  const { pipeline, env } = external ? await import(pathToFileURL(entry!).href) as typeof import("@huggingface/transformers") : await import("@huggingface/transformers");
+  env.cacheDir = modelCachePath();
   // 显式 HF_ENDPOINT 最优先（海外用户指回官方源）
   const first = process.env.HF_ENDPOINT;
   const hosts = first
@@ -62,6 +68,11 @@ export function createLocalEmbedder(
     dimensions: LOCAL_EMBED_DIM,
     space: "transformers-feature-extraction-v1:mean:normalize:q8",
     async embed(text: string): Promise<number[]> {
+      if (IS_COMPILED) {
+        if (!localRuntimeEntry()) throw Error("Cannot find package '@huggingface/transformers'");
+        modelProcess ??= createLocalModelProcess(onProgress);
+        return modelProcess.embed(text);
+      }
       if (!extractorPromise) {
         // 失败要能重试：清掉缓存的 promise
         extractorPromise = loadExtractor(onProgress).catch((e) => {
@@ -79,6 +90,7 @@ export function createLocalEmbedder(
 /** 仅测试用：清掉模型单例，让下一个用例可以注入假的 transformers */
 export function resetLocalExtractor(): void {
   extractorPromise = null;
+  modelProcess?.stop(); modelProcess = null;
 }
 
 /**

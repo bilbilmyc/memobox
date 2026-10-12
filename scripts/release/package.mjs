@@ -1,11 +1,10 @@
 /** 在隔离目录验证实际发行物；发布时复用已验收的 tarball，不重新打包。 */
-import { spawnSync, spawn } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { createInterface } from "node:readline";
 import assert from "node:assert/strict";
+import { validateTarball } from "../native/test-package.mjs";
 import { planRelease, readRegistry } from "./plan.mjs";
 
 const root = process.cwd(), pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -20,95 +19,28 @@ function execute(command, args, options = {}) {
 const npm = (args, options) => execute(process.execPath, [npmCli, ...args], options);
 const digest = (path, algorithm = "sha512") => createHash(algorithm).update(readFileSync(path)).digest("base64");
 
-function mcpClient(entry, env) {
-  const child = spawn(process.env.BUN_BINARY ?? "bun", [entry], { env, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
-  const pending = new Map(); let sequence = 0;
-  const fail = (error) => { for (const item of pending.values()) { clearTimeout(item.timer); item.reject(error); } pending.clear(); };
-  child.on("error", fail); child.on("exit", () => fail(Error("MCP 提前退出")));
-  child.stderr.resume();
-  const lines = createInterface({ input: child.stdout });
-  lines.on("line", line => {
-    try {
-      const response = JSON.parse(line), item = pending.get(response.id);
-      if (!item) return;
-      clearTimeout(item.timer); pending.delete(response.id);
-      if (response.error || response.result?.isError) item.reject(Error("MCP 请求失败")); else item.resolve(response.result);
-    } catch (error) { fail(error); }
-  });
-  return {
-    call(method, params) {
-      const id = ++sequence;
-      return new Promise((resolve, reject) => {
-        const timer = setTimeout(() => { pending.delete(id); reject(Error("MCP 请求超时")); }, 10000);
-        pending.set(id, { timer, resolve, reject });
-        child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
-      });
-    },
-    close() { fail(Error("测试完成")); lines.close(); child.stdin.end(); child.kill(); },
-  };
-}
-const text = result => result.content.map(c => c.text ?? "").join("\n");
-
 async function packAndTest() {
   assert.equal(pkg.name, "memobox");
   if (process.env.EXPECTED_VERSION) assert.equal(pkg.version, process.env.EXPECTED_VERSION);
-  const artifacts = resolve("artifacts"); mkdirSync(artifacts, { recursive: true });
-  const raw = JSON.parse(npm(["pack", "--ignore-scripts", "--json", "--pack-destination", artifacts]));
-  const packed = Array.isArray(raw) ? raw[0] : raw.memobox ?? raw;
+  if (!process.env.NATIVE_USE_BUILT) {
+    execute(process.env.BUN_BINARY ?? "bun", ["scripts/native/build.ts"]);
+    execute(process.execPath, ["scripts/native/validate.mjs"]);
+  }
+  execute(process.execPath, ["scripts/native/assemble.mjs", process.env.NATIVE_ARTIFACTS ?? "artifacts"], {
+    env: { ...process.env, ...(!process.env.NATIVE_ALL ? { NATIVE_LOCAL_ONLY: "1" } : {}) },
+  });
+  const artifacts = resolve("artifacts"), stage = join(artifacts, "npm-stage");
+  const packed = JSON.parse(npm(["pack", "--ignore-scripts", "--json", "--pack-destination", artifacts], { cwd: stage }))[0];
   assert.equal(packed.version, pkg.version); assert.equal(packed.name, pkg.name);
   assert.equal(packed.filename, `memobox-${pkg.version}.tgz`);
-  for (const file of packed.files) {
-    const name = basename(file.path);
-    assert(!name.endsWith(".test.ts") && !name.startsWith(".env") && name !== "config.json" && !/\.db(?:-wal|-shm)?$/.test(name), "包中包含不应发布的文件：" + file.path);
-  }
-  const tarball = join(artifacts, packed.filename);
-  assert.equal("sha512-" + digest(tarball), packed.integrity);
-  const fixture = mkdtempSync(join(tmpdir(), "memobox-release-")), consumer = join(fixture, "consumer");
-  const env = { ...process.env, MEMOBOX_DB_PATH: join(fixture, "中文共享记忆.db"), MEMOBOX_CONFIG_PATH: join(fixture, "配置.json") };
-  for (const name of ["EMBEDDING_API_BASE", "EMBEDDING_API_KEY", "EMBEDDING_MODEL", "EMBEDDING_DIM", "EMBEDDING_TIMEOUT_MS", "MEMOBOX_BACKEND"]) delete env[name];
-  npm(["install", "--prefix", consumer, "--cache", join(fixture, "cache"), "--ignore-scripts", "--omit=dev", "--no-audit", "--no-fund", tarball]);
-  const entry = join(consumer, "node_modules/memobox/bin/memobox.js");
-  const cli = args => execute(process.env.BUN_BINARY ?? "bun", [entry, ...args], { env, timeout: 15000 });
-  assert.equal(cli(["--version"]), pkg.version);
-  assert(cli(["--help"]).includes("memobox"));
-  cli(["save", "发行物验证：中文目录 ✅", "--entities", "发布项目"]);
-  assert(cli(["search", "中文目录"]).includes("发行物验证"));
-  const explained = JSON.parse(cli(["search", "中文目录", "--entity", "发布项目", "--explain", "--json"]));
-  assert.equal(explained.memories.length, 1);
-  assert.equal(explained.explanation.hits[0].keyword.rank, 1);
-  assert.equal(explained.explanation.semantic.status, "disabled");
-  const backup = join(fixture, "备份.json"); cli(["export", backup]);
-  const exported = JSON.parse(readFileSync(backup, "utf8")); assert.equal(exported.memories.length, 1);
-  const preview = JSON.parse(cli(["import", backup, "--dry-run", "--json"]));
-  assert.deepEqual(preview, { total: 1, imported: 0, skipped: 1, conflicts: [], duplicateIds: [] });
-  cli(["import", backup]); assert.equal(JSON.parse(cli(["get", exported.memories[0].id])).content, exported.memories[0].content);
-  const a = mcpClient(entry, env), b = mcpClient(entry, env);
-  const call = (client, name, args) => client.call("tools/call", { name, arguments: args });
-  try {
-    for (const client of [a, b]) {
-      const result = await client.call("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "release-test", version: "1" } });
-      assert.equal(result.serverInfo.version, pkg.version);
-      await call(client, "memory_search", { query: "release_unique_marker" });
-    }
-    const first = text(await call(b, "memory_save", { content: "release_unique_marker 共享记忆甲" }));
-    const id = first.match(/saved memory ([\w-]+)/)?.[1]; assert(id);
-    assert(text(await call(a, "memory_search", { query: "release_unique_marker" })).includes("共享记忆甲"));
-    await call(b, "memory_update", { id, content: "release_unique_marker 共享记忆甲修订", entities: ["共享发布项目"] });
-    for (const client of [a, b]) {
-      assert.equal((await call(client, "memory_get", { id })).structuredContent.memory.content, "release_unique_marker 共享记忆甲修订");
-      const scoped = await call(client, "memory_search", { query: "release_unique_marker", entity: "共享发布项目", explain: true });
-      assert.equal(scoped.structuredContent.memories.length, 1);
-      assert.equal(scoped.structuredContent.memories[0].id, id);
-      assert.equal(scoped.structuredContent.explanation.hits[0].keyword.rank, 1);
-    }
-    await call(a, "memory_save", { content: "release_unique_marker 共享记忆乙" });
-    assert(text(await call(b, "memory_search", { query: "release_unique_marker" })).includes("共享记忆乙"));
-    cli(["forget", id]);
-    for (const client of [a, b]) assert(!text(await call(client, "memory_search", { query: "release_unique_marker" })).includes("共享记忆甲"));
-  } finally { a.close(); b.close(); }
+  for (const file of packed.files) assert(["package.json", "README.md", "README.zh-CN.md", "LICENSE", "bin/memobox.js", "bin/runtime.js", "bin/prefetch.js", "bin/manifest.json"].includes(file.path), "意外的发行文件：" + file.path);
+  const tarball = join(artifacts, packed.filename); assert.equal("sha512-" + digest(tarball), packed.integrity);
+  const result = await validateTarball(tarball, process.env.NATIVE_ARTIFACTS ?? "artifacts", pkg.version);
+  const manifest = JSON.parse(readFileSync(join(stage, "bin/manifest.json"), "utf8"));
   writeFileSync(join(artifacts, "receipt.json"), JSON.stringify({ name: pkg.name, version: pkg.version, filename: packed.filename,
-    integrity: packed.integrity, size: packed.size, revision: process.env.GITHUB_SHA ?? null, platform: process.platform, cliAndMcpPassed: true }, null, 2));
-  console.log(JSON.stringify({ version: pkg.version, size: packed.size, installedCli: "passed", twoProcessMcp: "passed" }));
+    integrity: packed.integrity, size: packed.size, revision: process.env.GITHUB_SHA ?? null, platform: process.platform,
+    cliAndMcpPassed: true, platforms: Object.keys(manifest.platforms), native: result }, null, 2));
+  console.log(JSON.stringify({ version: pkg.version, size: packed.size, productionDependencies: 0, installedNodeCli: "passed", twoProcessMcp: "passed", noExternalBun: true }));
 }
 
 async function publish() {

@@ -3,6 +3,10 @@ import { Database } from "bun:sqlite";
 import type { Memory } from "./memory";
 
 export type RestorePreview = { total: number; imported: number; skipped: number; conflicts: string[]; duplicateIds: string[] };
+export function planOverwriteRestore(items: Memory[], existing: Memory[]) {
+  const ids = new Set(existing.map(memory => memory.id)), replaced = items.filter(memory => ids.has(memory.id)).length;
+  return { total: items.length, imported: items.length - replaced, replaced };
+}
 
 /** 默认值与 SQLite 导入一致；字段白名单忽略备份中的额外属性。 */
 function comparable(memory: Memory): string {

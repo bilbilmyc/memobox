@@ -25,6 +25,11 @@ const configActions: Command[] = [
   { name: "config set", args: "<配置项> [值]", desc: "校验后原子写入；--stdin 从标准输入读取，适合密钥", min: 1, max: 2, options: { stdin: flag("从标准输入读取值，不能同时提供位置值") } },
   { name: "config reset", args: "[配置项]", desc: "重置单项；无配置项时备份原文件并重置全部配置", max: 1 },
 ];
+const maintenanceActions: Command[] = [
+  { name: "maintain scan", desc: "只读建议重复、潜在冲突和过旧记忆；不自动判定失效", max: 0, options: { kind, entity: scopeOptions.entity, source: scopeOptions.source, before: str("创建时间早于此时间的过旧候选，7d/ISO 日期", "时间"), json: flag("输出建议 JSON") } },
+  { name: "maintain plan", desc: "按编号预览批量删除；摘要由用户/agent 提供，不调用 LLM", max: 0, options: { ids: str("必填：选择的编号，英文逗号分隔，最多 1000 条", "id,id"), "summary-file": str("UTF-8 摘要文件；合并到首个编号并保留创建时间", "文件.txt"), kind, out: str("保存计划到新文件；不覆盖已有文件", "计划.json") } },
+  { name: "maintain apply", args: "<计划.json>", desc: "先自动备份，再原子执行；数据改变后旧计划拒绝执行", min: 1, max: 1, options: { yes: flag("必填：审核计划后明确确认执行"), json: flag("输出结果与备份路径 JSON") } },
+];
 export const COMMANDS: Command[] = [
   { name: "serve", desc: "启动 stdio MCP 服务（无参数时等价；供 agent 拉起）", max: 0 },
   { name: "save", args: "<文本>", desc: "保存记忆；纯空白内容会被拒绝", min: 1, options: { kind, entities: str("实体标签，用英文逗号分隔", "标签,标签"), source: str("记忆来源名称", "名称") }, example: 'memobox save "开发端口是 3100" --kind 决策 --entities 项目甲' },
@@ -42,13 +47,16 @@ export const COMMANDS: Command[] = [
   { name: "entities", desc: "统计实体标签和关联记忆数", max: 0, options: { limit: limit(20, 100) } },
   { name: "stats", desc: "显示记忆数和检索数", max: 0 },
   { name: "path", desc: "打印实际库文件位置", max: 0 },
-  { name: "doctor", desc: "检查库、检索模式、配置来源和客户端接线", max: 0 },
+  { name: "doctor", desc: "只读检查库完整性、向量、配置和客户端同库接线", max: 0, options: { json: flag("输出诊断 JSON，不加载模型或迁移旧库"), strict: flag("数据或模型诊断有异常时退出 1") } },
   { name: "config", args: "<show|get|set|reset>", desc: "管理配置，支持 " + CONFIG_KEYS.join("、"), min: 1, max: 1 },
+  { name: "maintain", args: "<scan|plan|apply>", desc: "记忆维护：建议、预览、备份及明确确认执行", min: 1, max: 1 },
   { name: "model", args: "<status|enable|disable|reindex>", desc: "管理可选的语义检索；help model enable 查看具体选项", min: 1, max: 1 },
   { name: "export", args: "<文件.json>", desc: "导出全量备份，向量不入备份，可按模型重算", min: 1, max: 1 },
   { name: "import", args: "<文件.json>", desc: "验证并导入备份，相同 id 跳过且不覆盖；可先预览冲突", min: 1, max: 1, options: { "dry-run": flag("只读预览新增/跳过/冲突，不建库、不加载模型"), json: flag("输出导入计数或恢复预览 JSON") } },
   { name: "import-codex", desc: "迁移 Codex 原生记忆，重复导入幂等", max: 0, options: { file: str("MEMORY.md 文件路径", "路径"), "dry-run": flag("仅预览，不写入记忆") } },
-  { name: "install", args: "[claude|codex|pi]", desc: "接入 MCP 客户端；无参数打印通用接法", max: 1 },
+  { name: "install", args: "[claude|codex|pi]", desc: "接入 MCP 客户端；无参数打印通用接法", max: 1, options: { force: flag("先备份完整原文件，再更新自己的接线；保留其他配置") } },
+  { name: "restore", args: "<备份.json>", desc: "撤销维护或恢复备份中的内容、编号和创建时间；仅覆盖备份涉及的编号", min: 1, max: 1,
+    options: { "dry-run": flag("只读预览新增与覆盖数量，不建库、不加载模型"), yes: flag("必填：确认覆盖前，自动备份当前内容"), json: flag("输出预览或结果与备份路径 JSON") } },
   { name: "version", desc: "打印版本号", max: 0 },
   { name: "help", args: "[命令] [子命令]", desc: "显示总帮助或指定命令的中文说明", max: 2 },
 ];
@@ -57,7 +65,7 @@ export class CliArgumentError extends Error {}
 const kinds: Record<string, string> = { 事实: "fact", 偏好: "preference", 事件: "event", 决策: "decision", fact: "fact", preference: "preference", event: "event", decision: "decision" };
 function usage(c: Command): string { return `memobox ${c.name}${c.args ? " " + c.args : ""}`; }
 export function cmdHelp(name: string): string | null {
-  const c = [...COMMANDS, ...modelActions, ...configActions].find(c => c.name === name);
+  const c = [...COMMANDS, ...modelActions, ...configActions, ...maintenanceActions].find(c => c.name === name);
   if (!c) return null;
   const opts = Object.entries({ ...c.options, ...globals }).map(([name, o]) =>
     `  --${name}${o.value ? " <" + o.value + ">" : ""}  ${o.desc}${o.default !== undefined ? "（默认 " + o.default + "）" : ""}`);
@@ -75,12 +83,17 @@ export const USAGE = `memobox ${VERSION} —— 给 AI agent 的本地长期记�
   "  EMBEDDING_DIM        嵌入向量维度（正整数）\n" +
   "  EMBEDDING_TIMEOUT_MS 嵌入请求超时（毫秒，默认 5000）\n" +
   "  HF_ENDPOINT          内置模型的优先下载源\n" +
-  "配置优先级：环境变量 > 配置文件 > 默认关键词检索。\n运行环境：Bun ≥ 1.4（本版本 npm 包仍需要 Bun）。\n详细选项与中文示例：memobox help <命令>。";
+  "  MEMOBOX_RUNTIME_PATH 可选模型依赖目录（默认 ~/.memobox/runtime）\n" +
+  "  MEMOBOX_MODELS_PATH  模型缓存目录（默认 ~/.memobox/models）\n" +
+  "  MEMOBOX_BINARY_CACHE npm 平台程序缓存目录（默认 ~/.memobox/bin）\n" +
+  "  MEMOBOX_BINARY_PATH  离线使用同版本独立程序，执行前校验 SHA256\n" +
+  "  MEMOBOX_DOWNLOAD_BASE 平台包下载镜像，仍按官方发行清单校验\n" +
+  "配置优先级：环境变量 > 配置文件 > 默认关键词检索。\nnpm 入口需要 Node ≥ 22；独立程序自带运行时，无需安装 Bun。源码开发使用 Bun ≥ 1.4。\n详细选项与中文示例：memobox help <命令>。";
 
 /** 参数类型、作用范围和帮助共用规格；所有检查先于存储和模型副作用。 */
 export function parseArgs(argv: string[]): { pos: string[]; flags: Map<string, string> } {
   const options: Record<string, { type: "string" | "boolean"; short?: string }> = {};
-  for (const c of [...COMMANDS, ...modelActions, ...configActions]) for (const [name, o] of Object.entries(c.options ?? {})) options[name] = { type: o.type };
+  for (const c of [...COMMANDS, ...modelActions, ...configActions, ...maintenanceActions]) for (const [name, o] of Object.entries(c.options ?? {})) options[name] = { type: o.type };
   for (const [name, o] of Object.entries(globals)) options[name] = { type: o.type, ...(name === "help" ? { short: "h" } : name === "version" ? { short: "v" } : {}) };
   let parsed: ReturnType<typeof parseNodeArgs>;
   try { parsed = parseNodeArgs({ args: argv, options, allowPositionals: true, strict: true }); }
@@ -94,9 +107,11 @@ export function parseArgs(argv: string[]): { pos: string[]; flags: Map<string, s
   const command = pos[0] ?? "serve";
   const c = COMMANDS.find(c => c.name === command);
   if (!c) throw new CliArgumentError(`未知命令：${command}\n${USAGE}`);
-  const sub = command === "model" && pos[1] ? modelActions.find(c => c.name === `model ${pos[1]}`) : command === "config" && pos[1] ? configActions.find(c => c.name === `config ${pos[1]}`) : undefined;
+  const groups: Record<string, Command[]> = { model: modelActions, config: configActions, maintain: maintenanceActions };
+  const sub = groups[command] && pos[1] ? groups[command].find(c => c.name === `${command} ${pos[1]}`) : undefined;
   if (command === "model" && pos[1] && !sub) throw new CliArgumentError(`未知模型命令：${pos[1]}；用法：memobox model <status|enable|disable|reindex>`);
   if (command === "config" && pos[1] && !sub) throw new CliArgumentError("未知配置命令；用法：memobox config <show|get|set|reset>");
+  if (command === "maintain" && pos[1] && !sub) throw new CliArgumentError("未知维护命令；用法：memobox maintain <scan|plan|apply>");
   const effective = sub ?? c, allowed = { ...effective.options, ...globals };
   const flags = new Map<string, string>();
   for (const [name, value] of Object.entries(parsed.values)) {
@@ -131,7 +146,14 @@ export function parseArgs(argv: string[]): { pos: string[]; flags: Map<string, s
       if (!flags.has("stdin")) try { parseConfigValue(pos[2], pos[3]); } catch (error) { throw new CliArgumentError(error instanceof Error ? error.message : "配置值不正确"); }
     }
   }
+  if (command === "maintain") {
+    if (pos[1] === "plan" && !flags.get("ids")) throw new CliArgumentError("maintain plan 需要 --ids id,id 明确选择记忆");
+    if (pos[1] === "apply" && !flags.has("yes")) throw new CliArgumentError("审核计划后用 maintain apply <计划.json> --yes 明确确认执行");
+    if (flags.has("kind") && pos[1] === "plan" && !flags.has("summary-file")) throw new CliArgumentError("--kind 仅用于提供摘要的合并计划");
+    if (flags.has("before") && !Number.isFinite(parseSince(flags.get("before")!))) throw new CliArgumentError("--before 格式不对：用 7d 或 ISO 日期");
+  }
   if (command === "save" && !pos.slice(1).join(" ").trim()) throw new CliArgumentError("记忆内容不能是纯空白文本");
+  if (command === "restore" && !flags.has("dry-run") && !flags.has("yes")) throw new CliArgumentError("先用 restore <备份.json> --dry-run 预览；确认后加 --yes 执行");
   if (command === "update") {
     if (!pos[1]?.trim()) throw new CliArgumentError("记忆编号不能为空");
     if (pos.length > 2 && !pos.slice(2).join(" ").trim()) throw new CliArgumentError("记忆内容不能是纯空白文本");
@@ -139,6 +161,7 @@ export function parseArgs(argv: string[]): { pos: string[]; flags: Map<string, s
     if (pos.length < 3 && !["kind", "entities", "clear-entities", "source"].some(name => flags.has(name))) throw new CliArgumentError("至少提供要更新的文本、类型、实体或来源");
   }
   if (command === "search" && !pos.slice(1).join(" ").trim()) throw new CliArgumentError("查询文本不能为空");
+  if (command === "install" && flags.has("force") && !pos[1]) throw new CliArgumentError("--force 需要指定客户端 claude、codex 或 pi");
   if (command === "install" && pos[1] && !["claude", "codex", "pi"].includes(pos[1])) throw new CliArgumentError("用法：memobox install <claude|codex|pi>");
   if (sub?.name === "model enable" && flags.has("lite") && Object.hasOwn(parsed.values, "model")) throw new CliArgumentError("--lite 使用内置模型，不能同时指定 --model");
   if (flags.has("since") && !Number.isFinite(parseSince(flags.get("since")!))) throw new CliArgumentError("--since 格式不对——用 7d / 12h / 30m 或 ISO 日期");

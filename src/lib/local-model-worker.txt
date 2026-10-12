@@ -1,0 +1,33 @@
+// 同一个可执行文件以完整运行时模式加载磁盘 ML 模块，父进程退出/关闭 stdin 即退出。
+import { createRequire } from "node:module";
+import { join } from "node:path";
+import { createInterface } from "node:readline";
+const require = createRequire(join(process.env.MEMOBOX_RUNTIME_PATH, "package.json"));
+const { pipeline, env } = require("@huggingface/transformers");
+env.cacheDir = process.env.MEMOBOX_MODELS_PATH;
+const first = process.env.HF_ENDPOINT;
+const hosts = [...new Set([first, "https://hf-mirror.com", "https://huggingface.co"].filter(Boolean))];
+let extractor;
+async function load() {
+  if (extractor) return extractor;
+  for (const host of hosts) {
+    try {
+      env.remoteHost = host;
+      process.stderr.write(JSON.stringify({ progress: "加载内置模型；首次下载后复用本地缓存…" }) + "\n");
+      extractor = await pipeline("feature-extraction", "Xenova/bge-small-zh-v1.5", { dtype: "q8" });
+      return extractor;
+    } catch { process.stderr.write(JSON.stringify({ progress: "模型源加载失败，尝试备用源…" }) + "\n"); }
+  }
+  throw Error("Local model unavailable");
+}
+const input = createInterface({ input: process.stdin });
+input.once("close", () => process.exit(0));
+for await (const line of input) {
+  let request;
+  try {
+    request = JSON.parse(line);
+    const extract = await load();
+    const result = await extract(request.text, { pooling: "mean", normalize: true });
+    process.stdout.write(JSON.stringify({ id: request.id, vector: Array.from(result.data) }) + "\n");
+  } catch { process.stdout.write(JSON.stringify({ id: request?.id, error: "local_model_failed" }) + "\n"); }
+}

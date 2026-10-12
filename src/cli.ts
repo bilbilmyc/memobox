@@ -24,13 +24,12 @@ import { Database } from "bun:sqlite";
 import { SQLiteStore } from "@/db/sqlite-store";
 import { buildBackup, parseBackup } from "@/lib/backup";
 import { runSearchCommand } from "./cli/search";
-import { planRestore, readRestoreTarget } from "./lib/restore-preview";
+import { planRestore, planOverwriteRestore, readRestoreTarget } from "./lib/restore-preview";
+import { validateRestoreItems } from "./lib/maintenance";
 import { parseCodexMemoryMd, parseCodexSummary } from "@/lib/codex-import";
 import { defaultDbPath } from "@/lib/paths";
 import type { MemoryStore } from "@/lib/memory-store";
-import { createEmbedder } from "@/lib/embeddings";
-import { defaultConfigPath, loadConfig } from "@/lib/config";
-import { detectClaude, detectCodex, detectPi, installClient, serverEntry, type ClientKind } from "@/install";
+import { installClient, serverEntry, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
 import { VERSION } from "./version";
@@ -42,10 +41,12 @@ import { runModelCommand, defaultCliTools, type CliTools } from "./cli/model";
 export { defaultCliTools } from "./cli/model";
 export type { CliTools } from "./cli/model";
 
-import { renderMemory, renderTable, kindLabel, formatCliError, retrievalLabel, safeEndpoint } from "./cli/presentation";
+import { renderMemory, renderTable, kindLabel, formatCliError } from "./cli/presentation";
 export { renderMemory, renderTable } from "./cli/presentation";
-import { MemoryValidationError, validateMemoryInput } from "./lib/memory-validation";
+import { MemoryValidationError } from "./lib/memory-validation";
 import { runConfigCommand } from "./cli/config";
+import { runDoctorCommand } from "./cli/doctor";
+import { runMaintenanceCommand } from "./cli/maintenance";
 
 /** 注入点：输出流与 store 工厂都可替换（单测用 StubStore + 收集器） */
 export type CliIo = {
@@ -83,13 +84,15 @@ async function executeCli(
 
   // 参数解析已拒绝未知命令；帮助在模型和存储操作前返回。
   if (flags.has("help")) {
-    io.out(pos.length > 0 ? (cmdHelp(cmd === "model" || cmd === "config" ? pos.join(" ") : cmd) ?? USAGE) : USAGE);
+    io.out(pos.length > 0 ? (cmdHelp(["model", "config", "maintain"].includes(cmd) ? pos.join(" ") : cmd) ?? USAGE) : USAGE);
     return 0;
   }
 
   switch (cmd) {
     case "config":
       return runConfigCommand(pos, flags, io);
+    case "maintain":
+      return runMaintenanceCommand(pos, flags, io, makeStore);
     case "serve": {
       await serveStdio(makeStore());
       return 0;
@@ -162,46 +165,8 @@ async function executeCli(
       io.out(defaultDbPath());
       return 0;
     }
-    case "doctor": {
-      // 自检：库文件 + 检索模式 + 三家客户端接线，一眼定位「agent 怎么不记事」
-      const dbPath = defaultDbPath();
-      if (existsSync(dbPath)) {
-        const store = makeStore();
-        const { total, searches } = await store.stats();
-        io.out(`库文件：  ${dbPath}（${total} 条记忆，${searches} 次检索）`);
-        io.out(`检索模式：${retrievalLabel(store.retrieval)}`);
-        const invalid = (await store.exportAll()).filter(memory => {
-          try { validateMemoryInput(memory); return false; } catch { return true; }
-        }).length;
-        if (invalid) io.err(`发现 ${invalid} 条旧记忆内容或类型不合法。先 export 保留原始备份，再用 get 查看、forget 明确删除后重新保存；不会自动清理。`);
-      } else {
-        io.out(`库文件：  ${dbPath}（尚未创建——第一次 save 时自动建库）`);
-        io.out(`检索模式：${createEmbedder() ? retrievalLabel("semantic") : retrievalLabel("keyword")}`);
-      }
-      io.out("库路径来源：" + (process.env.MEMOBOX_DB_PATH ? "环境变量 MEMOBOX_DB_PATH" : "默认位置"));
-      io.out("配置文件：" + defaultConfigPath() + "（" + (process.env.MEMOBOX_CONFIG_PATH ? "环境变量 MEMOBOX_CONFIG_PATH" : "默认位置") + "）");
-      const embedding = loadConfig().embedding;
-      io.out("模型配置来源：" + (process.env.EMBEDDING_API_BASE ? "环境变量 EMBEDDING_API_*" : embedding ? "配置文件" : "默认关键词检索"));
-      const endpoint = process.env.EMBEDDING_API_BASE || embedding?.base;
-      if (endpoint) io.out("嵌入端点：" + safeEndpoint(endpoint));
-      io.out("配置优先级：环境变量 > 配置文件 > 默认关键词检索");
-      for (const d of [detectCodex(), detectPi(), detectClaude()]) {
-        io.out(`${d.client}:     ${d.configured ? "已接线" : "未接线"}  ${d.detail}`);
-      }
-      // 语义检索没启用时探测本机 Ollama：装了就给一键升级提示（只提示，不自动启用）
-      if (!createEmbedder()) {
-        const model = await tools.probeOllama();
-        if (model) {
-          io.out(`提示：    检测到本机 Ollama 服务（推荐模型 ${model}）——一条命令启用本地语义检索：`);
-          io.out(`         memobox model enable（自动拉模型、写配置、补算历史向量）`);
-        } else if (await tools.ollamaVersion()) {
-          io.out(`提示：    本机装了 Ollama 但服务未运行——memobox model enable 会自动拉起`);
-        } else {
-          io.out(`提示：    轻量语义检索可用内置小模型启用（零外部服务）：memobox model enable --lite`);
-        }
-      }
-      return 0;
-    }
+    case "doctor":
+      return runDoctorCommand(flags, io, tools);
     case "model":
       return runModelCommand(pos, flags, io, makeStore, tools);
     case "query": {
@@ -289,6 +254,7 @@ async function executeCli(
       io.out(`已导出 ${backup.memories.length} 条记忆 -> ${file}`);
       return 0;
     }
+    case "restore":
     case "import": {
       const file = pos[1];
       if (!file) {
@@ -305,6 +271,17 @@ async function executeCli(
       if (!parsed.ok) {
         io.err(`导入失败：${parsed.error}`);
         return 1;
+      }
+      if (cmd === "restore") {
+        try { validateRestoreItems(parsed.items); } catch { io.err("恢复失败：编号不能为空或重复，创建时间必须是非负整数"); return 2; }
+        if (flags.has("dry-run")) {
+          const preview = planOverwriteRestore(parsed.items, readRestoreTarget(defaultDbPath()));
+          io.out(flags.has("json") ? JSON.stringify(preview, null, 2) : `恢复预览：新增 ${preview.imported} 条，覆盖 ${preview.replaced} 条；未修改记忆。确认覆盖当前内容后用 --yes 执行。`);
+          return 0;
+        }
+        const result = await makeStore().restoreMemories(parsed.items, { confirm: flags.has("yes") });
+        io.out(flags.has("json") ? JSON.stringify(result, null, 2) : `恢复完成：新增 ${result.imported} 条，覆盖 ${result.replaced} 条；覆盖前备份：${result.backup}`);
+        return 0;
       }
       if (flags.has("dry-run")) {
         const preview = planRestore(parsed.items, readRestoreTarget(defaultDbPath()));
@@ -374,7 +351,7 @@ async function executeCli(
         io.out("内置一键接入：memobox install <claude|codex|pi>");
         return 0;
       }
-      const result = await installClient(client);
+      const result = await installClient(client, serverEntry(), flags.has("force"));
       io[result.ok ? "out" : "err"](result.message);
       return result.ok ? 0 : 1;
     }

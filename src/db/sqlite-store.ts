@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
@@ -25,6 +26,8 @@ import * as schema from "./schema-sqlite";
 import { defaultDbPath } from "@/lib/paths";
 import { validateMemoryInput } from "@/lib/memory-validation";
 import { explainSearch, type RankedMemory, type SearchReport, type SemanticStatus } from "@/lib/search-report";
+import { maintenanceInputSchema, maintenancePlanSchema, createMaintenancePlan, suggestMaintenance, validateMaintenanceSnapshot, writeMaintenanceBackup, normalizeReplacement, validateRestoreItems,
+  type MaintenanceInput, type MaintenancePlan, type MaintenanceScan, type MaintenanceSuggestions, type MaintenanceOptions, type MaintenanceResult, type RestoreResult } from "@/lib/maintenance";
 
 type SaveInput = Parameters<MemoryStore["save"]>[0];
 type CachedVector = { vec: Float32Array; space: string; m: Memory; normSquared: number };
@@ -133,7 +136,7 @@ export class SQLiteStore implements MemoryStore {
 
   constructor(
     private readonly embedder: EmbeddingProvider | null = createEmbedder(),
-    dbPath: string = defaultDbPath()
+    private readonly dbPath: string = defaultDbPath()
   ) {
     this.retrieval = embedder ? "semantic" : "keyword";
     // 建好库文件所在目录（":memory:" 除外）
@@ -303,7 +306,8 @@ export class SQLiteStore implements MemoryStore {
   private toMemory(row: Pick<schema.SqliteMemoryRow, "id" | "content" | "kind" | "source" | "entities" | "createdAt">): Memory {
     let entities: string[] = [];
     try {
-      entities = JSON.parse(row.entities);
+      const parsed: unknown = JSON.parse(row.entities);
+      if (Array.isArray(parsed) && parsed.every(entity => typeof entity === "string")) entities = parsed;
     } catch {
       // 列内容损坏时按空实体处理
     }
@@ -811,6 +815,73 @@ export class SQLiteStore implements MemoryStore {
       .orderBy(schema.memories.createdAt)
       .all();
     return rows.map((r) => this.toMemory(r));
+  }
+
+  async scanMaintenance(options: MaintenanceScan = {}): Promise<MaintenanceSuggestions> {
+    return suggestMaintenance(await this.exportAll(), options);
+  }
+
+  private maintenanceRows(ids: string[]): schema.SqliteMemoryRow[] {
+    const rows = this.db.select().from(schema.memories).where(inArray(schema.memories.id, ids)).all();
+    for (const row of rows) validateMemoryInput({ content: row.content, kind: row.kind, entities: JSON.parse(row.entities) });
+    const byId = new Map(rows.map(row => [row.id, row]));
+    return ids.flatMap(id => { const row = byId.get(id); return row ? [row] : []; });
+  }
+
+  async planMaintenance(raw: MaintenanceInput): Promise<MaintenancePlan> {
+    const input = maintenanceInputSchema.parse(raw);
+    return this.client.transaction(() => createMaintenancePlan(input, this.maintenanceRows(input.ids).map(row => this.toMemory(row)))).deferred();
+  }
+
+  async applyMaintenance(raw: MaintenancePlan, options: MaintenanceOptions): Promise<MaintenanceResult> {
+    if (options.confirm !== true) throw Error("Maintenance requires explicit confirmation");
+    const plan = maintenancePlanSchema.parse(raw), ids = plan.targets.map(target => target.id);
+    let vec: Float32Array | null = null;
+    if (plan.replacement && this.embedder) { try { vec = toVector(await this.embedder.embed(plan.replacement.content)); } catch { /* 降级为空向量，不能保留旧内容的向量。 */ } }
+    const directory = options.backupDirectory ?? join(dirname(this.dbPath === ":memory:" ? defaultDbPath() : this.dbPath), "backups");
+    const result = this.writeMemory(() => {
+      const rows = this.maintenanceRows(ids), memories = rows.map(row => this.toMemory(row));
+      validateMaintenanceSnapshot(plan, memories);
+      const backup = writeMaintenanceBackup(directory, memories);
+      const replacement = plan.replacement ? normalizeReplacement(plan.replacement, memories) : undefined;
+      const kept = plan.replacement ? ids[0] : undefined, deletedIds = kept ? ids.slice(1) : ids;
+      if (kept && replacement) {
+        this.db.update(schema.memories).set({ ...replacement, entities: JSON.stringify(replacement.entities),
+          embedding: vec ? encodeEmbedding(vec) : null, embeddingSpace: vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null, updatedAt: Date.now() }).where(eq(schema.memories.id, kept)).run();
+        this.syncEdges(kept, replacement.entities ?? []);
+      }
+      this.db.delete(schema.memories).where(inArray(schema.memories.id, deletedIds)).run();
+      this.db.delete(schema.entityNodes).where(sql`${schema.entityNodes.id} NOT IN (SELECT entity_id FROM memory_entity_edges)`).run();
+      return { deleted: deletedIds.length, ...(kept ? { updated: kept } : {}), backup, keptRow: kept ? this.readRow(kept) : undefined };
+    }, value => {
+      for (const id of ids) { this.kwIndex?.remove(id); this.vecCache?.delete(id); }
+      if (value.keptRow) this.cacheRow(value.keptRow);
+    });
+    const { keptRow, ...report } = result; return report;
+  }
+
+  async restoreMemories(items: Memory[], options: MaintenanceOptions): Promise<RestoreResult> {
+    if (options.confirm !== true) throw Error("Restore requires explicit confirmation");
+    validateRestoreItems(items);
+    // 慢模型调用放在写锁之外，失败时用关键词检索，不能复用被覆盖内容的向量。
+    const vectors = new Map<string, Float32Array>();
+    if (this.embedder) for (const item of items) {
+      try { const vec = toVector(await this.embedder.embed(item.content)); if (vec) vectors.set(item.id, vec); } catch { /* 降级，稍后可 reindex。 */ }
+    }
+    const directory = options.backupDirectory ?? join(dirname(this.dbPath === ":memory:" ? defaultDbPath() : this.dbPath), "backups");
+    return this.writeMemory(() => {
+      const existing = items.flatMap(item => { const row = this.readRow(item.id); return row ? [this.toMemory(row)] : []; });
+      const backup = writeMaintenanceBackup(directory, existing);
+      for (const item of items) {
+        const vec = vectors.get(item.id), row = { id: item.id, content: item.content, kind: item.kind ?? "fact", source: item.source ?? "mcp",
+          entities: JSON.stringify(item.entities ?? []), createdAt: item.createdAt, updatedAt: Date.now(),
+          embedding: vec ? encodeEmbedding(vec) : null, embeddingSpace: vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null };
+        this.db.insert(schema.memories).values(row).onConflictDoUpdate({ target: schema.memories.id, set: row }).run();
+        this.syncEdges(item.id, item.entities ?? []);
+      }
+      this.db.delete(schema.entityNodes).where(sql`${schema.entityNodes.id} NOT IN (SELECT entity_id FROM memory_entity_edges)`).run();
+      return { imported: items.length - existing.length, replaced: existing.length, backup };
+    }, () => { this.kwIndex = null; this.vecCache = null; });
   }
 
   async importMemories(

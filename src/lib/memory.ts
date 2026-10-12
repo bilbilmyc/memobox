@@ -5,6 +5,7 @@
 
 import type { RankedMemory, SearchReport } from "./search-report";
 import { rrfContribution } from "./search-report";
+import type { MaintenanceInput, MaintenancePlan, MaintenanceScan, MaintenanceSuggestions, MaintenanceOptions, MaintenanceResult, RestoreResult } from "./maintenance";
 
 export type Memory = {
   id: string;
@@ -73,6 +74,10 @@ export interface MemoryStore {
   search(query: string, limit?: number, scope?: SearchScope): Promise<Memory[]>;
   /** 与普通检索共用快照、排名和日志，额外返回匹配贡献及安全的降级原因。 */
   searchDetailed(query: string, limit?: number, scope?: SearchScope): Promise<SearchReport>;
+  scanMaintenance(options?: MaintenanceScan): Promise<MaintenanceSuggestions>;
+  planMaintenance(input: MaintenanceInput): Promise<MaintenancePlan>;
+  applyMaintenance(plan: MaintenancePlan, options: MaintenanceOptions): Promise<MaintenanceResult>;
+  restoreMemories(items: Memory[], options: MaintenanceOptions): Promise<RestoreResult>;
   list(limit: number): Promise<Memory[]>;
   /** 全库参数化过滤，先过滤再分页，创建时间和 id 保证稳定顺序。 */
   query(filters: MemoryQuery): Promise<Memory[]>;

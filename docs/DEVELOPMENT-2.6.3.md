@@ -23,7 +23,7 @@
 | 检索正确性 | 无字母符号/emoji 原文可查；同分排序保留原行为；实体更新和遗忘不遗留图谱候选 |
 | 共享一致性 | 两个真实长驻 MCP 验证写入、修订、元数据、范围、并发保存和 CLI 删除的可见性；安装器实际生成的配置也参与测试 |
 
-`embedding.model/dimensions/timeoutMs` 是端点模式设置；内置 lite 模式仍使用固定模型和维度。新配置需要重启 MCP，模型变化后执行 `model reindex`。免 Bun 分发未完成，开发版仍需要 Bun。
+`embedding.model/dimensions/timeoutMs` 是端点模式设置；内置 lite 模式仍使用固定模型和维度。新配置需要重启 MCP，模型变化后执行 `model reindex`。Windows 原生程序及轻量 npm 入口已完成本地安装验收，无需外部 Bun；其余四个平台正在 CI 验收。正式发行物尚未发布。
 
 ## 性能优化与实测
 
@@ -106,3 +106,13 @@ bun scripts/retrieval-eval.ts --out docs/perf/quality-current-2.6.3.json
 5. Claude Code/Codex/pi 的实际持续使用，完整首次安装文档和 beta 发行物验收，再统一发布正式 2.6.3。
 
 全部属于 2.6.3，未完成项不另挪到 2.7/2.8/2.9，也不以当前回归全绿替代完整产品验收。
+
+## 当前继续开发：诊断、维护与原生分发
+
+- `doctor --json --strict` 只读检查旧库完整性、坏元数据、向量缺失/损坏/来源/维度；客户端路径采用显式配置和默认推断分别报告，不加载模型或迁移旧库。
+- `maintain scan/plan/apply` 提供重复、潜在冲突、年龄候选和用户/agent 摘要合并；执行前备份，内容指纹拒绝过期计划，SQLite 事务与缓存提交保持一致。
+- `restore --dry-run/--yes` 可恢复删除与合并前的内容、编号及创建时间；覆盖前再备份，其他编号不动。`import` 仍保留跳过已有编号的兼容行为。
+- `install <client> --force` 先备份完整配置，再更新 memobox 接线；保留其他 agent、模型及用户设置。默认安装仍幂等。
+- Windows 原生程序约 85.2 MiB、gzip 约 39.3 MiB；轻量 Node npm tarball 当前约 14 kB，无生产 npm 依赖。npm 主包按系统/CPU 下载 GitHub Releases 中的同版本平台压缩包，流式 SHA256 校验、原子缓存；不安装其他平台程序。
+- 原生程序真实 `--lite` 已验证。编译程序解析磁盘模块的问题已复现；同一个程序通过内置运行时加载可选模型，模型助手随所属 CLI/MCP 退出，继续共用同一 SQLite 实现，无端口或共享模型服务。
+- 本地实际安装包已验证中文/单引号路径、CLI 参数/退出码、批量维护/恢复、三家客户端生成配置、共享 MCP 和终止信号。五个平台 CI 与完整性能/留出集质量验收尚在进行，不能据此宣布正式版本完成。

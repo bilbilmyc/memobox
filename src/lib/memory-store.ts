@@ -15,6 +15,9 @@ import {
 import { validateMemoryInput } from "./memory-validation";
 import { explainSearch, type SearchReport } from "./search-report";
 import { KeywordIndex } from "./memory";
+import { dirname, join } from "node:path";
+import { createMaintenancePlan, suggestMaintenance, maintenancePlanSchema, validateMaintenanceSnapshot, writeMaintenanceBackup, normalizeReplacement, validateRestoreItems,
+  type MaintenanceInput, type MaintenancePlan, type MaintenanceScan, type MaintenanceOptions, type MaintenanceResult, type RestoreResult } from "./maintenance";
 
 export type { Memory, MemoryStore } from "./memory";
 
@@ -173,6 +176,26 @@ export class StubStore implements MemoryStore {
   /** 桩不存向量，补算恒为 0 */
   async backfillEmbeddings(): Promise<BackfillReport> {
     return { inspected: 0, needed: 0, processed: 0, succeeded: 0, skipped: 0, failed: 0 };
+  }
+
+  async scanMaintenance(options: MaintenanceScan = {}) { return suggestMaintenance([...this.rows.values()], options); }
+  async planMaintenance(input: MaintenanceInput) { return createMaintenancePlan(input, [...this.rows.values()]); }
+  async applyMaintenance(raw: MaintenancePlan, options: MaintenanceOptions): Promise<MaintenanceResult> {
+    if (options.confirm !== true) throw Error("Maintenance requires explicit confirmation");
+    const plan = maintenancePlanSchema.parse(raw), rows = plan.targets.flatMap(target => { const row = this.rows.get(target.id); return row ? [row] : []; });
+    validateMaintenanceSnapshot(plan, rows);
+    const backup = writeMaintenanceBackup(options.backupDirectory ?? join(dirname(defaultDbPath()), "backups"), rows);
+    if (plan.replacement) this.rows.set(rows[0].id, { ...rows[0], ...normalizeReplacement(plan.replacement, rows) });
+    const deleted = plan.replacement ? rows.slice(1) : rows; for (const row of deleted) this.rows.delete(row.id);
+    return { deleted: deleted.length, ...(plan.replacement ? { updated: rows[0].id } : {}), backup };
+  }
+  async restoreMemories(items: Memory[], options: MaintenanceOptions): Promise<RestoreResult> {
+    if (options.confirm !== true) throw Error("Restore requires explicit confirmation");
+    validateRestoreItems(items);
+    const existing = items.flatMap(item => { const row = this.rows.get(item.id); return row ? [row] : []; });
+    const backup = writeMaintenanceBackup(options.backupDirectory ?? join(dirname(defaultDbPath()), "backups"), existing);
+    for (const item of items) this.rows.set(item.id, { ...item, kind: item.kind ?? "fact", source: item.source ?? "mcp", entities: item.entities ?? [] });
+    return { imported: items.length - existing.length, replaced: existing.length, backup };
   }
 }
 

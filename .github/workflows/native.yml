@@ -1,0 +1,110 @@
+name: Native distribution
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: native (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, platform: win32-x64 }
+          - { os: ubuntu-24.04, platform: linux-x64 }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64 }
+          - { os: macos-15-intel, platform: darwin-x64 }
+          - { os: macos-14, platform: darwin-arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.4.2'
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: 在原平台构建独立程序
+        run: bun scripts/native/build.ts
+      - name: 无 Bun PATH 的 CLI、三家接线、共享 MCP、恢复、信号和真实 lite 模型
+        run: node scripts/native/validate.mjs
+        env:
+          NATIVE_TEST_LITE: '1'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ${{ matrix.platform }}
+          path: |
+            artifacts/${{ matrix.platform }}/*.gz
+            artifacts/${{ matrix.platform }}/receipt.json
+          if-no-files-found: error
+          retention-days: 7
+
+  assemble:
+    needs: native
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: '*64'
+          path: artifacts
+      - name: 汇集五个平台清单，打包并实际安装 Node 入口
+        run: node scripts/release/package.mjs pack-and-test
+        env:
+          NATIVE_USE_BUILT: '1'
+          NATIVE_ALL: '1'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: npm-candidate
+          path: |
+            artifacts/*.tgz
+            artifacts/receipt.json
+          if-no-files-found: error
+          retention-days: 7
+
+  installed:
+    name: installed (${{ matrix.platform }})
+    needs: assemble
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, platform: win32-x64 }
+          - { os: ubuntu-24.04, platform: linux-x64 }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64 }
+          - { os: macos-15-intel, platform: darwin-x64 }
+          - { os: macos-14, platform: darwin-arm64 }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: npm-candidate
+          path: release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ${{ matrix.platform }}
+          path: artifacts/${{ matrix.platform }}
+      - name: 仅 Node/npm 安装同一份 tarball，无外部 Bun 运行
+        run: node scripts/native/test-package.mjs release artifacts
