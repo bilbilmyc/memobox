@@ -18,7 +18,7 @@ concurrency:
 jobs:
   accepted:
     name: Product acceptance
-    if: always() && !cancelled()
+    if: always()
     needs: [distribution, test]
     runs-on: ubuntu-latest
     steps:
