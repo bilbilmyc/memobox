@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
+import { releaseCommit } from "./github.mjs";
 assert.equal(process.env.GITHUB_REPOSITORY, "bilbilmyc/memobox");
 assert.equal(process.env.GITHUB_REF, "refs/heads/main");
 assert.equal(process.env.GITHUB_EVENT_NAME, "push");
@@ -97,7 +98,7 @@ for (const name of ["SHA256SUMS", "manifest.json"])
     hash: hash("release/" + name),
   });
 let release = api("releases/tags/" + tag, true);
-const existingCommit = api("commits/" + tag, true);
+const existingCommit = releaseCommit(api, tag);
 if (existingCommit)
   assert.equal(
     existingCommit.sha,
