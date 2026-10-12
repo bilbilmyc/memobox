@@ -1,0 +1,79 @@
+{
+  "version": "2.6.2",
+  "denseVectors": true,
+  "uniqueEntities": false,
+  "bun": "1.4.2",
+  "platform": "win32",
+  "arch": "x64",
+  "data": "synthetic Chinese; 512-dimensional deterministic provider; in-memory SQLite; no network; RSS is cumulative per-process snapshot, not a per-store peak",
+  "scenarios": [
+    {
+      "size": 10000,
+      "mode": "keyword",
+      "importMs": 3332.9049,
+      "coldSearchMs": 98.74539999999979,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 8.588000000000193,
+          "p95Ms": 11.883699999999862
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 8.16859999999997,
+          "p95Ms": 11.089000000000397
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 2.232600000000275,
+          "p95Ms": 2.624300000000403
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 7.881800000000112,
+          "p95Ms": 8.992099999999482
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 13.65809999999965,
+          "p95Ms": 16.547599999999875
+        }
+      ],
+      "rssBytes": 364601344
+    },
+    {
+      "size": 10000,
+      "mode": "hybrid",
+      "importMs": 3625.807399999999,
+      "coldSearchMs": 149.47479999999996,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 12.853900000000067,
+          "p95Ms": 15.274900000000343
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 12.487299999998868,
+          "p95Ms": 14.85070000000087
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 7.274300000000949,
+          "p95Ms": 7.766600000000835
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 13.08469999999943,
+          "p95Ms": 14.481599999999162
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 7.257399999998597,
+          "p95Ms": 7.757499999999709
+        }
+      ],
+      "rssBytes": 577585152
+    }
+  ]
+}

@@ -110,9 +110,9 @@ describe("SQLiteStore (in-memory)", () => {
     });
 
     const hits = await store.search("aurora borealis lights phenomena", 5);
-    expect(hits.length).toBe(2);
+    expect(hits.length).toBe(1);
     expect(hits[0].id).toBe(near.id);
-    expect(hits[1].id).toBe(far.id); // orthogonal but still listed
+    expect(hits.map(h => h.id)).not.toContain(far.id); // 低相关向量不应凑满名额
   });
 
   test("search with no matches returns empty, not an error", async () => {
@@ -353,12 +353,12 @@ describe("SQLiteStore v2.6：BLOB 向量 + 混合检索 + 进程内缓存", () =
     const store = new SQLiteStore(stub, ":memory:");
     const semOnly = await store.save({ content: "向量检索的底层原理速记", source: "test" });
     const kwOnly = await store.save({ content: "docker semaphore 速查表", source: "test" });
-    // 「semaphore」：关键词只命中 kwOnly，余弦只把 semOnly 排前——两路互补都进榜
+    // 「semaphore」：关键词只命中 kwOnly，语义只命中 semOnly——两路互补都进榜
     const hits = await store.search("semaphore", 2);
     expect(new Set(hits.map((h) => h.id))).toEqual(
       new Set([semOnly.id, kwOnly.id])
     );
-    expect(hits[0].id).toBe(kwOnly.id); // 双路得分者第一
+    expect(hits[0].id).toBe(kwOnly.id); // 两路各第一，平分时按创建时间排序
   });
 
   test("向量缓存随 update 失效，不留过期向量", async () => {
@@ -380,8 +380,8 @@ describe("SQLiteStore v2.6：BLOB 向量 + 混合检索 + 进程内缓存", () =
 
     await store.update("alpha", { content: "beta topic" }); // 新向量 [0,1]
     const after = await store.search("query", 5);
-    // 缓存若过期：alpha 仍 sim=1 会霸榜；正确时应平分后按时间 newer 先
-    expect(after[0].id).toBe("newer");
+    // 缓存若过期：alpha 仍 sim=1 会霸榜；新向量均正交，应无结果。
+    expect(after).toEqual([]);
   });
 
   test("关键词索引增量维护：save 后立即可查，forget 后立即消失", async () => {

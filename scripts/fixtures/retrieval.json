@@ -1,0 +1,32 @@
+{
+  "description": "合成中文/英文记忆；人工指定相关项；不包含用户数据。固定验收集，不用于参数调优。",
+  "memories": [
+    { "id": "current-port", "content": "项目 dev 固定用 3100 端口", "entities": ["ports"], "createdAt": 12 },
+    { "id": "old-port", "content": "历史记录：dev 曾经使用 3000 端口，已停用", "entities": ["ports"], "createdAt": 1 },
+    { "id": "style", "content": "Use tabs for indentation", "entities": ["style"], "createdAt": 2 },
+    { "id": "runtime", "content": "本项目运行时是 Bun，数据库使用 SQLite", "entities": ["environment"], "createdAt": 3 },
+    { "id": "release", "content": "发布必须手动审核后执行，禁止自动发布", "entities": ["release"], "createdAt": 4 },
+    { "id": "platform", "content": "仅支持 Windows 桌面，不支持 Linux 部署", "entities": ["platform"], "createdAt": 5 },
+    { "id": "paths", "content": "中文目录与单引号路径需要保持原样", "entities": ["files"], "createdAt": 6 },
+    { "id": "device", "content": "设备编号 ZX-42_A", "entities": ["device"], "createdAt": 7 },
+    { "id": "compiler", "content": "编译器支持 C++ 和 UTF-8", "entities": ["languages"], "createdAt": 8 },
+    { "id": "status", "content": "发布核验 ✅ 完成", "entities": ["status"], "createdAt": 9 },
+    { "id": "coffee", "content": "咖啡选择无糖，偏好白天饮用", "entities": ["life"], "createdAt": 10 },
+    { "id": "privacy", "content": "API 密钥仅存本机配置", "entities": ["privacy"], "createdAt": 11 }
+  ],
+  "queries": [
+    { "id": "exact-number", "category": "exact", "query": "3100", "relevant": ["current-port"] },
+    { "id": "chinese", "category": "chinese", "query": "数据库", "relevant": ["runtime"] },
+    { "id": "entity-fragment", "category": "entity", "query": "port", "relevant": ["current-port", "old-port"] },
+    { "id": "english", "category": "english", "query": "tabs", "relevant": ["style"] },
+    { "id": "case-fold", "category": "exact", "query": "zx-42_a", "relevant": ["device"] },
+    { "id": "symbols", "category": "symbols", "query": "C++", "relevant": ["compiler"] },
+    { "id": "emoji", "category": "symbols", "query": "✅", "relevant": ["status"] },
+    { "id": "negation", "category": "negation", "query": "支持 Linux 吗", "relevant": ["platform"] },
+    { "id": "old-conflict", "category": "historical-conflict", "query": "当前 dev 端口", "relevant": ["current-port"] },
+    { "id": "paraphrase", "category": "paraphrase", "query": "缩进用制表符", "relevant": ["style"] },
+    { "id": "cross-language", "category": "cross-language", "query": "Which runtime does this project use?", "relevant": ["runtime"] },
+    { "id": "unrelated-chinese", "category": "unrelated", "query": "火星探测器轨道推演", "relevant": [] },
+    { "id": "unrelated-latin", "category": "unrelated", "query": "xyqz_unseen_9817", "relevant": [] }
+  ]
+}

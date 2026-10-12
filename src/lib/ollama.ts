@@ -146,9 +146,11 @@ export async function pullOllamaModel(
 
 /** 人类可读的进度行（拉取进度回调 → 单行文本） */
 export function formatPullStatus(s: PullStatus): string {
+  const labels: Record<string, string> = { "pulling manifest": "获取模型清单", "verifying sha256 digest": "验证文件完整性", "writing manifest": "写入模型清单", "removing any unused layers": "清理未使用文件", success: "完成" };
+  const label = labels[s.status] ?? (/pulling |downloading/.test(s.status) ? "下载模型文件" : "处理模型文件");
   if (s.completed !== undefined && s.total) {
     const mb = (n: number) => `${(n / 1e6).toFixed(0)}MB`;
-    return `${s.status}：${mb(s.completed)} / ${mb(s.total)}（${Math.round((s.completed / s.total) * 100)}%）`;
+    return `${label}：${mb(s.completed)} / ${mb(s.total)}（${Math.round((s.completed / s.total) * 100)}%）`;
   }
-  return s.status;
+  return label;
 }

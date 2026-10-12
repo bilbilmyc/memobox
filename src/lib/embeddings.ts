@@ -8,11 +8,22 @@
 export interface EmbeddingProvider {
   readonly model: string;
   readonly dimensions: number;
+  /** 同模型名下区分端点和预处理版本；不包含 API 密钥。 */
+  readonly space?: string;
   embed(text: string): Promise<number[]>;
 }
 
-import { loadConfig } from "./config";
+import { createHash } from "node:crypto";
+import { loadConfig, parseConfigValue } from "./config";
 import { createLocalEmbedder } from "./local-embedder";
+
+/** 指纹同时包含实际维度和配置维度，兼容端点返回的维度与默认值不同。 */
+export function embeddingSpace(provider: EmbeddingProvider, dimensions: number): string {
+  return createHash("sha256").update(JSON.stringify({
+    model: provider.model, dimensions, configuredDimensions: provider.dimensions,
+    pipeline: provider.space ?? "custom-v1",
+  })).digest("hex");
+}
 
 export function openAICompatibleEmbedder(
   opts: {
@@ -20,18 +31,25 @@ export function openAICompatibleEmbedder(
     key?: string;
     model: string;
     dimensions: number;
+    timeoutMs?: number;
     /** 测试注入用 */
     fetchFn?: typeof fetch;
   }
 ): EmbeddingProvider {
+  parseConfigValue("embedding.base", opts.base);
+  parseConfigValue("embedding.model", opts.model);
+  parseConfigValue("embedding.dimensions", String(opts.dimensions));
+  parseConfigValue("embedding.timeoutMs", String(opts.timeoutMs ?? 5000));
   const doFetch = opts.fetchFn ?? fetch;
   const base = opts.base.replace(/\/$/, "");
   return {
     model: opts.model,
     dimensions: opts.dimensions,
+    space: `openai-compatible-v1:${base}`,
     async embed(text: string): Promise<number[]> {
       const res = await doFetch(`${base}/embeddings`, {
         method: "POST",
+        signal: AbortSignal.timeout(opts.timeoutMs ?? 5000),
         headers: {
           "content-type": "application/json",
           // 无 key 端点（本地 Ollama）不送 authorization
@@ -66,15 +84,17 @@ export function createEmbedder(): EmbeddingProvider | null {
       key: process.env.EMBEDDING_API_KEY,
       model: process.env.EMBEDDING_MODEL ?? "text-embedding-3-small",
       dimensions: Number(process.env.EMBEDDING_DIM ?? 1536),
+      timeoutMs: Number(process.env.EMBEDDING_TIMEOUT_MS ?? 5000),
     });
   }
   const cfg = loadConfig().embedding;
   if (cfg?.base) {
     return openAICompatibleEmbedder({
       base: cfg.base,
-      key: cfg.key,
-      model: cfg.model ?? "text-embedding-3-small",
-      dimensions: Number(process.env.EMBEDDING_DIM ?? 1536),
+      key: process.env.EMBEDDING_API_KEY ?? cfg.key,
+      model: process.env.EMBEDDING_MODEL ?? cfg.model ?? "text-embedding-3-small",
+      dimensions: Number(process.env.EMBEDDING_DIM ?? cfg.dimensions ?? 1536),
+      timeoutMs: Number(process.env.EMBEDDING_TIMEOUT_MS ?? cfg.timeoutMs ?? 5000),
     });
   }
   // 内置小模型（model enable --lite）：构造零开销，模型在第一次 embed 才加载

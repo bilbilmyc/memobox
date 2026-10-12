@@ -6,6 +6,7 @@ import { cmdHelp, parseArgs, parseSince, renderTable, runCli, USAGE, VERSION } f
 import { StubStore } from "./lib/memory-store";
 import { loadConfig, saveConfig } from "./lib/config";
 import type { Memory, MemoryStore } from "./lib/memory-store";
+import { SQLiteStore } from "./db/sqlite-store";
 
 /** 收集输出的假 io + 新 StubStore——runCli 全注入，不起真进程 */
 function harness() {
@@ -88,7 +89,7 @@ describe("帮助体系（v2.3）", () => {
     expect(h.text()).not.toContain("memobox sql");
 
     const h2 = harness();
-    expect(await runCli(["help", "nope"], h2.io, h2.store)).toBe(1);
+    expect(await runCli(["help", "nope"], h2.io, h2.store)).toBe(2);
     expect(h2.err[0]).toContain("未知命令");
   });
 
@@ -124,7 +125,7 @@ describe("runCli 基础命令", () => {
 
   test("save 缺内容 / search 空结果 / list 空库的中文提示", async () => {
     const h = harness();
-    expect(await runCli(["save"], h.io, h.store)).toBe(1);
+    expect(await runCli(["save"], h.io, h.store)).toBe(2);
     expect(h.err[0]).toContain("用法");
 
     const h2 = harness();
@@ -152,13 +153,13 @@ describe("runCli 基础命令", () => {
     expect(h1.out[0]).toBe(VERSION);
 
     const h2 = harness();
-    expect(await runCli(["frobnicate"], h2.io, h2.store)).toBe(1);
+    expect(await runCli(["frobnicate"], h2.io, h2.store)).toBe(2);
     expect(h2.err[0]).toContain("未知命令");
   });
 
   test("install 子命令参数校验", async () => {
     const h = harness();
-    expect(await runCli(["install", "vscode"], h.io, h.store)).toBe(1);
+    expect(await runCli(["install", "vscode"], h.io, h.store)).toBe(2);
     expect(h.err[0]).toContain("claude|codex|pi");
   });
 
@@ -240,7 +241,7 @@ describe("query / get / sql", () => {
     expect(parsed[0].id).toBe("new-dec");
 
     const h = harness();
-    expect(await runCli(["query", "--since", "last week"], h.io, h.store)).toBe(1);
+    expect(await runCli(["query", "--since", "last week"], h.io, h.store)).toBe(2);
     expect(h.err[0]).toContain("--since");
   });
 
@@ -401,12 +402,27 @@ describe("model 子命令（v2.4，本地小模型管理）", () => {
     const restore = setup();
     try {
       const h = harness();
-      expect(await runCli(["model"], h.io, h.store, noOllamaTools())).toBe(1);
+      expect(await runCli(["model"], h.io, h.store, noOllamaTools())).toBe(2);
       expect(h.err[0]).toContain("status|enable|disable");
-      expect(await runCli(["model", "frob"], h.io, h.store, noOllamaTools())).toBe(1);
+      expect(await runCli(["model", "frob"], h.io, h.store, noOllamaTools())).toBe(2);
     } finally {
       restore();
     }
+  });
+
+  test("reindex 使用当前存储配置，保留匹配的向量，不启动 Ollama 或改配置", async () => {
+    const restore = setup();
+    const store = new SQLiteStore({ model: "reindex-test", dimensions: 2, async embed() { return [1, 0]; } }, ":memory:");
+    try {
+      await store.save({ content: "alpha" });
+      const h = harness();
+      expect(await runCli(["model", "reindex"], h.io, () => store, noOllamaTools())).toBe(0);
+      expect(h.text()).toContain("已补算 0 条");
+      expect(existsSync(CFG)).toBe(false);
+      const disabled = harness();
+      expect(await runCli(["model", "reindex"], disabled.io, disabled.store, noOllamaTools())).toBe(1);
+      expect(disabled.err[0]).toContain("未启用语义检索");
+    } finally { store.close(); restore(); }
   });
 
   test("enable 全链路：装好→起服务→拉模型→写配置（桩库补算 0）", async () => {
@@ -508,12 +524,12 @@ describe("model 子命令（v2.4，本地小模型管理）", () => {
       const text = h.text();
       expect(text).toContain("已安装（0.5.7）");
       expect(text).toContain("运行中（2 个模型");
-      expect(text).toContain("keyword");
+      expect(text).toContain("关键词检索");
       // 配置文件启用后显示 semantic + 来源
       saveConfig({ embedding: { base: "http://localhost:11434/v1", model: "bge-m3" } }, CFG);
       const h2 = harness();
       await runCli(["model", "status"], h2.io, h2.store, tools);
-      expect(h2.text()).toContain("semantic");
+      expect(h2.text()).toContain("混合检索");
       expect(h2.text()).toContain("来源");
     } finally {
       restore();

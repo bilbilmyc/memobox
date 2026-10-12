@@ -1,0 +1,79 @@
+{
+  "version": "2.6.3-dev.0",
+  "denseVectors": true,
+  "uniqueEntities": false,
+  "bun": "1.4.2",
+  "platform": "win32",
+  "arch": "x64",
+  "data": "synthetic Chinese; 512-dimensional deterministic provider; in-memory SQLite; no network; RSS is cumulative per-process snapshot, not a per-store peak",
+  "scenarios": [
+    {
+      "size": 10000,
+      "mode": "keyword",
+      "importMs": 3128.5102,
+      "coldSearchMs": 119.13549999999987,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 8.64280000000008,
+          "p95Ms": 12.419499999999971
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 8.908900000000358,
+          "p95Ms": 9.866300000000138
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 0.6005000000000109,
+          "p95Ms": 0.7044999999998254
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 11.904199999999946,
+          "p95Ms": 13.995499999999993
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 0.3926000000001295,
+          "p95Ms": 0.45930000000043947
+        }
+      ],
+      "rssBytes": 295063552
+    },
+    {
+      "size": 10000,
+      "mode": "hybrid",
+      "importMs": 3469.5072999999993,
+      "coldSearchMs": 138.01760000000013,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 12.636000000000422,
+          "p95Ms": 13.307400000001508
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 11.444100000000617,
+          "p95Ms": 12.208800000000338
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 5.474099999999453,
+          "p95Ms": 5.812599999999293
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 13.694500000001426,
+          "p95Ms": 15.938899999999194
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 5.292199999999866,
+          "p95Ms": 5.60950000000048
+        }
+      ],
+      "rssBytes": 492335104
+    }
+  ]
+}

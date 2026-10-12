@@ -35,11 +35,10 @@ const newHome = () => {
 afterAll(() => homes.forEach((h) => rmSync(h, { recursive: true, force: true })));
 
 describe("install 纯函数", () => {
-  test("codexTomlBlock：字面量字符串不转义反斜杠，env 进内联表", () => {
+  test("codexTomlBlock：基本字符串可解析，env 进内联表", () => {
     const block = codexTomlBlock(entry);
     expect(block).toContain("[mcp_servers.memobox]");
-    expect(block).toContain(`command = 'C:/Users/t/.bun/bin/bun.exe'`);
-    expect(block).toContain(`args = ['C:/memobox/src/cli.ts']`);
+    expect(Bun.TOML.parse(block)).toMatchObject({ mcp_servers: { memobox: entry } });
     expect(block).toContain(`EMBEDDING_API_BASE = "https://api.example.com/v1"`);
   });
 

@@ -1,0 +1,79 @@
+{
+  "version": "2.6.3-dev.0",
+  "denseVectors": true,
+  "uniqueEntities": false,
+  "bun": "1.4.2",
+  "platform": "win32",
+  "arch": "x64",
+  "data": "synthetic Chinese; 512-dimensional deterministic provider; in-memory SQLite; no network; RSS is cumulative per-process snapshot, not a per-store peak",
+  "scenarios": [
+    {
+      "size": 10000,
+      "mode": "keyword",
+      "importMs": 3048.4159,
+      "coldSearchMs": 106.55000000000018,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 7.552000000000135,
+          "p95Ms": 10.300700000000234
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 6.73720000000003,
+          "p95Ms": 10.187399999999798
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 0.564600000000155,
+          "p95Ms": 1.1530000000002474
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 8.433899999999994,
+          "p95Ms": 10.361599999999726
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 0.2681000000002314,
+          "p95Ms": 0.30970000000070286
+        }
+      ],
+      "rssBytes": 285618176
+    },
+    {
+      "size": 10000,
+      "mode": "hybrid",
+      "importMs": 3336.6282,
+      "coldSearchMs": 138.13619999999992,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 11.826000000000022,
+          "p95Ms": 14.372800000000097
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 10.500100000001112,
+          "p95Ms": 11.265699999999924
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 5.436699999998382,
+          "p95Ms": 6.008299999999508
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 12.099499999998443,
+          "p95Ms": 13.925200000001496
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 5.257200000000012,
+          "p95Ms": 5.675900000000183
+        }
+      ],
+      "rssBytes": 495820800
+    }
+  ]
+}

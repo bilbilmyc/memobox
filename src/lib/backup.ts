@@ -4,6 +4,7 @@
  * 而变（1536 锁定是 pg 部署内部约定，不代表导出目标同维度）。
  */
 import type { Memory } from "./memory";
+import { validateMemoryInput, MemoryValidationError, memoryValidationMessage } from "./memory-validation";
 
 export type BackupFile = {
   format: "memobox-backup";
@@ -87,6 +88,8 @@ export function parseBackup(text: string): ParseResult {
     if (m.source !== undefined && typeof m.source !== "string") {
       return itemFail(i, "source 不是字符串");
     }
+    try { validateMemoryInput(m as Memory); }
+    catch (e) { if (e instanceof MemoryValidationError) return itemFail(i, memoryValidationMessage(e)); throw e; }
     items.push({
       id: m.id,
       content: m.content,

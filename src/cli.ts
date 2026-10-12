@@ -23,148 +23,29 @@ import { homedir } from "node:os";
 import { Database } from "bun:sqlite";
 import { SQLiteStore } from "@/db/sqlite-store";
 import { buildBackup, parseBackup } from "@/lib/backup";
+import { runSearchCommand } from "./cli/search";
+import { planRestore, readRestoreTarget } from "./lib/restore-preview";
 import { parseCodexMemoryMd, parseCodexSummary } from "@/lib/codex-import";
 import { defaultDbPath } from "@/lib/paths";
-import type { Memory, MemoryStore } from "@/lib/memory-store";
-import { createEmbedder, probeOllama } from "@/lib/embeddings";
-import {
-  createLocalEmbedder,
-  isTransformersMissing,
-  LOCAL_EMBED_MODEL,
-} from "@/lib/local-embedder";
-import { defaultConfigPath, loadConfig, saveConfig } from "@/lib/config";
-import {
-  DEFAULT_EMBED_MODEL,
-  OLLAMA_HOST,
-  ensureOllamaServer,
-  formatPullStatus,
-  ollamaModels,
-  ollamaVersion,
-  pullOllamaModel,
-  type PullStatus,
-} from "@/lib/ollama";
+import type { MemoryStore } from "@/lib/memory-store";
+import { createEmbedder } from "@/lib/embeddings";
+import { defaultConfigPath, loadConfig } from "@/lib/config";
 import { detectClaude, detectCodex, detectPi, installClient, serverEntry, type ClientKind } from "@/install";
 import { serveStdio } from "@/mcp-server";
 
-export const VERSION = "2.6.1";
+import { VERSION } from "./version";
+import { parseArgs, parseSince, cmdHelp, USAGE } from "./cli/arguments";
+export { VERSION } from "./version";
+export { parseArgs, parseSince, cmdHelp, USAGE } from "./cli/arguments";
 
-/** doctor / model 子命令的外部依赖（真入口用默认值；单测注入假实现不碰网络） */
-export type CliTools = {
-  probeOllama: () => Promise<string | null>;
-  ollamaVersion: () => Promise<string | null>;
-  ensureServer: () => Promise<boolean>;
-  listModels: () => Promise<string[] | null>;
-  pull: (name: string, onStatus: (s: PullStatus) => void) => Promise<boolean>;
-  /** 内置小模型预检：加载模型并 embed 一条自检文本（enable --lite 用） */
-  loadLocalModel: (onProgress?: (msg: string) => void) => Promise<void>;
-};
+import { runModelCommand, defaultCliTools, type CliTools } from "./cli/model";
+export { defaultCliTools } from "./cli/model";
+export type { CliTools } from "./cli/model";
 
-export const defaultCliTools: CliTools = {
-  probeOllama,
-  ollamaVersion,
-  ensureServer: () => ensureOllamaServer(),
-  listModels: () => ollamaModels(),
-  pull: (name, onStatus) => pullOllamaModel(name, onStatus),
-  loadLocalModel: async (onProgress) => {
-    await createLocalEmbedder(onProgress).embed("memobox 启动自检");
-  },
-};
-
-/** 子命令规格表：--help / help <命令> / 总帮助都从这里渲染 */
-type CmdSpec = { name: string; usage: string; desc: string };
-
-const COMMANDS: CmdSpec[] = [
-  { name: "serve", usage: "memobox serve", desc: "启动 stdio MCP 服务（无参数时等价；供 Claude Code / Codex / pi 拉起）" },
-  { name: "save", usage: "memobox save <文本> [--kind fact|preference|event|decision] [--entities a,b] [--source 名字]", desc: "存一条记忆" },
-  { name: "search", usage: "memobox search <查询> [--limit 5]", desc: "检索记忆（关键词/语义自动，支持中文整句）" },
-  { name: "list", usage: "memobox list [--limit 20]", desc: "按时间倒序列出记忆" },
-  { name: "query", usage: "memobox query [文本] [--kind k] [--entity e] [--source s] [--since 7d|12h|30m|ISO日期] [--limit 20] [--json]", desc: "结构化过滤查询（条件 AND 组合）" },
-  { name: "get", usage: "memobox get <id>", desc: "查看单条记忆（完整 JSON）" },
-  { name: "sql", usage: 'memobox sql "SELECT ..." [--json]', desc: "只读 SQL 直查 SQLite 库文件" },
-  { name: "forget", usage: "memobox forget <id>", desc: "删除一条记忆（实体边级联清理）" },
-  { name: "entities", usage: "memobox entities [--limit 20]", desc: "实体标签统计（记忆图谱入口）" },
-  { name: "stats", usage: "memobox stats", desc: "库统计（记忆数 / 检索数）" },
-  { name: "path", usage: "memobox path", desc: "打印库文件位置" },
-  { name: "doctor", usage: "memobox doctor", desc: "自检：库文件 / 检索模式 / 三家客户端接线状态" },
-  { name: "model", usage: "memobox model <status|enable|disable> [--model bge-m3] [--lite]", desc: "语义检索管理：enable 用 Ollama（能力强）；enable --lite 用内置小模型（约 25MB 进程内推理，零外部服务）" },
-  { name: "export", usage: "memobox export <file.json>", desc: "全量备份（memobox-backup v1 格式，向量不入备份可重算）" },
-  { name: "import", usage: "memobox import <file.json>", desc: "导入备份（幂等：相同 id 跳过）" },
-  { name: "import-codex", usage: "memobox import-codex [--file <MEMORY.md路径>] [--dry-run]", desc: "迁移 Codex 原生记忆（~/.codex/memories/，任务+用户画像；重复导入幂等）" },
-  { name: "install", usage: "memobox install [claude|codex|pi]", desc: "接入 MCP 客户端（无参数打印任意客户端的通用接法；幂等，自动透传 EMBEDDING_API_*）" },
-  { name: "version", usage: "memobox version", desc: "打印版本号" },
-  { name: "help", usage: "memobox help [命令]", desc: "总帮助，或某条命令的详细用法" },
-];
-
-/** 总帮助 */
-export const USAGE =
-  `memobox ${VERSION} —— 给 AI agent 的本地长期记忆（SQLite，零服务）\n\n` +
-  `用法：memobox <命令> [参数]\n\n` +
-  `命令：\n` +
-  COMMANDS.map((c) => `  ${c.usage}\n      ${c.desc}`).join("\n") +
-  `\n\n环境变量：\n` +
-  `  MEMOBOX_DB_PATH    库文件位置（默认 ~/.memobox/memobox.db）\n` +
-  `  EMBEDDING_API_*    OpenAI 兼容 /embeddings 端点，配了走语义检索\n` +
-  `                     （不配 = 关键词模式，中文已支持；本地端点免 KEY）`;
-
-/** 单条命令的帮助；未知命令返回 null */
-export function cmdHelp(name: string): string | null {
-  const c = COMMANDS.find((x) => x.name === name);
-  return c ? `${c.usage}\n      ${c.desc}` : null;
-}
-
-/** 极简参数解析：位置参数按序收集，--flag 值成对收集（末尾孤旗标=布尔） */
-export function parseArgs(argv: string[]): {
-  pos: string[];
-  flags: Map<string, string>;
-} {
-  const pos: string[] = [];
-  const flags = new Map<string, string>();
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith("--") && i + 1 < argv.length && !argv[i + 1].startsWith("--")) {
-      flags.set(argv[i].slice(2), argv[++i]);
-    } else if (argv[i].startsWith("--")) {
-      flags.set(argv[i].slice(2), ""); // 布尔旗标（--json / --help / --dry-run）
-    } else {
-      pos.push(argv[i]);
-    }
-  }
-  return { pos, flags };
-}
-
-/** 一条记忆的展示行：`[id] content (entities: ...)`——与 MCP 输出同款 */
-export function renderMemory(m: Memory): string {
-  return `[${m.id}] ${m.content}${m.entities?.length ? ` (entities: ${m.entities.join(", ")})` : ""}`;
-}
-
-/** 终端表格：列对齐，超宽单元格截断（完整内容走 --json 或 get） */
-export function renderTable(rows: Record<string, unknown>[]): string {
-  if (rows.length === 0) return "(无结果)";
-  const keys = Object.keys(rows[0]);
-  const cell = (v: unknown) => {
-    const s = v === null || v === undefined ? "NULL" : String(v);
-    return s.length > 48 ? s.slice(0, 47) + "…" : s;
-  };
-  const body = rows.map((r) => keys.map((k) => cell(r[k])));
-  const widths = keys.map((k, i) =>
-    Math.max(k.length, ...body.map((r) => r[i].length))
-  );
-  const line = (cs: string[]) =>
-    cs.map((c, i) => c.padEnd(widths[i])).join("  ").trimEnd();
-  return [line(keys), ...body.map(line)].join("\n");
-}
-
-/**
- * --since 解析：`7d` / `12h` / `30m` 相对时长，或 ISO 日期/日期时间。
- * 返回毫秒时间戳下限；格式不合法返回 NaN。
- */
-export function parseSince(v: string): number {
-  const rel = /^(\d+)([dhm])$/.exec(v);
-  if (rel) {
-    const unit = rel[2] === "d" ? 864e5 : rel[2] === "h" ? 36e5 : 6e4;
-    return Date.now() - Number(rel[1]) * unit;
-  }
-  return Date.parse(v);
-}
+import { renderMemory, renderTable, kindLabel, formatCliError, retrievalLabel, safeEndpoint } from "./cli/presentation";
+export { renderMemory, renderTable } from "./cli/presentation";
+import { MemoryValidationError, validateMemoryInput } from "./lib/memory-validation";
+import { runConfigCommand } from "./cli/config";
 
 /** 注入点：输出流与 store 工厂都可替换（单测用 StubStore + 收集器） */
 export type CliIo = {
@@ -178,16 +59,37 @@ export async function runCli(
   makeStore: () => MemoryStore,
   tools: CliTools = defaultCliTools
 ): Promise<number> {
-  const { pos, flags } = parseArgs(argv);
+  let parsed: ReturnType<typeof parseArgs>;
+  try { parsed = parseArgs(argv); }
+  catch (e) {
+    io.err(e instanceof Error ? e.message : "命令参数不正确，请查看 --help");
+    return 2;
+  }
+  try { return await executeCli(parsed, io, makeStore, tools); }
+  catch (e) {
+    const operation = ({ export: "导出", import: "导入", sql: "SQL 查询", model: "模型操作" } as Record<string, string>)[parsed.pos[0]] ?? "命令执行";
+    io.err(formatCliError(e, operation, parsed.flags.has("debug")));
+    return e instanceof MemoryValidationError ? 2 : 1;
+  }
+}
+
+async function executeCli(
+  { pos, flags }: ReturnType<typeof parseArgs>,
+  io: CliIo,
+  makeStore: () => MemoryStore,
+  tools: CliTools
+): Promise<number> {
   const cmd = pos[0] ?? "serve";
 
-  // 任意命令后跟 --help：打印该命令的帮助；裸 --help / 未知命令回落到总帮助
+  // 参数解析已拒绝未知命令；帮助在模型和存储操作前返回。
   if (flags.has("help")) {
-    io.out(pos.length > 0 ? (cmdHelp(cmd) ?? USAGE) : USAGE);
+    io.out(pos.length > 0 ? (cmdHelp(cmd === "model" || cmd === "config" ? pos.join(" ") : cmd) ?? USAGE) : USAGE);
     return 0;
   }
 
   switch (cmd) {
+    case "config":
+      return runConfigCommand(pos, flags, io);
     case "serve": {
       await serveStdio(makeStore());
       return 0;
@@ -207,17 +109,25 @@ export async function runCli(
       io.out(`已保存记忆 ${row.id}`);
       return 0;
     }
+    case "update": {
+      const patch = {
+        ...(pos.length > 2 ? { content: pos.slice(2).join(" ") } : {}),
+        ...(flags.has("kind") ? { kind: flags.get("kind") } : {}),
+        ...(flags.has("source") ? { source: flags.get("source") } : {}),
+        ...(flags.has("clear-entities") ? { entities: [] } : flags.has("entities") ? { entities: flags.get("entities")!.split(",").map(s => s.trim()).filter(Boolean) } : {}),
+      };
+      const memory = await makeStore().update(pos[1], patch);
+      if (!memory) { io.err("未找到：" + pos[1]); return 1; }
+      io.out(flags.has("json") ? JSON.stringify(memory, null, 2) : "已更新记忆 " + memory.id);
+      return 0;
+    }
     case "search": {
       const query = pos.slice(1).join(" ");
       if (!query) {
         io.err("用法：memobox search <查询> [--limit 5]");
         return 1;
       }
-      const limit = Number(flags.get("limit") ?? 5) || 5;
-      const hits = await makeStore().search(query, limit);
-      if (hits.length === 0) io.out("没有匹配的记忆");
-      else hits.forEach((h) => io.out(renderMemory(h)));
-      return 0;
+      return runSearchCommand(query, flags, io, makeStore());
     }
     case "list": {
       const limit = Number(flags.get("limit") ?? 20) || 20;
@@ -259,11 +169,22 @@ export async function runCli(
         const store = makeStore();
         const { total, searches } = await store.stats();
         io.out(`库文件：  ${dbPath}（${total} 条记忆，${searches} 次检索）`);
-        io.out(`检索模式：${store.retrieval === "keyword" ? "keyword（memobox model enable 可启用语义检索）" : store.retrieval}`);
+        io.out(`检索模式：${retrievalLabel(store.retrieval)}`);
+        const invalid = (await store.exportAll()).filter(memory => {
+          try { validateMemoryInput(memory); return false; } catch { return true; }
+        }).length;
+        if (invalid) io.err(`发现 ${invalid} 条旧记忆内容或类型不合法。先 export 保留原始备份，再用 get 查看、forget 明确删除后重新保存；不会自动清理。`);
       } else {
         io.out(`库文件：  ${dbPath}（尚未创建——第一次 save 时自动建库）`);
-        io.out(`检索模式：${createEmbedder() ? "semantic" : "keyword（memobox model enable 可启用语义检索）"}`);
+        io.out(`检索模式：${createEmbedder() ? retrievalLabel("semantic") : retrievalLabel("keyword")}`);
       }
+      io.out("库路径来源：" + (process.env.MEMOBOX_DB_PATH ? "环境变量 MEMOBOX_DB_PATH" : "默认位置"));
+      io.out("配置文件：" + defaultConfigPath() + "（" + (process.env.MEMOBOX_CONFIG_PATH ? "环境变量 MEMOBOX_CONFIG_PATH" : "默认位置") + "）");
+      const embedding = loadConfig().embedding;
+      io.out("模型配置来源：" + (process.env.EMBEDDING_API_BASE ? "环境变量 EMBEDDING_API_*" : embedding ? "配置文件" : "默认关键词检索"));
+      const endpoint = process.env.EMBEDDING_API_BASE || embedding?.base;
+      if (endpoint) io.out("嵌入端点：" + safeEndpoint(endpoint));
+      io.out("配置优先级：环境变量 > 配置文件 > 默认关键词检索");
       for (const d of [detectCodex(), detectPi(), detectClaude()]) {
         io.out(`${d.client}:     ${d.configured ? "已接线" : "未接线"}  ${d.detail}`);
       }
@@ -281,115 +202,8 @@ export async function runCli(
       }
       return 0;
     }
-    case "model": {
-      // 本地嵌入模型管理（v2.4，CherryStudio 式）：
-      // enable = 检测 Ollama → 没跑就拉起 serve → 缺模型就流式拉取 → 写配置 → 补算存量向量
-      const sub = pos[1];
-      if (sub === "status") {
-        const ver = await tools.ollamaVersion();
-        io.out(`本机 Ollama：${ver ? `已安装（${ver}）` : "未安装（https://ollama.com 下载）"}`);
-        const models = ver ? await tools.listModels() : null;
-        io.out(`Ollama 服务：${models ? `运行中（${models.length} 个模型${models.length ? "：" + models.join(", ") : ""}）` : "未运行"}`);
-        const fromEnv = Boolean(process.env.EMBEDDING_API_BASE);
-        const cfg = loadConfig().embedding;
-        const mode = fromEnv
-          ? "semantic（来源：环境变量 EMBEDDING_API_*）"
-          : cfg?.base
-            ? `semantic（来源：${defaultConfigPath()}，端点 ${cfg.base}）`
-            : cfg?.local
-              ? `semantic（来源：内置模型 ${cfg.model ?? LOCAL_EMBED_MODEL}，进程内推理）`
-              : "keyword（memobox model enable --lite 可最轻启用语义检索）";
-        io.out(`检索模式：  ${mode}`);
-        return 0;
-      }
-      if (sub === "enable") {
-        // --lite：内置小模型（v2.5 轻量方案）——不碰 Ollama，进程内推理
-        if (flags.has("lite")) {
-          io.out(`启用内置嵌入模型 ${LOCAL_EMBED_MODEL}（约 25MB，缓存在 ~/.memobox/models）…`);
-          try {
-            await tools.loadLocalModel((m) => io.out(`  ${m}`));
-          } catch (e) {
-            if (isTransformersMissing(e)) {
-              // v2.6.1 起 npm 包默认不带 transformers（保持轻量）——按需补装
-              io.err("内置模型依赖 @huggingface/transformers 未安装：");
-              io.err("  npm 全局安装 memobox 的用户：npm i -g @huggingface/transformers");
-              io.err("  源码仓库运行的用户：        bun add @huggingface/transformers");
-              io.err("装好后重试：memobox model enable --lite");
-              return 1;
-            }
-            io.err(`内置模型加载失败：${e instanceof Error ? e.message : e}`);
-            io.err("检查网络后重试（默认源 hf-mirror.com；可用环境变量 HF_ENDPOINT 换源）");
-            return 1;
-          }
-          saveConfig({ ...loadConfig(), embedding: { local: true, model: LOCAL_EMBED_MODEL } });
-          const backfilled = await makeStore().backfillEmbeddings((done, total) => {
-            if (done % 10 === 0 || done === total) io.out(`  补算向量 ${done}/${total}`);
-          });
-          if (backfilled > 0) io.out(`已补算 ${backfilled} 条历史记忆的向量`);
-          io.out(`✓ 语义检索已启用（内置模型，零外部服务）——写入 ${defaultConfigPath()}`);
-          io.out(`  所有 memobox 进程（含 MCP 服务）下次启动自动生效，无需重装客户端`);
-          return 0;
-        }
-        const model = flags.get("model") ?? DEFAULT_EMBED_MODEL;
-        const ver = await tools.ollamaVersion();
-        if (!ver) {
-          io.err("未检测到 Ollama——先去 https://ollama.com 下载安装；或改用云端端点（.env.example 有示例）");
-          return 1;
-        }
-        io.out(`Ollama 已安装（${ver}）`);
-        if (!(await tools.ensureServer())) {
-          io.err("Ollama 服务拉不起来——手动跑 `ollama serve` 后重试");
-          return 1;
-        }
-        const models = await tools.listModels();
-        if (models && !models.includes(model)) {
-          io.out(`拉取模型 ${model}（首次约 1.2GB，取决于网速）…`);
-          // 进度节流：状态词变化必打；纯下载进度每 +10% 打一行
-          let lastStatus = "";
-          let lastPct = -100;
-          const ok = await tools.pull(model, (s) => {
-            const pct = s.total ? Math.floor(((s.completed ?? 0) / s.total) * 100) : null;
-            if (s.status !== lastStatus || (pct !== null && pct - lastPct >= 10)) {
-              io.out(`  ${formatPullStatus(s)}`);
-              lastStatus = s.status;
-              if (pct !== null) lastPct = pct;
-            }
-          });
-          if (!ok) {
-            io.err("模型拉取失败（网络中断？）——重试 memobox model enable 会续传");
-            return 1;
-          }
-        } else {
-          io.out(`模型 ${model} 已就绪`);
-        }
-        // 先写配置再造 store——store 构造时读配置才能拿到刚启用的 embedder
-        saveConfig({ ...loadConfig(), embedding: { base: `${OLLAMA_HOST}/v1`, model } });
-        const backfilled = await makeStore().backfillEmbeddings((done, total) => {
-          if (done % 10 === 0 || done === total) io.out(`  补算向量 ${done}/${total}`);
-        });
-        if (backfilled > 0) io.out(`已补算 ${backfilled} 条历史记忆的向量`);
-        io.out(`✓ 语义检索已启用：${model} @ ${OLLAMA_HOST}/v1（写入 ${defaultConfigPath()}）`);
-        io.out(`  所有 memobox 进程（含 MCP 服务）下次启动自动生效，无需重装客户端`);
-        return 0;
-      }
-      if (sub === "disable") {
-        if (process.env.EMBEDDING_API_BASE) {
-          io.out("环境变量 EMBEDDING_API_BASE 还配着——它优先于配置文件；先从 shell / 客户端配置里删掉再 disable");
-          return 0;
-        }
-        const cfg = loadConfig();
-        if (!cfg.embedding) {
-          io.out("本来就是关键词检索（没启用过语义模式）");
-          return 0;
-        }
-        delete cfg.embedding;
-        saveConfig(cfg);
-        io.out("已停用语义检索，回到关键词模式（已算的向量留在库里不碍事；重启客户端生效）");
-        return 0;
-      }
-      io.err("用法：memobox model <status|enable|disable> [--model 名]");
-      return 1;
-    }
+    case "model":
+      return runModelCommand(pos, flags, io, makeStore, tools);
     case "query": {
       // 结构化过滤（AND 组合）：文本子串 + kind/source 精确 + entity 包含 + 时间下限
       const text = pos.slice(1).join(" ").toLowerCase() || undefined;
@@ -403,28 +217,19 @@ export async function runCli(
       const source = flags.get("source");
       const entity = flags.get("entity");
       const limit = Number(flags.get("limit") ?? 20) || 20;
-      let rows = await makeStore().list(2000);
-      if (text) rows = rows.filter((m) => m.content.toLowerCase().includes(text));
-      if (kind) rows = rows.filter((m) => m.kind === kind);
-      if (source) rows = rows.filter((m) => m.source === source);
-      if (entity)
-        rows = rows.filter((m) =>
-          (m.entities ?? []).some((e) => e.toLowerCase() === entity.toLowerCase())
-        );
-      if (since !== undefined) rows = rows.filter((m) => m.createdAt >= since);
-      const cut = rows.slice(0, limit);
+      const cut = await makeStore().query({ text, kind, source, entity, since, limit, offset: Number(flags.get("offset") ?? 0) });
       if (flags.has("json")) io.out(JSON.stringify(cut, null, 2));
       else if (cut.length === 0) io.out("(无结果)");
       else
         io.out(
           renderTable(
             cut.map((m) => ({
-              id: m.id,
-              created: new Date(m.createdAt).toISOString().slice(0, 10),
-              kind: m.kind ?? "",
-              entities: (m.entities ?? []).join(","),
-              source: m.source ?? "",
-              content: m.content,
+              编号: m.id,
+              创建日期: new Date(m.createdAt).toISOString().slice(0, 10),
+              类型: kindLabel(m.kind),
+              实体: (m.entities ?? []).join("，"),
+              来源: m.source ?? "",
+              内容: m.content,
             }))
           )
         );
@@ -467,7 +272,7 @@ export async function runCli(
         io.out(flags.has("json") ? JSON.stringify(rows, null, 2) : renderTable(rows));
         return 0;
       } catch (e) {
-        io.err(e instanceof Error ? e.message : String(e));
+        io.err(formatCliError(e, "SQL 查询", flags.has("debug")));
         return 1;
       } finally {
         db.close();
@@ -494,15 +299,26 @@ export async function runCli(
       try {
         parsed = parseBackup(readFileSync(file, "utf-8"));
       } catch (e) {
-        io.err(`无法读取 ${file}：${e instanceof Error ? e.message : String(e)}`);
+        io.err(formatCliError(e, "读取备份", flags.has("debug")));
         return 1;
       }
       if (!parsed.ok) {
         io.err(`导入失败：${parsed.error}`);
         return 1;
       }
+      if (flags.has("dry-run")) {
+        const preview = planRestore(parsed.items, readRestoreTarget(defaultDbPath()));
+        if (flags.has("json")) io.out(JSON.stringify(preview, null, 2));
+        else {
+          io.out(`恢复预览：共 ${preview.total} 条，新增 ${preview.imported} 条，跳过 ${preview.skipped} 条；未写入记忆`);
+          if (preview.duplicateIds.length) io.out("备份内重复编号：" + preview.duplicateIds.join("，"));
+          if (preview.conflicts.length) io.out("内容或元数据冲突（保留当前/首条）：" + preview.conflicts.join("，"));
+          io.out("预览仅反映当前快照；确认后去掉 --dry-run 执行，已有编号仍不覆盖。");
+        }
+        return 0;
+      }
       const { imported, skipped } = await makeStore().importMemories(parsed.items);
-      io.out(`导入完成：新增 ${imported} 条，跳过 ${skipped} 条（已存在）`);
+      io.out(flags.has("json") ? JSON.stringify({ imported, skipped }) : `导入完成：新增 ${imported} 条，跳过 ${skipped} 条（已存在）`);
       return 0;
     }
     case "import-codex": {
@@ -526,10 +342,10 @@ export async function runCli(
         io.out(
           renderTable(
             items.map((m) => ({
-              id: m.id,
-              kind: m.kind ?? "",
-              entities: (m.entities ?? []).join(","),
-              content: m.content.split("\n")[0],
+              编号: m.id,
+              类型: kindLabel(m.kind),
+              实体: (m.entities ?? []).join("，"),
+              内容: m.content.split("\n")[0],
             }))
           )
         );
@@ -570,7 +386,7 @@ export async function runCli(
     case "help":
     case "--help":
     case "-h": {
-      const target = pos[1];
+      const target = pos.slice(1).join(" ");
       if (target) {
         const help = cmdHelp(target);
         if (help) {
@@ -601,7 +417,7 @@ if (import.meta.main) {
   )
     .then((code) => process.exit(code))
     .catch((e) => {
-      console.error(`[memobox] fatal: ${e}`);
+      console.error(formatCliError(e, "启动", process.argv.includes("--debug")));
       process.exit(1);
     });
 }

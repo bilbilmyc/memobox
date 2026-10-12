@@ -1,0 +1,79 @@
+{
+  "version": "2.6.3-dev.0",
+  "denseVectors": true,
+  "uniqueEntities": false,
+  "bun": "1.4.2",
+  "platform": "win32",
+  "arch": "x64",
+  "data": "synthetic Chinese; 512-dimensional deterministic provider; in-memory SQLite; no network; RSS is cumulative per-process snapshot, not a per-store peak",
+  "scenarios": [
+    {
+      "size": 10000,
+      "mode": "keyword",
+      "importMs": 3145.6322,
+      "coldSearchMs": 103.07690000000002,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 7.673899999999776,
+          "p95Ms": 10.616100000000188
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 6.356800000000021,
+          "p95Ms": 10.392899999999827
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 0.5273999999999432,
+          "p95Ms": 0.6932000000001608
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 8.164800000000014,
+          "p95Ms": 10.028800000000047
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 0.2710000000006403,
+          "p95Ms": 0.2974000000003798
+        }
+      ],
+      "rssBytes": 287531008
+    },
+    {
+      "size": 10000,
+      "mode": "hybrid",
+      "importMs": 3359.4996,
+      "coldSearchMs": 140.5596000000005,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 11.898699999999735,
+          "p95Ms": 13.506899999999405
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 10.508600000001024,
+          "p95Ms": 11.818900000000212
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 5.458599999999933,
+          "p95Ms": 6.168499999999767
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 11.95429999999942,
+          "p95Ms": 13.13299999999981
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 5.260399999999208,
+          "p95Ms": 5.497300000000905
+        }
+      ],
+      "rssBytes": 479707136
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "version": "2.6.2",
+  "uniqueEntities": false,
+  "bun": "1.4.2",
+  "platform": "win32",
+  "arch": "x64",
+  "data": "synthetic Chinese; 512-dimensional deterministic provider; in-memory SQLite; no network; RSS is cumulative per-process snapshot, not a per-store peak",
+  "scenarios": [
+    {
+      "size": 100,
+      "mode": "keyword",
+      "importMs": 75.9436,
+      "coldSearchMs": 2.916800000000009,
+      "cases": [
+        {
+          "query": "独特编号99",
+          "p50Ms": 0.14260000000000161,
+          "p95Ms": 0.18600000000000705
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 0.11370000000000857,
+          "p95Ms": 0.21599999999999397
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 0.3123000000000218,
+          "p95Ms": 0.7334999999999923
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 0.11249999999998295,
+          "p95Ms": 0.1529999999999916
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 0.24209999999999354,
+          "p95Ms": 0.29349999999999454
+        }
+      ],
+      "rssBytes": 79876096
+    },
+    {
+      "size": 100,
+      "mode": "hybrid",
+      "importMs": 44.59450000000001,
+      "coldSearchMs": 4.691399999999987,
+      "cases": [
+        {
+          "query": "独特编号99",
+          "p50Ms": 0.177599999999984,
+          "p95Ms": 0.27549999999999386
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 0.1529999999999916,
+          "p95Ms": 0.20349999999999113
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 0.5115999999999872,
+          "p95Ms": 1.4864000000000033
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 0.16619999999997503,
+          "p95Ms": 0.3534999999999968
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 0.44549999999998136,
+          "p95Ms": 1.0545000000000186
+        }
+      ],
+      "rssBytes": 89190400
+    }
+  ]
+}

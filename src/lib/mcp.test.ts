@@ -18,6 +18,11 @@ function fakeStore(): MemoryStore {
         .filter((r) => r.content.includes(query))
         .slice(0, limit);
     },
+    async searchDetailed(query: string, limit = 5) {
+      const memories = await this.search(query, limit);
+      return { memories, explanation: { mode: "keyword", semantic: { status: "disabled" }, hits: memories.map(m => ({ id: m.id })) } };
+    },
+    async query() { return []; },
     async list(limit: number) {
       return [...rows.values()].slice(0, limit);
     },
@@ -83,7 +88,7 @@ function fakeStore(): MemoryStore {
       return { imported, skipped: items.length - imported };
     },
     async backfillEmbeddings() {
-      return 0;
+      return { inspected: 0, needed: 0, processed: 0, succeeded: 0, skipped: 0, failed: 0 };
     },
   };
 }
@@ -92,6 +97,14 @@ const rpc = (id: unknown, method: string, params?: unknown) =>
   JSON.stringify({ jsonrpc: "2.0", id, method, params });
 
 describe("handleRpcBody", () => {
+  test("blank content and unknown kinds fail before persistence", async () => {
+    const store = fakeStore();
+    for (const args of [{ content: " \n\t" }, { content: "valid", kind: "unknown" }]) {
+      const res = await handleRpcBody(rpc(9, "tools/call", { name: "memory_save", arguments: args }), store);
+      expect((res.body as { result: { isError: boolean } }).result.isError).toBe(true);
+    }
+    expect((await store.stats()).total).toBe(0);
+  });
   test("initialize echoes client protocolVersion", async () => {
     const res = await handleRpcBody(
       rpc(1, "initialize", { protocolVersion: "2025-03-26" }),
@@ -102,13 +115,14 @@ describe("handleRpcBody", () => {
     expect(body.result.protocolVersion).toBe("2025-03-26");
   });
 
-  test("tools/list exposes all three tools", async () => {
+  test("tools/list exposes memory creation, recall and maintenance tools", async () => {
     const res = await handleRpcBody(rpc(2, "tools/list"), fakeStore());
     const body = res.body as { result: { tools: { name: string }[] } };
     expect(body.result.tools.map((t) => t.name)).toEqual([
       "memory_save",
       "memory_search",
       "memory_entities",
+      "memory_get", "memory_update", "memory_forget", "memory_query",
     ]);
   });
 

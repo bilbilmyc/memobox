@@ -73,8 +73,14 @@ async function packAndTest() {
   assert(cli(["--help"]).includes("memobox"));
   cli(["save", "发行物验证：中文目录 ✅", "--entities", "发布项目"]);
   assert(cli(["search", "中文目录"]).includes("发行物验证"));
+  const explained = JSON.parse(cli(["search", "中文目录", "--entity", "发布项目", "--explain", "--json"]));
+  assert.equal(explained.memories.length, 1);
+  assert.equal(explained.explanation.hits[0].keyword.rank, 1);
+  assert.equal(explained.explanation.semantic.status, "disabled");
   const backup = join(fixture, "备份.json"); cli(["export", backup]);
   const exported = JSON.parse(readFileSync(backup, "utf8")); assert.equal(exported.memories.length, 1);
+  const preview = JSON.parse(cli(["import", backup, "--dry-run", "--json"]));
+  assert.deepEqual(preview, { total: 1, imported: 0, skipped: 1, conflicts: [], duplicateIds: [] });
   cli(["import", backup]); assert.equal(JSON.parse(cli(["get", exported.memories[0].id])).content, exported.memories[0].content);
   const a = mcpClient(entry, env), b = mcpClient(entry, env);
   const call = (client, name, args) => client.call("tools/call", { name, arguments: args });
@@ -87,6 +93,14 @@ async function packAndTest() {
     const first = text(await call(b, "memory_save", { content: "release_unique_marker 共享记忆甲" }));
     const id = first.match(/saved memory ([\w-]+)/)?.[1]; assert(id);
     assert(text(await call(a, "memory_search", { query: "release_unique_marker" })).includes("共享记忆甲"));
+    await call(b, "memory_update", { id, content: "release_unique_marker 共享记忆甲修订", entities: ["共享发布项目"] });
+    for (const client of [a, b]) {
+      assert.equal((await call(client, "memory_get", { id })).structuredContent.memory.content, "release_unique_marker 共享记忆甲修订");
+      const scoped = await call(client, "memory_search", { query: "release_unique_marker", entity: "共享发布项目", explain: true });
+      assert.equal(scoped.structuredContent.memories.length, 1);
+      assert.equal(scoped.structuredContent.memories[0].id, id);
+      assert.equal(scoped.structuredContent.explanation.hits[0].keyword.rank, 1);
+    }
     await call(a, "memory_save", { content: "release_unique_marker 共享记忆乙" });
     assert(text(await call(b, "memory_search", { query: "release_unique_marker" })).includes("共享记忆乙"));
     cli(["forget", id]);

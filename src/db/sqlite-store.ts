@@ -1,11 +1,11 @@
 import { mkdirSync } from "node:fs";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
-import { createEmbedder, type EmbeddingProvider } from "@/lib/embeddings";
+import { createEmbedder, embeddingSpace, type EmbeddingProvider } from "@/lib/embeddings";
 import {
   computeBenchmark,
-  cosineSim,
+  matchesSearchScope,
   expandByEntities,
   KeywordIndex,
   percentile,
@@ -16,12 +16,63 @@ import {
   type Label,
   type Memory,
   type MemoryStore,
+  type MemoryQuery,
+  type SearchScope,
+  type BackfillReport,
   type QueryLogEntry,
 } from "@/lib/memory";
 import * as schema from "./schema-sqlite";
 import { defaultDbPath } from "@/lib/paths";
+import { validateMemoryInput } from "@/lib/memory-validation";
+import { explainSearch, type RankedMemory, type SearchReport, type SemanticStatus } from "@/lib/search-report";
 
 type SaveInput = Parameters<MemoryStore["save"]>[0];
+type CachedVector = { vec: Float32Array; space: string; m: Memory; normSquared: number };
+/** 只筛选语义候选；关键词精确匹配和实体扩展不受该门槛影响。 */
+const MIN_SEMANTIC_SIMILARITY = 0.35;
+
+const normSquared = (vec: Float32Array): number => {
+  let total = 0; for (let i = 0; i < vec.length; i++) total += vec[i] * vec[i]; return total;
+};
+/** 独立热点让 JIT 优化类型稳定的向量循环，避免捕获异步查询变量。 */
+function vectorDot(a: Float32Array, b: Float32Array): number {
+  let dot = 0;
+  const size = a.length;
+  let i = 0;
+  // 保留原来的累加顺序，同时减少每四维一次的循环判断。
+  for (; i + 3 < size; i += 4) {
+    dot += a[i] * b[i]; dot += a[i + 1] * b[i + 1];
+    dot += a[i + 2] * b[i + 2]; dot += a[i + 3] * b[i + 3];
+  }
+  for (; i < size; i++) dot += a[i] * b[i];
+  return dot;
+}
+
+function validVector(vec: ArrayLike<number>): boolean {
+  if (vec.length === 0) return false;
+  for (let i = 0; i < vec.length; i++) {
+    if (typeof vec[i] !== "number" || !Number.isFinite(vec[i])) return false;
+  }
+  return true;
+}
+
+/** 防止端点返回非数值，或有限的 double 转 Float32 后溢出。 */
+function toVector(raw: number[]): Float32Array {
+  if (!validVector(raw)) throw new Error("invalid embedding vector");
+  const vec = Float32Array.from(raw);
+  if (!validVector(vec)) throw new Error("invalid Float32 embedding vector");
+  return vec;
+}
+
+/** SQLite lower 只折叠 ASCII；补上过滤文本中的 Unicode 大小写字符。 */
+function foldedSql(expression: SQL, text: string): SQL {
+  let folded = sql`lower(${expression})`;
+  for (const char of new Set(text.toLowerCase())) {
+    const upper = char.toUpperCase();
+    if (char.codePointAt(0)! > 127 && upper !== char && [...upper].length === 1) folded = sql`replace(${folded}, ${upper}, ${char})`;
+  }
+  return folded;
+}
 
 /**
  * v2.6：向量在库里的形态是 Float32 BLOB（每维 4 字节，读出零拷贝成
@@ -40,7 +91,7 @@ export function decodeEmbedding(raw: unknown): Float32Array | null {
     try {
       const arr = JSON.parse(raw);
       if (!Array.isArray(arr)) return null;
-      return Float32Array.from(arr);
+      return toVector(arr);
     } catch {
       return null;
     }
@@ -49,11 +100,13 @@ export function decodeEmbedding(raw: unknown): Float32Array | null {
     if (raw.byteLength === 0 || raw.byteLength % 4 !== 0) return null;
     // byteOffset 非 4 对齐时不能直接视图，复制一份再转（bun:sqlite 正常对齐）
     if (raw.byteOffset % 4 === 0) {
-      return new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4);
+      const vec = new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4);
+      return validVector(vec) ? vec : null;
     }
     const copy = new Uint8Array(raw.byteLength);
     copy.set(raw);
-    return new Float32Array(copy.buffer, 0, raw.byteLength / 4);
+    const vec = new Float32Array(copy.buffer, 0, raw.byteLength / 4);
+    return validVector(vec) ? vec : null;
   }
   return null;
 }
@@ -74,7 +127,9 @@ export class SQLiteStore implements MemoryStore {
   /** v2.6 进程内缓存：全库 BM25 索引（写路径增量维护） */
   private kwIndex: KeywordIndex | null = null;
   /** v2.6 进程内缓存：id → 向量 + 记忆（写路径增量维护） */
-  private vecCache: Map<string, { vec: Float32Array; m: Memory }> | null = null;
+  private vecCache: Map<string, CachedVector> | null = null;
+  /** 对应缓存快照的记忆版本；检索日志写入不会改变它。 */
+  private cacheRevision = -1;
 
   constructor(
     private readonly embedder: EmbeddingProvider | null = createEmbedder(),
@@ -87,61 +142,82 @@ export class SQLiteStore implements MemoryStore {
       if (dir && dir !== dbPath) mkdirSync(dir, { recursive: true });
     }
     const client = new Database(dbPath);
+    client.exec("PRAGMA busy_timeout = 5000");
     client.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
-    // 幂等内联 DDL：已存在的库升级时只会补建缺的表/索引
-    client.exec(`
-      CREATE TABLE IF NOT EXISTS memories (
-        id TEXT PRIMARY KEY,
-        content TEXT NOT NULL,
-        kind TEXT NOT NULL DEFAULT 'fact',
-        source TEXT NOT NULL DEFAULT 'mcp',
-        entities TEXT NOT NULL DEFAULT '[]',
-        embedding BLOB,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS memories_created_at_idx ON memories(created_at);
-      CREATE TABLE IF NOT EXISTS query_log (
-        id TEXT PRIMARY KEY,
-        query TEXT NOT NULL,
-        recalled_ids TEXT NOT NULL DEFAULT '[]',
-        latency_ms INTEGER,
-        created_at INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS entity_nodes (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL UNIQUE,
-        created_at INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS memory_entity_edges (
-        id TEXT PRIMARY KEY,
-        memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-        entity_id TEXT NOT NULL REFERENCES entity_nodes(id) ON DELETE CASCADE,
-        relation TEXT NOT NULL DEFAULT 'tag',
-        weight INTEGER NOT NULL DEFAULT 1
-      );
-      CREATE INDEX IF NOT EXISTS edges_memory_idx ON memory_entity_edges(memory_id);
-      CREATE TABLE IF NOT EXISTS eval_labels (
-        id TEXT PRIMARY KEY,
-        query_log_id TEXT NOT NULL REFERENCES query_log(id) ON DELETE CASCADE,
-        memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
-        relevant INTEGER NOT NULL,
-        created_at INTEGER NOT NULL
-      );
-      CREATE UNIQUE INDEX IF NOT EXISTS eval_labels_pair_idx ON eval_labels(query_log_id, memory_id);
-    `);
-    // v2.6 一次性迁移：旧库的 JSON 文本向量 → Float32 BLOB
-    //（typeof 过滤后转完即空转，开销可忽略；损坏向量清掉交补算链路重算）
-    const legacy = client
-      .query("SELECT id, embedding FROM memories WHERE typeof(embedding) = 'text'")
-      .all() as { id: string; embedding: string }[];
-    if (legacy.length > 0) {
-      const upd = client.prepare("UPDATE memories SET embedding = ? WHERE id = ?");
-      for (const row of legacy) {
-        const vec = decodeEmbedding(row.embedding);
-        upd.run(vec ? encodeEmbedding(vec) : null, row.id);
+    // 同时启动的客户端串行升级，不能看见另一连接只建了一半的表。
+    client.transaction(() => {
+      // 幂等内联 DDL：已存在的库升级时只会补建缺的表/索引
+      client.exec(`
+        CREATE TABLE IF NOT EXISTS memories (
+          id TEXT PRIMARY KEY,
+          content TEXT NOT NULL,
+          kind TEXT NOT NULL DEFAULT 'fact',
+          source TEXT NOT NULL DEFAULT 'mcp',
+          entities TEXT NOT NULL DEFAULT '[]',
+          embedding BLOB,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS memories_created_at_idx ON memories(created_at);
+        CREATE TABLE IF NOT EXISTS query_log (
+          id TEXT PRIMARY KEY,
+          query TEXT NOT NULL,
+          recalled_ids TEXT NOT NULL DEFAULT '[]',
+          latency_ms INTEGER,
+          created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS entity_nodes (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL UNIQUE,
+          created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS memory_entity_edges (
+          id TEXT PRIMARY KEY,
+          memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          entity_id TEXT NOT NULL REFERENCES entity_nodes(id) ON DELETE CASCADE,
+          relation TEXT NOT NULL DEFAULT 'tag',
+          weight INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE INDEX IF NOT EXISTS edges_memory_idx ON memory_entity_edges(memory_id);
+        CREATE TABLE IF NOT EXISTS eval_labels (
+          id TEXT PRIMARY KEY,
+          query_log_id TEXT NOT NULL REFERENCES query_log(id) ON DELETE CASCADE,
+          memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+          relevant INTEGER NOT NULL,
+          created_at INTEGER NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS eval_labels_pair_idx ON eval_labels(query_log_id, memory_id);
+      `);
+      const columns = client.query("PRAGMA table_info(memories)").all() as { name: string }[];
+      if (!columns.some((column) => column.name === "embedding_space")) {
+        client.exec("ALTER TABLE memories ADD COLUMN embedding_space TEXT");
       }
-    }
+      // 触发器覆盖所有连接（包括直接 SQL）；版本号与记忆变动一起提交或回滚。
+      client.exec(`
+        CREATE TABLE IF NOT EXISTS memory_state (
+          id INTEGER PRIMARY KEY CHECK (id = 1), revision INTEGER NOT NULL
+        );
+        INSERT OR IGNORE INTO memory_state (id, revision) VALUES (1, 0);
+        CREATE TRIGGER IF NOT EXISTS memories_revision_insert AFTER INSERT ON memories
+          BEGIN UPDATE memory_state SET revision = revision + 1 WHERE id = 1; END;
+        CREATE TRIGGER IF NOT EXISTS memories_revision_update AFTER UPDATE ON memories
+          BEGIN UPDATE memory_state SET revision = revision + 1 WHERE id = 1; END;
+        CREATE TRIGGER IF NOT EXISTS memories_revision_delete AFTER DELETE ON memories
+          BEGIN UPDATE memory_state SET revision = revision + 1 WHERE id = 1; END;
+      `);
+      // v2.6 一次性迁移：旧库的 JSON 文本向量 → Float32 BLOB
+      //（typeof 过滤后转完即空转，开销可忽略；损坏向量清掉交补算链路重算）
+      const legacy = client
+        .query("SELECT id, embedding FROM memories WHERE typeof(embedding) = 'text'")
+        .all() as { id: string; embedding: string }[];
+      if (legacy.length > 0) {
+        const upd = client.prepare("UPDATE memories SET embedding = ? WHERE id = ?");
+        for (const row of legacy) {
+          const vec = decodeEmbedding(row.embedding);
+          upd.run(vec ? encodeEmbedding(vec) : null, row.id);
+        }
+      }
+    }).immediate();
     this.db = drizzle(client, { schema });
     this.client = client;
   }
@@ -151,9 +227,51 @@ export class SQLiteStore implements MemoryStore {
    * Windows 下不关句柄会锁住库文件）。
    */
   close(): void {
-    this.client.close();
+    // Drizzle 的 prepare 语句可能仍被缓存引用；严格关闭会一并 finalize，
+    // 立即释放 Windows 文件句柄，不等全进程 GC 才允许备份/替换/测试清理。
+    this.client.close(true);
     this.kwIndex = null;
     this.vecCache = null;
+  }
+
+  private memoryRevision(): number {
+    const row = this.client.query("SELECT revision FROM memory_state WHERE id = 1").get() as { revision: number };
+    return row.revision;
+  }
+
+  /** 在同一读/写事务中检查版本，避免缓存版本和读到的行属于不同快照。 */
+  private refreshCaches(): void {
+    const revision = this.memoryRevision();
+    if (revision !== this.cacheRevision) {
+      this.kwIndex = null;
+      this.vecCache = null;
+      this.cacheRevision = revision;
+    }
+  }
+
+  /** 异步算向量在外部完成；事务只做同步写入，提交成功后再更新缓存。 */
+  private writeMemory<T>(write: () => T, onCommit: (value: T) => void): T {
+    const { value, revision } = this.client.transaction(() => {
+      this.refreshCaches();
+      const value = write();
+      return { value, revision: this.memoryRevision() };
+    }).immediate();
+    this.cacheRevision = revision;
+    onCommit(value);
+    return value;
+  }
+
+  private readRow(id: string): schema.SqliteMemoryRow | undefined {
+    return this.db.select().from(schema.memories).where(eq(schema.memories.id, id)).get();
+  }
+
+  /** 从提交后的完整行更新缓存；编辑分类或实体时沿用数据库里的原向量。 */
+  private cacheRow(row: schema.SqliteMemoryRow): void {
+    const m = this.toMemory(row);
+    this.kwIndex?.add(m);
+    const vec = decodeEmbedding(row.embedding);
+    if (vec && row.embeddingSpace) this.vecCache?.set(row.id, { vec, space: row.embeddingSpace, m, normSquared: normSquared(vec) });
+    else this.vecCache?.delete(row.id);
   }
 
   /** 惰性建/取全库关键词索引（首次 search 触发；写路径增量维护） */
@@ -161,26 +279,28 @@ export class SQLiteStore implements MemoryStore {
     if (!this.kwIndex) {
       this.kwIndex = new KeywordIndex();
       this.kwIndex.rebuild(
-        this.db.select().from(schema.memories).all().map((r) => this.toMemory(r))
+        this.db.select({ id: schema.memories.id, content: schema.memories.content, kind: schema.memories.kind,
+          source: schema.memories.source, entities: schema.memories.entities, createdAt: schema.memories.createdAt })
+          .from(schema.memories).all().map((r) => this.toMemory(r))
       );
     }
     return this.kwIndex;
   }
 
   /** 惰性建/取向量缓存（首次语义检索触发；写路径增量维护） */
-  private vectorCache(): Map<string, { vec: Float32Array; m: Memory }> {
+  private vectorCache(): Map<string, CachedVector> {
     if (!this.vecCache) {
-      const cache = new Map<string, { vec: Float32Array; m: Memory }>();
+      const cache = new Map<string, CachedVector>();
       for (const r of this.db.select().from(schema.memories).all()) {
         const vec = decodeEmbedding(r.embedding);
-        if (vec) cache.set(r.id, { vec, m: this.toMemory(r) });
+        if (vec && r.embeddingSpace) cache.set(r.id, { vec, space: r.embeddingSpace, m: this.toMemory(r), normSquared: normSquared(vec) });
       }
       this.vecCache = cache;
     }
     return this.vecCache;
   }
 
-  private toMemory(row: schema.SqliteMemoryRow): Memory {
+  private toMemory(row: Pick<schema.SqliteMemoryRow, "id" | "content" | "kind" | "source" | "entities" | "createdAt">): Memory {
     let entities: string[] = [];
     try {
       entities = JSON.parse(row.entities);
@@ -217,6 +337,7 @@ export class SQLiteStore implements MemoryStore {
       this.db
         .select()
         .from(schema.entityNodes)
+        .where(inArray(schema.entityNodes.name, unique))
         .all()
         .map((n) => [n.name, n.id])
     );
@@ -235,14 +356,15 @@ export class SQLiteStore implements MemoryStore {
   }
 
   async save(input: SaveInput): Promise<Memory> {
+    validateMemoryInput(input);
     const now = Date.now();
     let vec: Float32Array | null = null;
     if (this.embedder) {
       try {
-        vec = Float32Array.from(await this.embedder.embed(input.content));
+        vec = toVector(await this.embedder.embed(input.content));
       } catch (e) {
         // 可用性优先：embedding 失败也照常落库（不带向量）
-        console.error("[memobox] embedding 失败，按无向量保存：", e);
+        console.error("[memobox] 嵌入失败，已按无向量保存；可用 memobox model reindex 重试");
       }
     }
     const row = {
@@ -252,68 +374,93 @@ export class SQLiteStore implements MemoryStore {
       source: input.source ?? "mcp",
       entities: JSON.stringify(input.entities ?? []),
       embedding: vec ? encodeEmbedding(vec) : null,
+      embeddingSpace: vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null,
       createdAt: now,
       updatedAt: now,
     };
-    this.db.insert(schema.memories).values(row).run();
-    this.syncEdges(row.id, input.entities ?? []);
-    const m = this.toMemory(row);
-    // v2.6：两个进程内缓存增量更新，常驻服务下次 search 免重建
-    this.kwIndex?.add(m);
-    if (vec) this.vecCache?.set(row.id, { vec, m });
-    return m;
+    const saved = this.writeMemory(() => {
+      this.db.insert(schema.memories).values(row).run();
+      this.syncEdges(row.id, input.entities ?? []);
+      return row;
+    }, (saved) => this.cacheRow(saved));
+    return this.toMemory(saved);
   }
 
-  async search(query: string, limit = 5): Promise<Memory[]> {
-    const started = Date.now();
-    // v2.6 混合检索：全库 BM25 与语义余弦各自排名 → RRF 融合。
-    // 排名深度取宽于 limit（融合看名次不看分数，浅名单会丢并列信息）
-    const depth = Math.max(limit * 4, 20);
-    const keywordRank = this.keywordIndex().search(query, depth);
+  search(query: string, limit = 5, scope: SearchScope = {}): Promise<Memory[]> {
+    return this.retrieve(query, limit, scope, false);
+  }
 
-    let semanticRank: Memory[] = [];
+  searchDetailed(query: string, limit = 5, scope: SearchScope = {}): Promise<SearchReport> {
+    return this.retrieve(query, limit, scope, true);
+  }
+
+  private retrieve(query: string, limit: number, scope: SearchScope, explain: false): Promise<Memory[]>;
+  private retrieve(query: string, limit: number, scope: SearchScope, explain: true): Promise<SearchReport>;
+  private async retrieve(query: string, limit: number, scope: SearchScope, explain: boolean): Promise<Memory[] | SearchReport> {
+    const started = Date.now();
+    const allow = Object.values(scope).some(value => value !== undefined) ? (memory: Memory) => matchesSearchScope(memory, scope) : undefined;
+    // 先完成可能等待网络的操作，再打开同步读快照；等待期间的外部写入也可见。
+    let qv: Float32Array | null = null;
+    let semanticStatus: SemanticStatus = { status: "disabled" };
     if (this.embedder) {
       try {
-        const qv = await this.embedder.embed(query);
-        const scored: { m: Memory; sim: number }[] = [];
-        for (const { vec, m } of this.vectorCache().values()) {
-          scored.push({ m, sim: cosineSim(qv, vec) });
-        }
-        scored.sort((a, b) => b.sim - a.sim || b.m.createdAt - a.m.createdAt);
-        semanticRank = scored.slice(0, depth).map((s) => s.m);
+        qv = toVector(await this.embedder.embed(query));
+        semanticStatus = { status: "no_matches", reason: "no_compatible_vectors" };
       } catch (e) {
-        console.error("[memobox] 语义检索失败，回退关键词：", e);
+        semanticStatus = { status: "unavailable", reason: "embedding_failed" };
+        console.error("[memobox] 语义检索失败，已回退关键词；请检查模型或端点配置");
       }
     }
-
-    // 语义侧空手（没配 embedder / 全库无向量 / embed 失败）= 纯关键词
-    let hits =
-      semanticRank.length > 0
+    const report = this.client.transaction(() => {
+      this.refreshCaches();
+      // 冷启动的两路索引共用一次库快照，避免重复读出全文和向量。
+      if (qv && this.embedder && !this.kwIndex && !this.vecCache) {
+        this.kwIndex = new KeywordIndex(); this.vecCache = new Map();
+        for (const row of this.db.select().from(schema.memories).all()) this.cacheRow(row);
+      }
+      const depth = Math.max(limit * 4, 20);
+      // 普通检索不组装解释对象；可选功能不增加常驻进程热路径的分配负担。
+      const keywordScores = explain ? this.keywordIndex().rank(query, depth, allow) : [];
+      const keywordRank = explain ? keywordScores.map(row => row.memory) : this.keywordIndex().search(query, depth, allow);
+      let semanticRank: Memory[] = [];
+      let semanticScores: RankedMemory[] = [];
+      if (qv && this.embedder) {
+        const space = embeddingSpace(this.embedder, qv.length);
+        const queryNorm = normSquared(qv);
+        const scored: { m: Memory; sim: number }[] = [];
+        let compatible = 0;
+        for (const { vec, m, space: savedSpace, normSquared: savedNorm } of this.vectorCache().values()) {
+          if (allow && !allow(m)) continue;
+          if (savedSpace !== space || vec.length !== qv.length) continue;
+          if (!queryNorm || !savedNorm) continue;
+          if (explain) compatible++;
+          const sim = vectorDot(qv, vec) / Math.sqrt(queryNorm * savedNorm);
+          if (sim >= MIN_SEMANTIC_SIMILARITY) scored.push({ m, sim });
+        }
+        scored.sort((a, b) => b.sim - a.sim || b.m.createdAt - a.m.createdAt);
+        const selected = scored.slice(0, depth);
+        semanticRank = selected.map(s => s.m);
+        if (explain) semanticScores = selected.map(s => ({ memory: s.m, score: s.sim }));
+        semanticStatus = !queryNorm ? { status: "unavailable", reason: "zero_vector" }
+          : semanticRank.length ? { status: "used" }
+          : { status: "no_matches", reason: compatible ? "below_threshold" : "no_compatible_vectors" };
+      }
+      let matches = semanticRank.length > 0
         ? rrfFuse([keywordRank, semanticRank], limit)
         : keywordRank.slice(0, limit);
-
-    // v1.2 图谱扩展：锚点 = 直接命中记忆的实体 ∪ 查询词
-    //（v2.1 起查询词走 tokenize——中文整句也能锚到短实体名）
-    const anchors = [
-      ...new Set([
-        ...hits.flatMap((h) => h.entities ?? []),
-        ...tokenize(query),
-      ]),
-    ];
-    if (anchors.length > 0) {
-      const anchorSet = new Set(anchors.map((a) => a.toLowerCase()));
-      const rows = this.db.select().from(schema.memories).all();
-      const candidates = rows
-        .map((r) => this.toMemory(r))
-        .filter((m) =>
-          (m.entities ?? []).some((e) => anchorSet.has(e.toLowerCase()))
-        );
-      hits = [
-        ...hits,
-        ...expandByEntities(candidates, hits, anchors, limit),
+      // 实体扩展与排名读取相同快照，不能夹入另一连接的新旧版本。
+      const anchors = [
+        ...new Set([...matches.flatMap((h) => h.entities ?? []), ...tokenize(query)]),
       ];
-    }
-
+      if (anchors.length > 0 && matches.length < limit) {
+        const linked = this.keywordIndex().linked(anchors);
+        const candidates = allow ? linked.filter(allow) : linked;
+        matches = [...matches, ...expandByEntities(candidates, matches, anchors, limit)];
+      }
+      return explain ? explainSearch(matches, keywordScores, semanticScores, semanticStatus, anchors) : matches;
+    }).deferred();
+    const hits = Array.isArray(report) ? report : report.memories;
+    // 日志写入放在读事务外，避免 WAL 读快照升级为写事务时冲突。
     this.db
       .insert(schema.queryLog)
       .values({
@@ -324,7 +471,7 @@ export class SQLiteStore implements MemoryStore {
         createdAt: Date.now(),
       })
       .run();
-    return hits;
+    return report;
   }
 
   async list(limit: number): Promise<Memory[]> {
@@ -338,74 +485,73 @@ export class SQLiteStore implements MemoryStore {
   }
 
   async get(id: string): Promise<Memory | null> {
-    const rows = this.db
-      .select()
-      .from(schema.memories)
-      .where(eq(schema.memories.id, id))
-      .limit(1)
-      .all();
-    return rows.length ? this.toMemory(rows[0]) : null;
+    const row = this.readRow(id);
+    return row ? this.toMemory(row) : null;
+  }
+
+  async query(filters: MemoryQuery): Promise<Memory[]> {
+    const m = schema.memories, conditions = [];
+    if (filters.text) conditions.push(sql`instr(${foldedSql(sql`${m.content}`, filters.text)}, ${filters.text.toLowerCase()}) > 0`);
+    if (filters.kind) conditions.push(eq(m.kind, filters.kind));
+    if (filters.source) conditions.push(eq(m.source, filters.source));
+    if (filters.since !== undefined) conditions.push(sql`${m.createdAt} >= ${filters.since}`);
+    if (filters.entity) conditions.push(sql`EXISTS (
+      SELECT 1 FROM json_each(CASE WHEN json_valid(${m.entities}) THEN ${m.entities} ELSE '[]' END)
+      WHERE ${foldedSql(sql`value`, filters.entity)} = ${filters.entity.toLowerCase()}
+    )`);
+    const rows = this.db.select().from(m).where(and(...conditions))
+      .orderBy(desc(m.createdAt), desc(m.id)).limit(filters.limit ?? 20).offset(filters.offset ?? 0).all();
+    return rows.map(r => this.toMemory(r));
   }
 
   async update(
     id: string,
-    patch: { content?: string; kind?: string; entities?: string[] }
+    patch: { content?: string; kind?: string; entities?: string[]; source?: string }
   ): Promise<Memory | null> {
-    const existing = await this.get(id);
-    if (!existing) return null;
-
-    const values: Record<string, unknown> = { updated_at: Date.now() };
+    validateMemoryInput(patch, false);
+    if (!this.readRow(id)) return null;
+    const values: Partial<typeof schema.memories.$inferInsert> = {};
     let vec: Float32Array | null = null;
     if (patch.content !== undefined) {
       values.content = patch.content;
       if (this.embedder) {
         try {
-          vec = Float32Array.from(await this.embedder.embed(patch.content));
+          vec = toVector(await this.embedder.embed(patch.content));
         } catch {
           vec = null; // 过期向量比没有向量更糟
         }
       }
       values.embedding = vec ? encodeEmbedding(vec) : null;
+      values.embeddingSpace = vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null;
     }
     if (patch.kind !== undefined) values.kind = patch.kind;
+    if (patch.source !== undefined) values.source = patch.source;
     if (patch.entities !== undefined)
       values.entities = JSON.stringify(patch.entities);
 
-    this.db
-      .update(schema.memories)
-      .set(values)
-      .where(eq(schema.memories.id, id))
-      .run();
-    if (patch.entities !== undefined) {
-      this.syncEdges(id, patch.entities);
-    }
-    // 返回前再读一次，保证拿到的是落库后的真实行
-    const updated = await this.get(id);
-    // v2.6：缓存同步——索引先删再加（content/entities 都可能变了）
-    if (updated) {
-      this.kwIndex?.remove(id);
-      this.kwIndex?.add(updated);
-      if (vec) this.vecCache?.set(id, { vec, m: updated });
-      else this.vecCache?.delete(id);
-    }
-    return updated;
+    const updated = this.writeMemory(() => {
+      // 算向量期间可能已被另一连接删除，写事务内重新确认。
+      if (!this.readRow(id)) return null;
+      this.db.update(schema.memories).set({ ...values, updatedAt: Date.now() })
+        .where(eq(schema.memories.id, id)).run();
+      if (patch.entities !== undefined) this.syncEdges(id, patch.entities);
+      return this.readRow(id) ?? null;
+    }, (row) => { if (row) this.cacheRow(row); });
+    return updated ? this.toMemory(updated) : null;
   }
 
   async forget(id: string): Promise<boolean> {
-    const existing = await this.get(id);
-    if (!existing) return false;
-    this.db.delete(schema.memories).where(eq(schema.memories.id, id)).run();
-    // v2.6：缓存同步删除
-    this.kwIndex?.remove(id);
-    this.vecCache?.delete(id);
-    // 边随外键级联删除；顺手清掉不再连着任何边的实体节点
-    this.db
-      .delete(schema.entityNodes)
-      .where(
+    return this.writeMemory(() => {
+      if (!this.readRow(id)) return false;
+      this.db.delete(schema.memories).where(eq(schema.memories.id, id)).run();
+      // 边随外键级联删除；孤儿实体清理也随事务回滚。
+      this.db.delete(schema.entityNodes).where(
         sql`${schema.entityNodes.id} NOT IN (SELECT entity_id FROM memory_entity_edges)`
-      )
-      .run();
-    return true;
+      ).run();
+      return true;
+    }, (deleted) => {
+      if (deleted) { this.kwIndex?.remove(id); this.vecCache?.delete(id); }
+    });
   }
 
   async recentQueries(limit = 10): Promise<QueryLogEntry[]> {
@@ -612,36 +758,48 @@ export class SQLiteStore implements MemoryStore {
   // ---- v2.4 语义模式启用链路 ----
 
   /**
-   * 补算向量：给所有缺 embedding 的记忆现算（`memobox model enable` 用）。
+   * 补算缺失、损坏、来源未知或模型空间已变化的向量。
    * 单条失败跳过不中断（与 save 的可用性优先策略一致）；不动 updated_at
    * ——补算不是编辑，不应扰动排序。
    */
   async backfillEmbeddings(
     onProgress?: (done: number, total: number) => void
-  ): Promise<number> {
-    if (!this.embedder) return 0;
-    const rows = this.db
+  ): Promise<BackfillReport> {
+    const report: BackfillReport = { inspected: 0, needed: 0, processed: 0, succeeded: 0, skipped: 0, failed: 0 };
+    if (!this.embedder) return report;
+    const allRows = this.db
       .select()
       .from(schema.memories)
-      .all()
-      .filter((r) => !r.embedding);
-    let done = 0;
+      .all();
+    const rows = allRows.filter((r) => {
+        const vec = decodeEmbedding(r.embedding);
+        return !vec || r.embeddingSpace !== embeddingSpace(this.embedder!, vec.length);
+      });
+    report.inspected = allRows.length;
+    report.needed = rows.length;
+    report.skipped = allRows.length - rows.length;
     for (const r of rows) {
       try {
-        const vec = Float32Array.from(await this.embedder.embed(r.content));
-        this.db
-          .update(schema.memories)
-          .set({ embedding: encodeEmbedding(vec) })
-          .where(eq(schema.memories.id, r.id))
-          .run();
-        this.vecCache?.set(r.id, { vec, m: this.toMemory(r) });
-        done++;
+        const vec = toVector(await this.embedder.embed(r.content));
+        const space = embeddingSpace(this.embedder, vec.length);
+        const updated = this.writeMemory(() => {
+          const current = this.readRow(r.id);
+          // 等待端点期间的编辑/删除不能被旧内容的补算覆盖。
+          if (!current || current.content !== r.content) return null;
+          this.db.update(schema.memories)
+            .set({ embedding: encodeEmbedding(vec), embeddingSpace: space })
+            .where(eq(schema.memories.id, r.id)).run();
+          return this.readRow(r.id) ?? null;
+        }, (row) => { if (row) this.cacheRow(row); });
+        if (updated) report.succeeded++;
+        else report.skipped++;
       } catch {
-        // 单条失败跳过——下次 enable 还能补
+        report.failed++;
       }
-      onProgress?.(done, rows.length);
+      report.processed++;
+      onProgress?.(report.processed, rows.length);
     }
-    return done;
+    return report;
   }
 
   // ---- v1.6 备份/迁移 ----
@@ -658,47 +816,43 @@ export class SQLiteStore implements MemoryStore {
   async importMemories(
     items: Memory[]
   ): Promise<{ imported: number; skipped: number }> {
+    // 整批先校验，不能在遇到坏条目之前写入半份备份。
+    items.forEach(item => validateMemoryInput(item));
     let imported = 0;
     let skipped = 0;
     for (const item of items) {
-      // drizzle bun-sqlite 的 .run() 不返回 changes——先查后插
-      //（导入是单管理员低频操作，多一次 SELECT 无所谓）
-      const exists = this.db
-        .select({ id: schema.memories.id })
-        .from(schema.memories)
-        .where(eq(schema.memories.id, item.id))
-        .get();
-      if (exists) {
+      if (this.readRow(item.id)) {
         skipped++;
         continue;
       }
       let vec: Float32Array | null = null;
       if (this.embedder) {
         try {
-          vec = Float32Array.from(await this.embedder.embed(item.content));
+          vec = toVector(await this.embedder.embed(item.content));
         } catch {
           // 与 save 同策略：embedding 失败按无向量落库
         }
       }
-      this.db
-        .insert(schema.memories)
-        .values({
+      const inserted = this.writeMemory(() => {
+        // SELECT 与 INSERT 在同一写事务，防止并发导入误算计数或覆盖实体。
+        if (this.readRow(item.id)) return null;
+        const row = {
           id: item.id,
           content: item.content,
           kind: item.kind ?? "fact",
           source: item.source ?? "mcp",
           entities: JSON.stringify(item.entities ?? []),
           embedding: vec ? encodeEmbedding(vec) : null,
+          embeddingSpace: vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null,
           createdAt: item.createdAt,
           updatedAt: Date.now(),
-        })
-        .onConflictDoNothing({ target: schema.memories.id })
-        .run();
-      imported++;
-      this.syncEdges(item.id, item.entities ?? []);
-      // v2.6：缓存增量更新（与 save 一致）
-      if (this.kwIndex) this.kwIndex.add(item);
-      if (vec && this.vecCache) this.vecCache.set(item.id, { vec, m: item });
+        };
+        this.db.insert(schema.memories).values(row).run();
+        this.syncEdges(item.id, item.entities ?? []);
+        return row;
+      }, (row) => { if (row) this.cacheRow(row); });
+      if (inserted) imported++;
+      else skipped++;
     }
     return { imported, skipped };
   }

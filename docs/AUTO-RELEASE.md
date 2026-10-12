@@ -60,10 +60,11 @@ npm 会要求管理员完成一次设备/2FA 验证；这是账户绑定，不�
 npm version 2.6.3 --no-git-tag-version
 git add package.json
 git commit -m "release: prepare memobox 2.6.3"
-git push origin main
+git push origin HEAD
+# 创建 PR；审查并等待 Windows/Linux CI 全绿后合并到 main
 ```
 
-通过 feature 分支和 PR 合并到 main 也会触发相同流程。普通提交未升版本时，CI 仍检查代码，发布流程记录已发布版本并跳过。开发中的 `2.6.3-dev.0` 不会发布。
+日常功能及发版准备均在开发分支完成，经 PR 测试/审查后合并到 main。`codex/**` 推送和面向 main 的 PR 会运行 Windows/Linux 源码与实际安装包验证。普通提交未升版本时，发布流程跳过；开发中的 `2.6.3-dev.0` 不会发布。
 
 不要为测试流水线临时升正式版本或发布空壳版本。当前功能开发还需完成统一产品验收后，才能将 dev 改为正式版本。
 

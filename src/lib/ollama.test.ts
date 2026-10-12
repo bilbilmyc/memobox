@@ -53,6 +53,6 @@ describe("ollama 探测（注入假 fetch，不碰真网络）", () => {
 
   test("formatPullStatus：带进度的行给百分比", () => {
     expect(formatPullStatus({ status: "downloading", completed: 5e6, total: 1e7 })).toContain("50%");
-    expect(formatPullStatus({ status: "verifying sha256 digest" })).toBe("verifying sha256 digest");
+    expect(formatPullStatus({ status: "verifying sha256 digest" })).toBe("验证文件完整性");
   });
 });
