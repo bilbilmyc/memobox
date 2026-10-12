@@ -1,0 +1,9 @@
+{
+  "checkedTexts": 78,
+  "dimensions": 512,
+  "maxAbsoluteDifference": 0,
+  "allowedAbsoluteDifference": 0.000001,
+  "model": "Xenova/bge-small-zh-v1.5",
+  "space": "transformers-feature-extraction-v2:cls:query-instruction:normalize:q8",
+  "modelAndRetrievalPolicyUnchanged": true
+}

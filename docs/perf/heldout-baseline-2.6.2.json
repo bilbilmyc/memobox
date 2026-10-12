@@ -1,0 +1,2394 @@
+{
+  "version": "2.6.2",
+  "split": "heldout",
+  "fixtureSha256": "6de0a85f286314ba8e1f366136edd59e2aec0b9cdc97ba1562ecbe87e28f9892",
+  "model": "Xenova/bge-small-zh-v1.5",
+  "dimensions": 512,
+  "source": "Real q8 ONNX model outputs, reused identically across versions; local ranking excludes model time. Synthetic judged corpus; fixed Precision@5 denominator.",
+  "modelTimings": [
+    10.105574999999988,
+    4.369930000000011,
+    3.355448999999993,
+    3.2690800000000024,
+    4.033749,
+    3.069824000000011,
+    4.8911469999999895,
+    3.534556000000009,
+    2.521517000000017,
+    2.910094999999984,
+    2.9247880000000066,
+    2.763727000000017,
+    4.9756419999999935,
+    3.5269849999999963,
+    2.8441369999999893,
+    2.6683850000000007,
+    2.809254999999979,
+    2.6644100000000037,
+    2.9706549999999936,
+    8.233035999999998,
+    3.1301129999999944,
+    3.830116000000004,
+    6.082330999999982,
+    1.7896769999999833,
+    2.385753999999963,
+    3.6410750000000007,
+    3.1334380000000124,
+    2.0659479999999917,
+    2.421767999999986,
+    1.577970999999991,
+    2.233727999999985,
+    1.865458999999987,
+    1.7223960000000034,
+    2.911767999999995,
+    2.292786000000035,
+    2.4339259999999854,
+    1.8736620000000244,
+    2.5481659999999806,
+    2.245195000000024,
+    2.354287999999997,
+    1.7050799999999526,
+    2.018617000000006,
+    2.0868789999999535,
+    2.169733000000008,
+    2.3470570000000066,
+    1.3574619999999982,
+    1.8957849999999894,
+    2.2812490000000025,
+    1.567575999999974,
+    4.555607000000009,
+    2.0468589999999836
+  ],
+  "rssBytes": 67993600,
+  "scenarios": [
+    {
+      "mode": "bm25",
+      "threshold": null,
+      "metrics": {
+        "recallAt5": 0.8333333333333334,
+        "precisionAt5": 0.2083333333333334,
+        "mrrAt5": 0.8833333333333333,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.12234199999999618,
+        "p95Ms": 0.23023299999999836
+      },
+      "cases": [
+        {
+          "id": "h-json",
+          "category": "exact",
+          "query": "批量删除 JSON 备份",
+          "relevant": [
+            "h-backup"
+          ],
+          "returned": [
+            "h-backup",
+            "h-help",
+            "h-upgrade"
+          ],
+          "latencyMs": 1.082172,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.737498367263529,
+          "topCosine": 0.737498367263529
+        },
+        {
+          "id": "h-backup-q",
+          "category": "paraphrase",
+          "query": "误清理记忆后如何恢复编号和时间？",
+          "relevant": [
+            "h-backup",
+            "h-restore"
+          ],
+          "returned": [
+            "h-backup",
+            "h-date",
+            "h-pagination",
+            "h-storage",
+            "h-privacy"
+          ],
+          "latencyMs": 0.23023299999999836,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7050407634209391,
+          "topCosine": 0.7050407634209391
+        },
+        {
+          "id": "h-db-q",
+          "category": "paraphrase",
+          "query": "不同助手的记忆要怎样存放才能互相看到？",
+          "relevant": [
+            "h-storage",
+            "h-cache"
+          ],
+          "returned": [
+            "h-storage",
+            "h-privacy",
+            "h-upgrade",
+            "h-date",
+            "h-backup"
+          ],
+          "latencyMs": 0.1488119999999995,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6197633706096127,
+          "topCosine": 0.6197633706096127
+        },
+        {
+          "id": "h-cross-db",
+          "category": "cross_language",
+          "query": "Where do agents store their shared long-term memories?",
+          "relevant": [
+            "h-storage",
+            "h-cache"
+          ],
+          "returned": [
+            "h-online",
+            "h-restore"
+          ],
+          "latencyMs": 0.10247199999999879,
+          "recallAt5": 0,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0.6850005733704604,
+          "topCosine": 0.6850005733704604
+        },
+        {
+          "id": "h-compose",
+          "category": "english",
+          "query": "How should the development container keep its data?",
+          "relevant": [
+            "h-docker"
+          ],
+          "returned": [
+            "h-docker",
+            "h-cache",
+            "h-tags",
+            "h-deploy",
+            "h-npm"
+          ],
+          "latencyMs": 0.12253299999999712,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6897403304515265,
+          "topCosine": 0.7045033106853668
+        },
+        {
+          "id": "h-shop",
+          "category": "paraphrase",
+          "query": "Is a health endpoint enough to accept a shop deployment?",
+          "relevant": [
+            "h-deploy"
+          ],
+          "returned": [
+            "h-deploy",
+            "h-npm",
+            "h-docker",
+            "h-restore",
+            "h-timeout"
+          ],
+          "latencyMs": 0.17390899999999476,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7144042537525499,
+          "topCosine": 0.7144042537525499
+        },
+        {
+          "id": "h-adb",
+          "category": "exact",
+          "query": "adb USB 调试授权",
+          "relevant": [
+            "h-android"
+          ],
+          "returned": [
+            "h-android",
+            "h-port-copy",
+            "h-port-current",
+            "h-port-old"
+          ],
+          "latencyMs": 0.12349400000000088,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6822070041612941,
+          "topCosine": 0.6822070041612941
+        },
+        {
+          "id": "h-adb-cross",
+          "category": "cross_language",
+          "query": "How do I authorize the Android USB debugging connection?",
+          "relevant": [
+            "h-android"
+          ],
+          "returned": [
+            "h-online",
+            "h-docker",
+            "h-empty",
+            "h-cache",
+            "h-android"
+          ],
+          "latencyMs": 0.10104100000000216,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 0.2,
+          "bestRelevantCosine": 0.5058277984469537,
+          "topCosine": 0.7498113457549188
+        },
+        {
+          "id": "h-ssh-q",
+          "category": "negation",
+          "query": "Can an SSH private key be committed?",
+          "relevant": [
+            "h-ssh"
+          ],
+          "returned": [
+            "h-ssh",
+            "h-empty",
+            "h-timeout"
+          ],
+          "latencyMs": 0.1070800000000034,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.721087963006983,
+          "topCosine": 0.721087963006983
+        },
+        {
+          "id": "h-exit",
+          "category": "exact",
+          "query": "参数错误 退出码 stderr",
+          "relevant": [
+            "h-help"
+          ],
+          "returned": [
+            "h-help"
+          ],
+          "latencyMs": 0.10417500000000501,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.8115280805601011,
+          "topCosine": 0.8115280805601011
+        },
+        {
+          "id": "h-publish",
+          "category": "english",
+          "query": "When does npm receive a release?",
+          "relevant": [
+            "h-npm",
+            "h-npm-old"
+          ],
+          "returned": [
+            "h-npm",
+            "h-npm-old",
+            "h-cache",
+            "h-tags",
+            "h-docker"
+          ],
+          "latencyMs": 0.10433500000000606,
+          "recallAt5": 1,
+          "precisionAt5": 0.4,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7000290126325567,
+          "topCosine": 0.7000290126325567
+        },
+        {
+          "id": "h-private",
+          "category": "negation",
+          "query": "公开发行包能包含真实用户记忆吗？",
+          "relevant": [
+            "h-privacy"
+          ],
+          "returned": [
+            "h-privacy",
+            "h-storage",
+            "h-date",
+            "h-backup",
+            "h-upgrade"
+          ],
+          "latencyMs": 0.1338399999999993,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7463557163812875,
+          "topCosine": 0.7463557163812875
+        },
+        {
+          "id": "h-service",
+          "category": "paraphrase",
+          "query": "What happens when the vector API hangs?",
+          "relevant": [
+            "h-timeout"
+          ],
+          "returned": [
+            "h-cache",
+            "h-tags",
+            "h-deploy",
+            "h-npm",
+            "h-ssh"
+          ],
+          "latencyMs": 0.12507699999999744,
+          "recallAt5": 0,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0.5417882051257542,
+          "topCosine": 0.6318107788356222
+        },
+        {
+          "id": "h-priority",
+          "category": "exact",
+          "query": "环境变量 配置文件 默认值",
+          "relevant": [
+            "h-config"
+          ],
+          "returned": [
+            "h-config"
+          ],
+          "latencyMs": 0.12353500000000395,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.8351744761801341,
+          "topCosine": 0.8351744761801341
+        },
+        {
+          "id": "h-cache-q",
+          "category": "english",
+          "query": "Will a running client see another agent edit a memory?",
+          "relevant": [
+            "h-cache",
+            "h-storage"
+          ],
+          "returned": [
+            "h-cache",
+            "h-tags",
+            "h-empty",
+            "h-npm",
+            "h-docker"
+          ],
+          "latencyMs": 0.1375850000000014,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7430239337820673,
+          "topCosine": 0.7443929475930066
+        },
+        {
+          "id": "h-upgrade-q",
+          "category": "paraphrase",
+          "query": "更新库结构时原记忆和标签怎么办？",
+          "relevant": [
+            "h-upgrade"
+          ],
+          "returned": [
+            "h-upgrade",
+            "h-date",
+            "h-pagination",
+            "h-storage",
+            "h-privacy"
+          ],
+          "latencyMs": 0.12756999999999863,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6640730781854686,
+          "topCosine": 0.6640730781854686
+        },
+        {
+          "id": "h-time-q",
+          "category": "paraphrase",
+          "query": "编辑正文是否改变记录标识和创建日期？",
+          "relevant": [
+            "h-date"
+          ],
+          "returned": [
+            "h-date",
+            "h-port-old",
+            "h-pagination",
+            "h-backup"
+          ],
+          "latencyMs": 0.14812100000000328,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7238388271752254,
+          "topCosine": 0.7238388271752254
+        },
+        {
+          "id": "h-history",
+          "category": "conflict_history",
+          "query": "项目丙的调试端口改过吗？",
+          "relevant": [
+            "h-port-current",
+            "h-port-old",
+            "h-port-copy"
+          ],
+          "returned": [
+            "h-port-copy",
+            "h-port-current",
+            "h-port-old",
+            "h-android"
+          ],
+          "latencyMs": 0.11112599999999873,
+          "recallAt5": 1,
+          "precisionAt5": 0.6,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7266587140512399,
+          "topCosine": 0.7266587140512399
+        },
+        {
+          "id": "h-upload",
+          "category": "negation",
+          "query": "Should local memory be sent to telemetry automatically?",
+          "relevant": [
+            "h-online",
+            "h-privacy"
+          ],
+          "returned": [
+            "h-online",
+            "h-docker",
+            "h-empty",
+            "h-restore",
+            "h-npm"
+          ],
+          "latencyMs": 0.12234199999999618,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7521303969025974,
+          "topCosine": 0.7521303969025974
+        },
+        {
+          "id": "h-restore-q",
+          "category": "english",
+          "query": "What happens to existing rows after restore fails?",
+          "relevant": [
+            "h-restore"
+          ],
+          "returned": [
+            "h-restore",
+            "h-npm",
+            "h-ssh",
+            "h-docker",
+            "h-timeout"
+          ],
+          "latencyMs": 0.11172600000000443,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7702173862310759,
+          "topCosine": 0.7702173862310759
+        },
+        {
+          "id": "h-lite",
+          "category": "paraphrase",
+          "query": "不用模型也能搜吗？模型会重复下载吗？",
+          "relevant": [
+            "h-model"
+          ],
+          "returned": [
+            "h-model"
+          ],
+          "latencyMs": 0.1251359999999977,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6555476253548027,
+          "topCosine": 0.6555476253548027
+        },
+        {
+          "id": "h-tags-q",
+          "category": "english",
+          "query": "How is a project tag different from the writing agent?",
+          "relevant": [
+            "h-tags"
+          ],
+          "returned": [
+            "h-tags",
+            "h-npm",
+            "h-docker",
+            "h-cache",
+            "h-deploy"
+          ],
+          "latencyMs": 0.14797000000000082,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7965230994378697,
+          "topCosine": 0.7965230994378697
+        },
+        {
+          "id": "h-filter",
+          "category": "exact",
+          "query": "全库过滤 分页",
+          "relevant": [
+            "h-pagination"
+          ],
+          "returned": [
+            "h-pagination"
+          ],
+          "latencyMs": 0.08585799999999466,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6841261913044271,
+          "topCosine": 0.6841261913044271
+        },
+        {
+          "id": "h-whitespace",
+          "category": "english",
+          "query": "Can a blank note create a database or make a model request?",
+          "relevant": [
+            "h-empty"
+          ],
+          "returned": [
+            "h-empty",
+            "h-restore",
+            "h-tags",
+            "h-npm",
+            "h-docker"
+          ],
+          "latencyMs": 0.11605300000000085,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7634664864545951,
+          "topCosine": 0.7634664864545951
+        },
+        {
+          "id": "h-unrelated-1",
+          "category": "unrelated",
+          "query": "意大利面通常煮几分钟？",
+          "relevant": [],
+          "returned": [],
+          "latencyMs": 0.10291300000000092,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.3369301590359846
+        },
+        {
+          "id": "h-unrelated-2",
+          "category": "unrelated",
+          "query": "What are Saturn rings made of?",
+          "relevant": [],
+          "returned": [
+            "h-online"
+          ],
+          "latencyMs": 0.1125069999999937,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.6598222452835131
+        },
+        {
+          "id": "h-unrelated-3",
+          "category": "unrelated",
+          "query": "鲸鱼每年如何迁徙？",
+          "relevant": [],
+          "returned": [],
+          "latencyMs": 0.10203200000000123,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.34097497783866854
+        },
+        {
+          "id": "h-unrelated-4",
+          "category": "unrelated",
+          "query": "How do I tune a classical violin?",
+          "relevant": [],
+          "returned": [
+            "h-online",
+            "h-docker",
+            "h-empty",
+            "h-tags",
+            "h-npm"
+          ],
+          "latencyMs": 0.10734000000000066,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.6161634354973711
+        }
+      ]
+    },
+    {
+      "mode": "semantic",
+      "threshold": 0.35,
+      "metrics": {
+        "recallAt5": 0.8125,
+        "precisionAt5": 0.2083333333333334,
+        "mrrAt5": 0.875,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.048101000000002614,
+        "p95Ms": 0.11027399999999687
+      },
+      "cases": [
+        {
+          "id": "h-json",
+          "category": "exact",
+          "query": "批量删除 JSON 备份",
+          "relevant": [
+            "h-backup"
+          ],
+          "returned": [
+            "h-backup",
+            "h-upgrade",
+            "h-docker",
+            "h-restore",
+            "h-empty"
+          ],
+          "latencyMs": 0.09243699999999677,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.737498367263529,
+          "topCosine": 0.737498367263529
+        },
+        {
+          "id": "h-backup-q",
+          "category": "paraphrase",
+          "query": "误清理记忆后如何恢复编号和时间？",
+          "relevant": [
+            "h-backup",
+            "h-restore"
+          ],
+          "returned": [
+            "h-backup",
+            "h-date",
+            "h-port-old",
+            "h-upgrade",
+            "h-empty"
+          ],
+          "latencyMs": 0.11027399999999687,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7050407634209391,
+          "topCosine": 0.7050407634209391
+        },
+        {
+          "id": "h-db-q",
+          "category": "paraphrase",
+          "query": "不同助手的记忆要怎样存放才能互相看到？",
+          "relevant": [
+            "h-storage",
+            "h-cache"
+          ],
+          "returned": [
+            "h-storage",
+            "h-upgrade",
+            "h-privacy",
+            "h-backup",
+            "h-model"
+          ],
+          "latencyMs": 0.12208199999999891,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6197633706096127,
+          "topCosine": 0.6197633706096127
+        },
+        {
+          "id": "h-cross-db",
+          "category": "cross_language",
+          "query": "Where do agents store their shared long-term memories?",
+          "relevant": [
+            "h-storage",
+            "h-cache"
+          ],
+          "returned": [
+            "h-cache",
+            "h-restore",
+            "h-docker",
+            "h-timeout",
+            "h-ssh"
+          ],
+          "latencyMs": 0.0822120000000055,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6850005733704604,
+          "topCosine": 0.6850005733704604
+        },
+        {
+          "id": "h-compose",
+          "category": "english",
+          "query": "How should the development container keep its data?",
+          "relevant": [
+            "h-docker"
+          ],
+          "returned": [
+            "h-cache",
+            "h-docker",
+            "h-npm-old",
+            "h-npm",
+            "h-empty"
+          ],
+          "latencyMs": 0.07404000000000366,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 0.5,
+          "bestRelevantCosine": 0.6897403304515265,
+          "topCosine": 0.7045033106853668
+        },
+        {
+          "id": "h-shop",
+          "category": "paraphrase",
+          "query": "Is a health endpoint enough to accept a shop deployment?",
+          "relevant": [
+            "h-deploy"
+          ],
+          "returned": [
+            "h-deploy",
+            "h-empty",
+            "h-tags",
+            "h-cache",
+            "h-online"
+          ],
+          "latencyMs": 0.07270799999999866,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7144042537525499,
+          "topCosine": 0.7144042537525499
+        },
+        {
+          "id": "h-adb",
+          "category": "exact",
+          "query": "adb USB 调试授权",
+          "relevant": [
+            "h-android"
+          ],
+          "returned": [
+            "h-android",
+            "h-npm-old",
+            "h-docker",
+            "h-port-old",
+            "h-port-copy"
+          ],
+          "latencyMs": 0.0670599999999979,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6822070041612941,
+          "topCosine": 0.6822070041612941
+        },
+        {
+          "id": "h-adb-cross",
+          "category": "cross_language",
+          "query": "How do I authorize the Android USB debugging connection?",
+          "relevant": [
+            "h-android"
+          ],
+          "returned": [
+            "h-cache",
+            "h-npm-old",
+            "h-npm",
+            "h-tags",
+            "h-docker"
+          ],
+          "latencyMs": 0.053049000000001456,
+          "recallAt5": 0,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0.5058277984469537,
+          "topCosine": 0.7498113457549188
+        },
+        {
+          "id": "h-ssh-q",
+          "category": "negation",
+          "query": "Can an SSH private key be committed?",
+          "relevant": [
+            "h-ssh"
+          ],
+          "returned": [
+            "h-ssh",
+            "h-cache",
+            "h-npm-old",
+            "h-npm",
+            "h-docker"
+          ],
+          "latencyMs": 0.04290300000000258,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.721087963006983,
+          "topCosine": 0.721087963006983
+        },
+        {
+          "id": "h-exit",
+          "category": "exact",
+          "query": "参数错误 退出码 stderr",
+          "relevant": [
+            "h-help"
+          ],
+          "returned": [
+            "h-help",
+            "h-port-old",
+            "h-port-copy",
+            "h-port-current",
+            "h-npm"
+          ],
+          "latencyMs": 0.03527199999999908,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.8115280805601011,
+          "topCosine": 0.8115280805601011
+        },
+        {
+          "id": "h-publish",
+          "category": "english",
+          "query": "When does npm receive a release?",
+          "relevant": [
+            "h-npm",
+            "h-npm-old"
+          ],
+          "returned": [
+            "h-npm-old",
+            "h-npm",
+            "h-deploy",
+            "h-cache",
+            "h-empty"
+          ],
+          "latencyMs": 0.04056999999999533,
+          "recallAt5": 1,
+          "precisionAt5": 0.4,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7000290126325567,
+          "topCosine": 0.7000290126325567
+        },
+        {
+          "id": "h-private",
+          "category": "negation",
+          "query": "公开发行包能包含真实用户记忆吗？",
+          "relevant": [
+            "h-privacy"
+          ],
+          "returned": [
+            "h-privacy",
+            "h-upgrade",
+            "h-storage",
+            "h-backup",
+            "h-date"
+          ],
+          "latencyMs": 0.0624430000000018,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7463557163812875,
+          "topCosine": 0.7463557163812875
+        },
+        {
+          "id": "h-service",
+          "category": "paraphrase",
+          "query": "What happens when the vector API hangs?",
+          "relevant": [
+            "h-timeout"
+          ],
+          "returned": [
+            "h-deploy",
+            "h-npm",
+            "h-restore",
+            "h-cache",
+            "h-docker"
+          ],
+          "latencyMs": 0.03751600000000366,
+          "recallAt5": 0,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0.5417882051257542,
+          "topCosine": 0.6318107788356222
+        },
+        {
+          "id": "h-priority",
+          "category": "exact",
+          "query": "环境变量 配置文件 默认值",
+          "relevant": [
+            "h-config"
+          ],
+          "returned": [
+            "h-config",
+            "h-upgrade",
+            "h-tags",
+            "h-ssh",
+            "h-npm-old"
+          ],
+          "latencyMs": 0.03770600000000002,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.8351744761801341,
+          "topCosine": 0.8351744761801341
+        },
+        {
+          "id": "h-cache-q",
+          "category": "english",
+          "query": "Will a running client see another agent edit a memory?",
+          "relevant": [
+            "h-cache",
+            "h-storage"
+          ],
+          "returned": [
+            "h-tags",
+            "h-cache",
+            "h-empty",
+            "h-npm",
+            "h-npm-old"
+          ],
+          "latencyMs": 0.048101000000002614,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 0.5,
+          "bestRelevantCosine": 0.7430239337820673,
+          "topCosine": 0.7443929475930066
+        },
+        {
+          "id": "h-upgrade-q",
+          "category": "paraphrase",
+          "query": "更新库结构时原记忆和标签怎么办？",
+          "relevant": [
+            "h-upgrade"
+          ],
+          "returned": [
+            "h-upgrade",
+            "h-pagination",
+            "h-date",
+            "h-backup",
+            "h-privacy"
+          ],
+          "latencyMs": 0.06792099999999834,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6640730781854686,
+          "topCosine": 0.6640730781854686
+        },
+        {
+          "id": "h-time-q",
+          "category": "paraphrase",
+          "query": "编辑正文是否改变记录标识和创建日期？",
+          "relevant": [
+            "h-date"
+          ],
+          "returned": [
+            "h-date",
+            "h-backup",
+            "h-pagination",
+            "h-upgrade",
+            "h-privacy"
+          ],
+          "latencyMs": 0.057584999999996,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7238388271752254,
+          "topCosine": 0.7238388271752254
+        },
+        {
+          "id": "h-history",
+          "category": "conflict_history",
+          "query": "项目丙的调试端口改过吗？",
+          "relevant": [
+            "h-port-current",
+            "h-port-old",
+            "h-port-copy"
+          ],
+          "returned": [
+            "h-port-copy",
+            "h-port-current",
+            "h-port-old",
+            "h-help",
+            "h-npm"
+          ],
+          "latencyMs": 0.042614000000000374,
+          "recallAt5": 1,
+          "precisionAt5": 0.6,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7266587140512399,
+          "topCosine": 0.7266587140512399
+        },
+        {
+          "id": "h-upload",
+          "category": "negation",
+          "query": "Should local memory be sent to telemetry automatically?",
+          "relevant": [
+            "h-online",
+            "h-privacy"
+          ],
+          "returned": [
+            "h-online",
+            "h-npm",
+            "h-cache",
+            "h-empty",
+            "h-ssh"
+          ],
+          "latencyMs": 0.0402300000000011,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7521303969025974,
+          "topCosine": 0.7521303969025974
+        },
+        {
+          "id": "h-restore-q",
+          "category": "english",
+          "query": "What happens to existing rows after restore fails?",
+          "relevant": [
+            "h-restore"
+          ],
+          "returned": [
+            "h-restore",
+            "h-deploy",
+            "h-cache",
+            "h-npm",
+            "h-timeout"
+          ],
+          "latencyMs": 0.04119099999999776,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7702173862310759,
+          "topCosine": 0.7702173862310759
+        },
+        {
+          "id": "h-lite",
+          "category": "paraphrase",
+          "query": "不用模型也能搜吗？模型会重复下载吗？",
+          "relevant": [
+            "h-model"
+          ],
+          "returned": [
+            "h-model",
+            "h-privacy",
+            "h-upgrade",
+            "h-npm-old",
+            "h-empty"
+          ],
+          "latencyMs": 0.047420999999999935,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6555476253548027,
+          "topCosine": 0.6555476253548027
+        },
+        {
+          "id": "h-tags-q",
+          "category": "english",
+          "query": "How is a project tag different from the writing agent?",
+          "relevant": [
+            "h-tags"
+          ],
+          "returned": [
+            "h-tags",
+            "h-npm",
+            "h-npm-old",
+            "h-empty",
+            "h-online"
+          ],
+          "latencyMs": 0.048723000000002514,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7965230994378697,
+          "topCosine": 0.7965230994378697
+        },
+        {
+          "id": "h-filter",
+          "category": "exact",
+          "query": "全库过滤 分页",
+          "relevant": [
+            "h-pagination"
+          ],
+          "returned": [
+            "h-pagination",
+            "h-npm-old",
+            "h-empty",
+            "h-ssh",
+            "h-restore"
+          ],
+          "latencyMs": 0.03166699999999878,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6841261913044271,
+          "topCosine": 0.6841261913044271
+        },
+        {
+          "id": "h-whitespace",
+          "category": "english",
+          "query": "Can a blank note create a database or make a model request?",
+          "relevant": [
+            "h-empty"
+          ],
+          "returned": [
+            "h-empty",
+            "h-tags",
+            "h-npm",
+            "h-docker",
+            "h-npm-old"
+          ],
+          "latencyMs": 0.04791099999999915,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7634664864545951,
+          "topCosine": 0.7634664864545951
+        },
+        {
+          "id": "h-unrelated-1",
+          "category": "unrelated",
+          "query": "意大利面通常煮几分钟？",
+          "relevant": [],
+          "returned": [],
+          "latencyMs": 0.037866000000001065,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.3369301590359846
+        },
+        {
+          "id": "h-unrelated-2",
+          "category": "unrelated",
+          "query": "What are Saturn rings made of?",
+          "relevant": [],
+          "returned": [
+            "h-cache",
+            "h-restore",
+            "h-npm-old",
+            "h-npm",
+            "h-empty"
+          ],
+          "latencyMs": 0.0418420000000026,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.6598222452835131
+        },
+        {
+          "id": "h-unrelated-3",
+          "category": "unrelated",
+          "query": "鲸鱼每年如何迁徙？",
+          "relevant": [],
+          "returned": [],
+          "latencyMs": 0.05962799999999646,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.34097497783866854
+        },
+        {
+          "id": "h-unrelated-4",
+          "category": "unrelated",
+          "query": "How do I tune a classical violin?",
+          "relevant": [],
+          "returned": [
+            "h-npm",
+            "h-deploy",
+            "h-restore",
+            "h-npm-old",
+            "h-cache"
+          ],
+          "latencyMs": 0.06028899999999737,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.6161634354973711
+        }
+      ]
+    },
+    {
+      "mode": "rrf",
+      "threshold": 0.35,
+      "metrics": {
+        "recallAt5": 0.8125,
+        "precisionAt5": 0.2083333333333334,
+        "mrrAt5": 0.8472222222222223,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.08935400000000016,
+        "p95Ms": 0.16838100000000367
+      },
+      "cases": [
+        {
+          "id": "h-json",
+          "category": "exact",
+          "query": "批量删除 JSON 备份",
+          "relevant": [
+            "h-backup"
+          ],
+          "returned": [
+            "h-backup",
+            "h-upgrade",
+            "h-help",
+            "h-docker",
+            "h-restore"
+          ],
+          "latencyMs": 0.2197569999999942,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.737498367263529,
+          "topCosine": 0.737498367263529
+        },
+        {
+          "id": "h-backup-q",
+          "category": "paraphrase",
+          "query": "误清理记忆后如何恢复编号和时间？",
+          "relevant": [
+            "h-backup",
+            "h-restore"
+          ],
+          "returned": [
+            "h-backup",
+            "h-date",
+            "h-upgrade",
+            "h-pagination",
+            "h-privacy"
+          ],
+          "latencyMs": 0.12476600000000104,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7050407634209391,
+          "topCosine": 0.7050407634209391
+        },
+        {
+          "id": "h-db-q",
+          "category": "paraphrase",
+          "query": "不同助手的记忆要怎样存放才能互相看到？",
+          "relevant": [
+            "h-storage",
+            "h-cache"
+          ],
+          "returned": [
+            "h-storage",
+            "h-upgrade",
+            "h-privacy",
+            "h-backup",
+            "h-date"
+          ],
+          "latencyMs": 0.16838100000000367,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6197633706096127,
+          "topCosine": 0.6197633706096127
+        },
+        {
+          "id": "h-cross-db",
+          "category": "cross_language",
+          "query": "Where do agents store their shared long-term memories?",
+          "relevant": [
+            "h-storage",
+            "h-cache"
+          ],
+          "returned": [
+            "h-restore",
+            "h-online",
+            "h-cache",
+            "h-docker",
+            "h-timeout"
+          ],
+          "latencyMs": 0.09041400000000266,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 0.3333333333333333,
+          "bestRelevantCosine": 0.6850005733704604,
+          "topCosine": 0.6850005733704604
+        },
+        {
+          "id": "h-compose",
+          "category": "english",
+          "query": "How should the development container keep its data?",
+          "relevant": [
+            "h-docker"
+          ],
+          "returned": [
+            "h-cache",
+            "h-docker",
+            "h-tags",
+            "h-npm",
+            "h-deploy"
+          ],
+          "latencyMs": 0.09110499999999888,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 0.5,
+          "bestRelevantCosine": 0.6897403304515265,
+          "topCosine": 0.7045033106853668
+        },
+        {
+          "id": "h-shop",
+          "category": "paraphrase",
+          "query": "Is a health endpoint enough to accept a shop deployment?",
+          "relevant": [
+            "h-deploy"
+          ],
+          "returned": [
+            "h-deploy",
+            "h-npm",
+            "h-tags",
+            "h-docker",
+            "h-empty"
+          ],
+          "latencyMs": 0.08935400000000016,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7144042537525499,
+          "topCosine": 0.7144042537525499
+        },
+        {
+          "id": "h-adb",
+          "category": "exact",
+          "query": "adb USB 调试授权",
+          "relevant": [
+            "h-android"
+          ],
+          "returned": [
+            "h-android",
+            "h-port-copy",
+            "h-port-old",
+            "h-port-current",
+            "h-npm-old"
+          ],
+          "latencyMs": 0.09080600000000061,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6822070041612941,
+          "topCosine": 0.6822070041612941
+        },
+        {
+          "id": "h-adb-cross",
+          "category": "cross_language",
+          "query": "How do I authorize the Android USB debugging connection?",
+          "relevant": [
+            "h-android"
+          ],
+          "returned": [
+            "h-cache",
+            "h-docker",
+            "h-online",
+            "h-empty",
+            "h-tags"
+          ],
+          "latencyMs": 0.09046499999999469,
+          "recallAt5": 0,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0.5058277984469537,
+          "topCosine": 0.7498113457549188
+        },
+        {
+          "id": "h-ssh-q",
+          "category": "negation",
+          "query": "Can an SSH private key be committed?",
+          "relevant": [
+            "h-ssh"
+          ],
+          "returned": [
+            "h-ssh",
+            "h-timeout",
+            "h-empty",
+            "h-cache",
+            "h-npm-old"
+          ],
+          "latencyMs": 0.07922800000000052,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.721087963006983,
+          "topCosine": 0.721087963006983
+        },
+        {
+          "id": "h-exit",
+          "category": "exact",
+          "query": "参数错误 退出码 stderr",
+          "relevant": [
+            "h-help"
+          ],
+          "returned": [
+            "h-help",
+            "h-port-old",
+            "h-port-copy",
+            "h-port-current",
+            "h-npm"
+          ],
+          "latencyMs": 0.08220300000000691,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.8115280805601011,
+          "topCosine": 0.8115280805601011
+        },
+        {
+          "id": "h-publish",
+          "category": "english",
+          "query": "When does npm receive a release?",
+          "relevant": [
+            "h-npm",
+            "h-npm-old"
+          ],
+          "returned": [
+            "h-npm-old",
+            "h-npm",
+            "h-cache",
+            "h-tags",
+            "h-deploy"
+          ],
+          "latencyMs": 0.08313400000000115,
+          "recallAt5": 1,
+          "precisionAt5": 0.4,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7000290126325567,
+          "topCosine": 0.7000290126325567
+        },
+        {
+          "id": "h-private",
+          "category": "negation",
+          "query": "公开发行包能包含真实用户记忆吗？",
+          "relevant": [
+            "h-privacy"
+          ],
+          "returned": [
+            "h-privacy",
+            "h-storage",
+            "h-upgrade",
+            "h-date",
+            "h-backup"
+          ],
+          "latencyMs": 0.1139090000000067,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7463557163812875,
+          "topCosine": 0.7463557163812875
+        },
+        {
+          "id": "h-service",
+          "category": "paraphrase",
+          "query": "What happens when the vector API hangs?",
+          "relevant": [
+            "h-timeout"
+          ],
+          "returned": [
+            "h-deploy",
+            "h-cache",
+            "h-npm",
+            "h-docker",
+            "h-tags"
+          ],
+          "latencyMs": 0.08022900000000277,
+          "recallAt5": 0,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0.5417882051257542,
+          "topCosine": 0.6318107788356222
+        },
+        {
+          "id": "h-priority",
+          "category": "exact",
+          "query": "环境变量 配置文件 默认值",
+          "relevant": [
+            "h-config"
+          ],
+          "returned": [
+            "h-config",
+            "h-upgrade",
+            "h-tags",
+            "h-ssh",
+            "h-npm-old"
+          ],
+          "latencyMs": 0.0830140000000057,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.8351744761801341,
+          "topCosine": 0.8351744761801341
+        },
+        {
+          "id": "h-cache-q",
+          "category": "english",
+          "query": "Will a running client see another agent edit a memory?",
+          "relevant": [
+            "h-cache",
+            "h-storage"
+          ],
+          "returned": [
+            "h-tags",
+            "h-cache",
+            "h-empty",
+            "h-npm",
+            "h-docker"
+          ],
+          "latencyMs": 0.09593300000000227,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 0.5,
+          "bestRelevantCosine": 0.7430239337820673,
+          "topCosine": 0.7443929475930066
+        },
+        {
+          "id": "h-upgrade-q",
+          "category": "paraphrase",
+          "query": "更新库结构时原记忆和标签怎么办？",
+          "relevant": [
+            "h-upgrade"
+          ],
+          "returned": [
+            "h-upgrade",
+            "h-pagination",
+            "h-date",
+            "h-storage",
+            "h-backup"
+          ],
+          "latencyMs": 0.10730999999999824,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6640730781854686,
+          "topCosine": 0.6640730781854686
+        },
+        {
+          "id": "h-time-q",
+          "category": "paraphrase",
+          "query": "编辑正文是否改变记录标识和创建日期？",
+          "relevant": [
+            "h-date"
+          ],
+          "returned": [
+            "h-date",
+            "h-backup",
+            "h-pagination",
+            "h-port-old",
+            "h-upgrade"
+          ],
+          "latencyMs": 0.10994300000000123,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7238388271752254,
+          "topCosine": 0.7238388271752254
+        },
+        {
+          "id": "h-history",
+          "category": "conflict_history",
+          "query": "项目丙的调试端口改过吗？",
+          "relevant": [
+            "h-port-current",
+            "h-port-old",
+            "h-port-copy"
+          ],
+          "returned": [
+            "h-port-copy",
+            "h-port-current",
+            "h-port-old",
+            "h-android",
+            "h-help"
+          ],
+          "latencyMs": 0.08359499999998832,
+          "recallAt5": 1,
+          "precisionAt5": 0.6,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7266587140512399,
+          "topCosine": 0.7266587140512399
+        },
+        {
+          "id": "h-upload",
+          "category": "negation",
+          "query": "Should local memory be sent to telemetry automatically?",
+          "relevant": [
+            "h-online",
+            "h-privacy"
+          ],
+          "returned": [
+            "h-online",
+            "h-npm",
+            "h-empty",
+            "h-docker",
+            "h-ssh"
+          ],
+          "latencyMs": 0.07830699999999524,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7521303969025974,
+          "topCosine": 0.7521303969025974
+        },
+        {
+          "id": "h-restore-q",
+          "category": "english",
+          "query": "What happens to existing rows after restore fails?",
+          "relevant": [
+            "h-restore"
+          ],
+          "returned": [
+            "h-restore",
+            "h-npm",
+            "h-ssh",
+            "h-timeout",
+            "h-docker"
+          ],
+          "latencyMs": 0.07945800000000247,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7702173862310759,
+          "topCosine": 0.7702173862310759
+        },
+        {
+          "id": "h-lite",
+          "category": "paraphrase",
+          "query": "不用模型也能搜吗？模型会重复下载吗？",
+          "relevant": [
+            "h-model"
+          ],
+          "returned": [
+            "h-model",
+            "h-privacy",
+            "h-upgrade",
+            "h-npm-old",
+            "h-empty"
+          ],
+          "latencyMs": 0.09799599999999486,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6555476253548027,
+          "topCosine": 0.6555476253548027
+        },
+        {
+          "id": "h-tags-q",
+          "category": "english",
+          "query": "How is a project tag different from the writing agent?",
+          "relevant": [
+            "h-tags"
+          ],
+          "returned": [
+            "h-tags",
+            "h-npm",
+            "h-npm-old",
+            "h-ssh",
+            "h-docker"
+          ],
+          "latencyMs": 0.11420099999999422,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7965230994378697,
+          "topCosine": 0.7965230994378697
+        },
+        {
+          "id": "h-filter",
+          "category": "exact",
+          "query": "全库过滤 分页",
+          "relevant": [
+            "h-pagination"
+          ],
+          "returned": [
+            "h-pagination",
+            "h-npm-old",
+            "h-empty",
+            "h-ssh",
+            "h-restore"
+          ],
+          "latencyMs": 0.06062000000000012,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6841261913044271,
+          "topCosine": 0.6841261913044271
+        },
+        {
+          "id": "h-whitespace",
+          "category": "english",
+          "query": "Can a blank note create a database or make a model request?",
+          "relevant": [
+            "h-empty"
+          ],
+          "returned": [
+            "h-empty",
+            "h-tags",
+            "h-npm",
+            "h-docker",
+            "h-cache"
+          ],
+          "latencyMs": 0.0991379999999964,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7634664864545951,
+          "topCosine": 0.7634664864545951
+        },
+        {
+          "id": "h-unrelated-1",
+          "category": "unrelated",
+          "query": "意大利面通常煮几分钟？",
+          "relevant": [],
+          "returned": [],
+          "latencyMs": 0.07453200000000493,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.3369301590359846
+        },
+        {
+          "id": "h-unrelated-2",
+          "category": "unrelated",
+          "query": "What are Saturn rings made of?",
+          "relevant": [],
+          "returned": [
+            "h-online",
+            "h-cache",
+            "h-restore",
+            "h-npm-old",
+            "h-npm"
+          ],
+          "latencyMs": 0.07442000000000348,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.6598222452835131
+        },
+        {
+          "id": "h-unrelated-3",
+          "category": "unrelated",
+          "query": "鲸鱼每年如何迁徙？",
+          "relevant": [],
+          "returned": [],
+          "latencyMs": 0.06370499999999879,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.34097497783866854
+        },
+        {
+          "id": "h-unrelated-4",
+          "category": "unrelated",
+          "query": "How do I tune a classical violin?",
+          "relevant": [],
+          "returned": [
+            "h-npm",
+            "h-docker",
+            "h-online",
+            "h-empty",
+            "h-cache"
+          ],
+          "latencyMs": 0.08520699999999692,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.6161634354973711
+        }
+      ]
+    },
+    {
+      "mode": "hybrid+graph",
+      "threshold": null,
+      "metrics": {
+        "recallAt5": 0.8125,
+        "precisionAt5": 0.2083333333333334,
+        "mrrAt5": 0.8472222222222223,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.2397370000000052,
+        "p95Ms": 0.4332849999999979
+      },
+      "cases": [
+        {
+          "id": "h-json",
+          "category": "exact",
+          "query": "批量删除 JSON 备份",
+          "relevant": [
+            "h-backup"
+          ],
+          "returned": [
+            "h-backup",
+            "h-upgrade",
+            "h-help",
+            "h-docker",
+            "h-restore"
+          ],
+          "latencyMs": 2.6183709999999962,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.737498367263529,
+          "topCosine": 0.737498367263529
+        },
+        {
+          "id": "h-backup-q",
+          "category": "paraphrase",
+          "query": "误清理记忆后如何恢复编号和时间？",
+          "relevant": [
+            "h-backup",
+            "h-restore"
+          ],
+          "returned": [
+            "h-backup",
+            "h-date",
+            "h-upgrade",
+            "h-pagination",
+            "h-privacy"
+          ],
+          "latencyMs": 0.29141400000000317,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7050407634209391,
+          "topCosine": 0.7050407634209391
+        },
+        {
+          "id": "h-db-q",
+          "category": "paraphrase",
+          "query": "不同助手的记忆要怎样存放才能互相看到？",
+          "relevant": [
+            "h-storage",
+            "h-cache"
+          ],
+          "returned": [
+            "h-storage",
+            "h-upgrade",
+            "h-privacy",
+            "h-backup",
+            "h-date"
+          ],
+          "latencyMs": 0.2651549999999929,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6197633706096127,
+          "topCosine": 0.6197633706096127
+        },
+        {
+          "id": "h-cross-db",
+          "category": "cross_language",
+          "query": "Where do agents store their shared long-term memories?",
+          "relevant": [
+            "h-storage",
+            "h-cache"
+          ],
+          "returned": [
+            "h-restore",
+            "h-online",
+            "h-cache",
+            "h-docker",
+            "h-timeout"
+          ],
+          "latencyMs": 0.18174100000000237,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 0.3333333333333333,
+          "bestRelevantCosine": 0.6850005733704604,
+          "topCosine": 0.6850005733704604
+        },
+        {
+          "id": "h-compose",
+          "category": "english",
+          "query": "How should the development container keep its data?",
+          "relevant": [
+            "h-docker"
+          ],
+          "returned": [
+            "h-cache",
+            "h-docker",
+            "h-tags",
+            "h-npm",
+            "h-deploy"
+          ],
+          "latencyMs": 0.3044240000000116,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 0.5,
+          "bestRelevantCosine": 0.6897403304515265,
+          "topCosine": 0.7045033106853668
+        },
+        {
+          "id": "h-shop",
+          "category": "paraphrase",
+          "query": "Is a health endpoint enough to accept a shop deployment?",
+          "relevant": [
+            "h-deploy"
+          ],
+          "returned": [
+            "h-deploy",
+            "h-npm",
+            "h-tags",
+            "h-docker",
+            "h-empty"
+          ],
+          "latencyMs": 0.3252039999999994,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7144042537525499,
+          "topCosine": 0.7144042537525499
+        },
+        {
+          "id": "h-adb",
+          "category": "exact",
+          "query": "adb USB 调试授权",
+          "relevant": [
+            "h-android"
+          ],
+          "returned": [
+            "h-android",
+            "h-port-copy",
+            "h-port-old",
+            "h-port-current",
+            "h-npm-old"
+          ],
+          "latencyMs": 0.25546099999999683,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6822070041612941,
+          "topCosine": 0.6822070041612941
+        },
+        {
+          "id": "h-adb-cross",
+          "category": "cross_language",
+          "query": "How do I authorize the Android USB debugging connection?",
+          "relevant": [
+            "h-android"
+          ],
+          "returned": [
+            "h-cache",
+            "h-docker",
+            "h-online",
+            "h-empty",
+            "h-tags"
+          ],
+          "latencyMs": 0.2331269999999961,
+          "recallAt5": 0,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0.5058277984469537,
+          "topCosine": 0.7498113457549188
+        },
+        {
+          "id": "h-ssh-q",
+          "category": "negation",
+          "query": "Can an SSH private key be committed?",
+          "relevant": [
+            "h-ssh"
+          ],
+          "returned": [
+            "h-ssh",
+            "h-timeout",
+            "h-empty",
+            "h-cache",
+            "h-npm-old"
+          ],
+          "latencyMs": 0.2526060000000001,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.721087963006983,
+          "topCosine": 0.721087963006983
+        },
+        {
+          "id": "h-exit",
+          "category": "exact",
+          "query": "参数错误 退出码 stderr",
+          "relevant": [
+            "h-help"
+          ],
+          "returned": [
+            "h-help",
+            "h-port-old",
+            "h-port-copy",
+            "h-port-current",
+            "h-npm"
+          ],
+          "latencyMs": 0.33077299999999354,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.8115280805601011,
+          "topCosine": 0.8115280805601011
+        },
+        {
+          "id": "h-publish",
+          "category": "english",
+          "query": "When does npm receive a release?",
+          "relevant": [
+            "h-npm",
+            "h-npm-old"
+          ],
+          "returned": [
+            "h-npm-old",
+            "h-npm",
+            "h-cache",
+            "h-tags",
+            "h-deploy"
+          ],
+          "latencyMs": 0.35180400000000134,
+          "recallAt5": 1,
+          "precisionAt5": 0.4,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7000290126325567,
+          "topCosine": 0.7000290126325567
+        },
+        {
+          "id": "h-private",
+          "category": "negation",
+          "query": "公开发行包能包含真实用户记忆吗？",
+          "relevant": [
+            "h-privacy"
+          ],
+          "returned": [
+            "h-privacy",
+            "h-storage",
+            "h-upgrade",
+            "h-date",
+            "h-backup"
+          ],
+          "latencyMs": 0.25650199999999757,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7463557163812875,
+          "topCosine": 0.7463557163812875
+        },
+        {
+          "id": "h-service",
+          "category": "paraphrase",
+          "query": "What happens when the vector API hangs?",
+          "relevant": [
+            "h-timeout"
+          ],
+          "returned": [
+            "h-deploy",
+            "h-cache",
+            "h-npm",
+            "h-docker",
+            "h-tags"
+          ],
+          "latencyMs": 0.23291700000000048,
+          "recallAt5": 0,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0.5417882051257542,
+          "topCosine": 0.6318107788356222
+        },
+        {
+          "id": "h-priority",
+          "category": "exact",
+          "query": "环境变量 配置文件 默认值",
+          "relevant": [
+            "h-config"
+          ],
+          "returned": [
+            "h-config",
+            "h-upgrade",
+            "h-tags",
+            "h-ssh",
+            "h-npm-old"
+          ],
+          "latencyMs": 0.21624300000000574,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.8351744761801341,
+          "topCosine": 0.8351744761801341
+        },
+        {
+          "id": "h-cache-q",
+          "category": "english",
+          "query": "Will a running client see another agent edit a memory?",
+          "relevant": [
+            "h-cache",
+            "h-storage"
+          ],
+          "returned": [
+            "h-tags",
+            "h-cache",
+            "h-empty",
+            "h-npm",
+            "h-docker"
+          ],
+          "latencyMs": 0.200618999999989,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 0.5,
+          "bestRelevantCosine": 0.7430239337820673,
+          "topCosine": 0.7443929475930066
+        },
+        {
+          "id": "h-upgrade-q",
+          "category": "paraphrase",
+          "query": "更新库结构时原记忆和标签怎么办？",
+          "relevant": [
+            "h-upgrade"
+          ],
+          "returned": [
+            "h-upgrade",
+            "h-pagination",
+            "h-date",
+            "h-storage",
+            "h-backup"
+          ],
+          "latencyMs": 0.24117999999999995,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6640730781854686,
+          "topCosine": 0.6640730781854686
+        },
+        {
+          "id": "h-time-q",
+          "category": "paraphrase",
+          "query": "编辑正文是否改变记录标识和创建日期？",
+          "relevant": [
+            "h-date"
+          ],
+          "returned": [
+            "h-date",
+            "h-backup",
+            "h-pagination",
+            "h-port-old",
+            "h-upgrade"
+          ],
+          "latencyMs": 0.30810900000000174,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7238388271752254,
+          "topCosine": 0.7238388271752254
+        },
+        {
+          "id": "h-history",
+          "category": "conflict_history",
+          "query": "项目丙的调试端口改过吗？",
+          "relevant": [
+            "h-port-current",
+            "h-port-old",
+            "h-port-copy"
+          ],
+          "returned": [
+            "h-port-copy",
+            "h-port-current",
+            "h-port-old",
+            "h-android",
+            "h-help"
+          ],
+          "latencyMs": 0.2397370000000052,
+          "recallAt5": 1,
+          "precisionAt5": 0.6,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7266587140512399,
+          "topCosine": 0.7266587140512399
+        },
+        {
+          "id": "h-upload",
+          "category": "negation",
+          "query": "Should local memory be sent to telemetry automatically?",
+          "relevant": [
+            "h-online",
+            "h-privacy"
+          ],
+          "returned": [
+            "h-online",
+            "h-npm",
+            "h-empty",
+            "h-docker",
+            "h-ssh"
+          ],
+          "latencyMs": 0.1761629999999883,
+          "recallAt5": 0.5,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7521303969025974,
+          "topCosine": 0.7521303969025974
+        },
+        {
+          "id": "h-restore-q",
+          "category": "english",
+          "query": "What happens to existing rows after restore fails?",
+          "relevant": [
+            "h-restore"
+          ],
+          "returned": [
+            "h-restore",
+            "h-npm",
+            "h-ssh",
+            "h-timeout",
+            "h-docker"
+          ],
+          "latencyMs": 0.16258200000000045,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7702173862310759,
+          "topCosine": 0.7702173862310759
+        },
+        {
+          "id": "h-lite",
+          "category": "paraphrase",
+          "query": "不用模型也能搜吗？模型会重复下载吗？",
+          "relevant": [
+            "h-model"
+          ],
+          "returned": [
+            "h-model",
+            "h-privacy",
+            "h-upgrade",
+            "h-npm-old",
+            "h-empty"
+          ],
+          "latencyMs": 0.18847999999999843,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6555476253548027,
+          "topCosine": 0.6555476253548027
+        },
+        {
+          "id": "h-tags-q",
+          "category": "english",
+          "query": "How is a project tag different from the writing agent?",
+          "relevant": [
+            "h-tags"
+          ],
+          "returned": [
+            "h-tags",
+            "h-npm",
+            "h-npm-old",
+            "h-ssh",
+            "h-docker"
+          ],
+          "latencyMs": 0.2228319999999968,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7965230994378697,
+          "topCosine": 0.7965230994378697
+        },
+        {
+          "id": "h-filter",
+          "category": "exact",
+          "query": "全库过滤 分页",
+          "relevant": [
+            "h-pagination"
+          ],
+          "returned": [
+            "h-pagination",
+            "h-npm-old",
+            "h-empty",
+            "h-ssh",
+            "h-restore"
+          ],
+          "latencyMs": 0.19620199999999954,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.6841261913044271,
+          "topCosine": 0.6841261913044271
+        },
+        {
+          "id": "h-whitespace",
+          "category": "english",
+          "query": "Can a blank note create a database or make a model request?",
+          "relevant": [
+            "h-empty"
+          ],
+          "returned": [
+            "h-empty",
+            "h-tags",
+            "h-npm",
+            "h-docker",
+            "h-cache"
+          ],
+          "latencyMs": 0.23288700000000517,
+          "recallAt5": 1,
+          "precisionAt5": 0.2,
+          "reciprocalRank": 1,
+          "bestRelevantCosine": 0.7634664864545951,
+          "topCosine": 0.7634664864545951
+        },
+        {
+          "id": "h-unrelated-1",
+          "category": "unrelated",
+          "query": "意大利面通常煮几分钟？",
+          "relevant": [],
+          "returned": [],
+          "latencyMs": 0.4332849999999979,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.3369301590359846
+        },
+        {
+          "id": "h-unrelated-2",
+          "category": "unrelated",
+          "query": "What are Saturn rings made of?",
+          "relevant": [],
+          "returned": [
+            "h-online",
+            "h-cache",
+            "h-restore",
+            "h-npm-old",
+            "h-npm"
+          ],
+          "latencyMs": 0.21491000000000327,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.6598222452835131
+        },
+        {
+          "id": "h-unrelated-3",
+          "category": "unrelated",
+          "query": "鲸鱼每年如何迁徙？",
+          "relevant": [],
+          "returned": [],
+          "latencyMs": 0.4175519999999864,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.34097497783866854
+        },
+        {
+          "id": "h-unrelated-4",
+          "category": "unrelated",
+          "query": "How do I tune a classical violin?",
+          "relevant": [],
+          "returned": [
+            "h-npm",
+            "h-docker",
+            "h-online",
+            "h-empty",
+            "h-cache"
+          ],
+          "latencyMs": 0.17988800000000538,
+          "recallAt5": null,
+          "precisionAt5": 0,
+          "reciprocalRank": 0,
+          "bestRelevantCosine": 0,
+          "topCosine": 0.6161634354973711
+        }
+      ]
+    }
+  ]
+}

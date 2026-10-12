@@ -7,24 +7,24 @@
 
 | 文件 | 职责与验证 |
 | --- | --- |
-| `.github/workflows/publish.yml` | main 推送、版本判定、Linux/Windows 检查、发行物验证、OIDC 发布 |
+| `.github/workflows/publish.yml` | main 推送、版本判定、源码回归、五平台原生/安装、质量/性能门禁、资产验证、OIDC 发布 |
 | `scripts/release/plan.mjs` 与测试 | 公开的发布资格规则；main、仓库、正式版本、幂等与防版本回退 |
 | `scripts/release/package.mjs` | 打包同一份 tarball，隔离 npm 安装后运行 CLI 和真实双进程 MCP |
 | `bun.lock` | 与已有 package.json 的依赖分类保持一致，支持 frozen-lockfile |
-| `.github/workflows/ci.yml` | 保留普通 main/PR 的单测、类型检查及 CLI 冒烟 |
+| `.github/workflows/ci.yml` | main/PR 单测、类型检查、五平台发行物和 Product acceptance 总门禁 |
 
-无运行时/API/数据库迁移；需要 GitHub `npm` 环境和 npm Trusted Publisher 的账户配置。
+原生资产自带运行时并沿用同一 SQLite 实现；需要 GitHub `npm` 环境和 npm Trusted Publisher 的账户配置。
 上述模块地图已审查，发布策略按用户确认采用手动升版本、自动发布。
 
 ## 自动发布流程
 
-`main push → 判定版本 → Linux/Windows 单测与类型检查 → tarball 安装验证 → OIDC 发布 → 核对 npm latest/integrity`。
+`main push → 判定版本 → 完整 CI（源码、五平台原生/无 Bun 安装、真实模型留出质量和磁盘 MCP 性能）→ 核对同一 tarball/资产 → GitHub Release → OIDC npm 发布 → 核对 latest/integrity/provenance → 公开 npm/GitHub 重装`。
 
 - 主分支固定为 `main`，仓库固定为 `bilbilmyc/memobox`；没有 PR、tag 或其他分支的发布入口。
 - 新正式版本必须大于 npm latest；已有版本跳过，registry 查询故障明确失败，不伪装成未发布。
-- Linux 与 Windows 都必须通过回归和实际包测试。测试覆盖中文保存/检索、版本、备份回导、两个长驻 MCP 双向共享以及 CLI 删除可见性。
-- 发布阶段下载已验收的 Linux tarball，核对版本、commit SHA、SHA-512 和文件清单；不重新打包，也不运行打包后的生命周期脚本。
-- 发布串行执行，正式标签为 `latest`；发布前再核对版本，防止重复发布或把 latest 回退。registry 入库延迟只重试查询，不重试 publish。
+- Linux/Windows 源码回归与五个平台原机验收全部通过。覆盖中文操作、真实模型与端点、配置/Pi 扩展、维护恢复、双 MCP、退出信号和无 Bun 的同一 npm tarball。Linux 另执行冻结留出集质量及 100/1000/10000 条磁盘 MCP 新旧对比，任何失败阻止发布。
+- 发布阶段下载 npm-candidate 和五个平台资产，核对版本、commit SHA、tarball SHA-512、原生/压缩 SHA256 及各平台真实模型/端点/Pi 验收 receipt；不重新编译或打包。GitHub Release 先以 draft 上传，只补缺失资产，下载核对字节后公开；标签必须指向当前提交，已有冲突资产不能覆盖。
+- 发布串行执行，正式标签为 `latest`；发布前再核对版本，防止重复发布或把 latest 回退。registry 入库延迟只重试查询，不重试 publish。公开重装运行正常 postinstall，并核对官方 tarball 完整性和实际 CLI/MCP 产品流程。
 - GitHub `npm` 环境只允许 `main` 类型为 branch 的规则；该环境不设置人工审批，因此合法新版本可以全自动发布。
 - 只在发布 job 授予 `id-token: write`，使用短期 OIDC 身份，不设置 NPM_TOKEN。依赖安装及检查 job 没有发布身份权限。
 
@@ -64,9 +64,9 @@ git push origin HEAD
 # 创建 PR；审查并等待 Windows/Linux CI 全绿后合并到 main
 ```
 
-日常功能及发版准备均在开发分支完成，经 PR 测试/审查后合并到 main。`codex/**` 推送和面向 main 的 PR 会运行 Windows/Linux 源码与实际安装包验证。普通提交未升版本时，发布流程跳过；开发中的 `2.6.3-dev.0` 不会发布。
+日常功能及发版准备均在开发分支完成，经 PR 测试/审查后合并到 main。`codex/**` 推送和面向 main 的 PR 会运行 Windows/Linux 源码与实际安装包验证。普通提交未升版本时，发布流程跳过；dev/beta 发行物只保存在 Actions artifacts，不进入 npm latest。
 
-不要为测试流水线临时升正式版本或发布空壳版本。当前功能开发还需完成统一产品验收后，才能将 dev 改为正式版本。
+不要为测试流水线临时升正式版本或发布空壳版本。统一 beta 产品验收通过后才准备正式版本 PR；审查问题修复和 Product acceptance 全绿后合并。
 
 ## 本地验证
 
@@ -77,3 +77,7 @@ git push origin HEAD
 GitHub 实际验证：[CI](https://github.com/bilbilmyc/memobox/actions/runs/38231920695) 通过，136 个测试、415 次断言、类型检查及 CLI 冒烟通过；[发布工作流](https://github.com/bilbilmyc/memobox/actions/runs/38231920678) 从 main 正确触发，并将已发布的 2.6.1 判为幂等跳过。GitHub 当前源代码与尚未提交的 2.6.3 开发工作区分别验收，不能混用测试数量。
 
 npm 账号绑定已完成，正式 latest 仍为 2.6.2，本次没有发布新版本。第一个新正式版本的 OIDC 发布及 Linux/Windows 发行物矩阵将在版本号更新后的 main 推送中执行；现有绑定成功和跳过测试不代表该发布路径已实际运行。
+
+## 2.6.3 完整门禁
+
+开发版完整 CI [38265380668](https://github.com/bilbilmyc/memobox/actions/runs/38265380668) 的 15 项检查通过，包括五个平台真实可选模型、Node 安装及质量/性能。正式版本在最新 PR 和 main 发布工作流再次执行相同门禁。Trusted Publisher 保持原 publish.yml / npm 环境绑定，不需要长期 token。发行验收与原始数据见 [开发记录](./DEVELOPMENT-2.6.3.md)。
