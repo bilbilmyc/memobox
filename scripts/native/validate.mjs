@@ -69,7 +69,7 @@ export async function validateProduct(command, prefix, { root = mkdtempSync(join
   if (lite) {
     env.MEMOBOX_RUNTIME_PATH = extra.MEMOBOX_RUNTIME_PATH ?? join(root, "optional-runtime");
     env.MEMOBOX_MODELS_PATH = extra.MEMOBOX_MODELS_PATH ?? join(root, "models");
-    await cli(["model", "enable", "--lite"], 0, 240000);
+    await cli(["model", "enable", "--lite", "--debug"], 0, 240000);
     const check = JSON.parse(await cli(["doctor", "--json", "--strict"])); assert.equal(check.model.mode, "local"); assert.equal(check.database.vectors.missing, 0);
     const local = mcpClient(command, prefix, env);
     try {

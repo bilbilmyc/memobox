@@ -16,7 +16,7 @@ async function load() {
       process.stderr.write(JSON.stringify({ progress: "加载内置模型；首次下载后复用本地缓存…" }) + "\n");
       extractor = await pipeline("feature-extraction", "Xenova/bge-small-zh-v1.5", { dtype: "q8" });
       return extractor;
-    } catch { process.stderr.write(JSON.stringify({ progress: "模型源加载失败，尝试备用源…" }) + "\n"); }
+    } catch (error) { process.stderr.write(JSON.stringify({ progress: "模型源加载失败，尝试备用源…", diagnostic: String(error) }) + "\n"); }
   }
   throw Error("Local model unavailable");
 }
