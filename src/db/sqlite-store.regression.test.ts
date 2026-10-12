@@ -23,7 +23,6 @@ async function withDatabase(
   } finally {
     for (const store of stores) store.close();
     stores.length = 0;
-    Bun.gc(true);
     // 仅允许清理由本测试创建的临时目录；Windows 句柄释放有短暂延迟。
     if (dirname(resolve(dir)) !== resolve(tmpdir()) || !basename(dir).startsWith("memobox-regression-")) {
       throw new Error("测试目录超出临时目录范围");

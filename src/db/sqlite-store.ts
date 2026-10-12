@@ -227,7 +227,9 @@ export class SQLiteStore implements MemoryStore {
    * Windows 下不关句柄会锁住库文件）。
    */
   close(): void {
-    this.client.close();
+    // Drizzle 的 prepare 语句可能仍被缓存引用；严格关闭会一并 finalize，
+    // 立即释放 Windows 文件句柄，不等全进程 GC 才允许备份/替换/测试清理。
+    this.client.close(true);
     this.kwIndex = null;
     this.vecCache = null;
   }

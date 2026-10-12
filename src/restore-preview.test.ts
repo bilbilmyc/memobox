@@ -38,7 +38,6 @@ test("恢复预览验证整份备份，区分新增、重复与冲突，不建�
     expect(err.join("\n")).toContain("不支持的备份版本");
   } finally {
     if (previous === undefined) delete process.env.MEMOBOX_DB_PATH; else process.env.MEMOBOX_DB_PATH = previous;
-    Bun.gc(true);
     if (resolve(directory).startsWith(resolve(tmpdir()) + "/") || resolve(directory).startsWith(resolve(tmpdir()) + "\\")) rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
