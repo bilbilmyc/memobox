@@ -3,6 +3,9 @@
 给 AI 编程 agent 的本地长期记忆：**一个 CLI 工具 + stdio MCP 服务**，
 SQLite 单文件存储，零服务、零端口、零依赖。
 
+当前开发/合并规则以 `AGENTS.md` 为准：开发分支 → 本地测试与发行物验收 → PR Windows/Linux CI → 审查 → 合并 `main`。
+统一 2.6.3 进度见 `ROADMAP.md` 和 `docs/DEVELOPMENT-2.6.3.md`；npm 2.6.2 已发布，自动发布配置见 `docs/AUTO-RELEASE.md`。下面的历史记录保留当时状态，不代表当前发行状态。
+
 ## 决策日志（2026-10-11 grilling 会话产物，改主意先改这里）
 
 | 节点 | 决定 |

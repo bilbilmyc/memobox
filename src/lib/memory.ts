@@ -3,6 +3,9 @@
  * 避免相互 import 成环。
  */
 
+import type { RankedMemory, SearchReport } from "./search-report";
+import { rrfContribution } from "./search-report";
+
 export type Memory = {
   id: string;
   content: string;
@@ -33,6 +36,23 @@ export type EvalStats = {
 
 export type Label = { memoryId: string; relevant: boolean };
 
+export type MemoryQuery = {
+  text?: string; kind?: string; entity?: string; source?: string;
+  since?: number; limit?: number; offset?: number;
+};
+export type SearchScope = Pick<MemoryQuery, "kind" | "entity" | "source" | "since">;
+/** 范围条件按 AND 组合；项目用已有实体标签表达，无需数据库迁移。 */
+export function matchesSearchScope(memory: Memory, scope: SearchScope): boolean {
+  return (scope.kind === undefined || (memory.kind ?? "fact") === scope.kind) &&
+    (scope.source === undefined || memory.source === scope.source) &&
+    (scope.since === undefined || memory.createdAt >= scope.since) &&
+    (scope.entity === undefined || (memory.entities ?? []).some(e => e.toLowerCase() === scope.entity!.toLowerCase()));
+}
+export type BackfillReport = {
+  inspected: number; needed: number; processed: number;
+  succeeded: number; skipped: number; failed: number;
+};
+
 export type Benchmark = {
   labeledQueries: number;
   /** 已标注查询的 recall@k 均值；无有效标注时为 null */
@@ -50,14 +70,18 @@ export interface MemoryStore {
     entities?: string[];
     source?: string;
   }): Promise<Memory>;
-  search(query: string, limit?: number): Promise<Memory[]>;
+  search(query: string, limit?: number, scope?: SearchScope): Promise<Memory[]>;
+  /** 与普通检索共用快照、排名和日志，额外返回匹配贡献及安全的降级原因。 */
+  searchDetailed(query: string, limit?: number, scope?: SearchScope): Promise<SearchReport>;
   list(limit: number): Promise<Memory[]>;
+  /** 全库参数化过滤，先过滤再分页，创建时间和 id 保证稳定顺序。 */
+  query(filters: MemoryQuery): Promise<Memory[]>;
   recentQueries(limit?: number): Promise<QueryLogEntry[]>;
   stats(): Promise<{ total: number; searches: number }>;
   get(id: string): Promise<Memory | null>;
   update(
     id: string,
-    patch: { content?: string; kind?: string; entities?: string[] }
+    patch: { content?: string; kind?: string; entities?: string[]; source?: string }
   ): Promise<Memory | null>;
   forget(id: string): Promise<boolean>;
   topEntities(limit?: number): Promise<EntityCount[]>;
@@ -86,13 +110,13 @@ export interface MemoryStore {
     items: Memory[]
   ): Promise<{ imported: number; skipped: number }>;
   /**
-   * 补算向量（v2.4）：给所有缺 embedding 的记忆现算并落库——
+   * 补算向量：给缺失、损坏或不属于当前模型空间的记忆现算并落库——
    * `memobox model enable` 之后让存量记忆也能被语义检索命中。
-   * 返回补算成功的条数。keyword 模式 / 桩实现直接返回 0。
+   * 报告检查、需要补算、处理、成功、跳过和失败数量，不把失败伪装成无需补算。
    */
   backfillEmbeddings(
     onProgress?: (done: number, total: number) => void
-  ): Promise<number>;
+  ): Promise<BackfillReport>;
 }
 
 /**
@@ -100,10 +124,11 @@ export interface MemoryStore {
  * v2.6 起接受 ArrayLike——BLOB 向量解码出的 Float32Array 视图零拷贝直传。
  */
 export function cosineSim(a: ArrayLike<number>, b: ArrayLike<number>): number {
+  if (a.length !== b.length) throw new RangeError("embedding dimensions do not match");
   let dot = 0;
   let na = 0;
   let nb = 0;
-  const n = Math.min(a.length, b.length);
+  const n = a.length;
   for (let i = 0; i < n; i++) {
     dot += a[i] * b[i];
     na += a[i] * a[i];
@@ -157,6 +182,8 @@ const EXACT_BOOST = 5;
 /** KeywordIndex 内部的预计算文档 */
 type KeywordDoc = {
   m: Memory;
+  /** 同分同时间时沿用索引插入顺序，不能由查询词遍历顺序决定。 */
+  order: number;
   /** term → 出现次数（查询期 O(1) 查词频，不再线性扫 token 列表） */
   tf: Map<string, number>;
   /** 文档长度（token 数） */
@@ -178,12 +205,18 @@ type KeywordDoc = {
 export class KeywordIndex {
   private docs = new Map<string, KeywordDoc>();
   private df = new Map<string, number>();
+  private entityDocs = new Map<string, Set<string>>();
+  private termDocs = new Map<string, Set<string>>();
   private totalLen = 0;
+  private nextOrder = 0;
 
   rebuild(rows: Memory[]): void {
     this.docs.clear();
     this.df.clear();
+    this.entityDocs.clear();
+    this.termDocs.clear();
     this.totalLen = 0;
+    this.nextOrder = 0;
     for (const m of rows) this.add(m);
   }
 
@@ -194,6 +227,7 @@ export class KeywordIndex {
     for (const t of tokens) tf.set(t, (tf.get(t) ?? 0) + 1);
     const doc: KeywordDoc = {
       m,
+      order: this.nextOrder++,
       tf,
       dl: tokens.length,
       entityTokens: new Set((m.entities ?? []).flatMap((e) => tokenize(e))),
@@ -201,6 +235,12 @@ export class KeywordIndex {
       textLower: m.content.toLowerCase(),
     };
     this.docs.set(m.id, doc);
+    // 查询词倒排表按需建立；写入只维护已缓存词，避免冷启动全量扩张。
+    for (const [term, ids] of this.termDocs) if (tf.has(term) || doc.entityTokens.has(term)) ids.add(m.id);
+    for (const entity of new Set(doc.entityRaw)) {
+      const ids = this.entityDocs.get(entity) ?? new Set<string>();
+      ids.add(m.id); this.entityDocs.set(entity, ids);
+    }
     for (const t of tf.keys()) this.df.set(t, (this.df.get(t) ?? 0) + 1);
     this.totalLen += doc.dl;
   }
@@ -208,27 +248,69 @@ export class KeywordIndex {
   remove(id: string): void {
     const doc = this.docs.get(id);
     if (!doc) return;
+    for (const ids of this.termDocs.values()) ids.delete(id);
     for (const t of doc.tf.keys()) {
       const n = (this.df.get(t) ?? 1) - 1;
       if (n <= 0) this.df.delete(t);
       else this.df.set(t, n);
     }
     this.totalLen -= doc.dl;
+    for (const entity of new Set(doc.entityRaw)) {
+      const ids = this.entityDocs.get(entity)!;
+      ids.delete(id); if (!ids.size) this.entityDocs.delete(entity);
+    }
     this.docs.delete(id);
   }
 
-  search(query: string, limit: number): Memory[] {
+  /** 精确实体倒排索引；图谱扩展无需每次读出全库并解析 JSON。 */
+  linked(anchors: string[]): Memory[] {
+    const ids = new Set<string>();
+    for (const entity of anchors) for (const id of this.entityDocs.get(entity.toLowerCase()) ?? []) ids.add(id);
+    return [...ids].map(id => this.docs.get(id)!.m);
+  }
+
+  search(query: string, limit: number, allow?: (memory: Memory) => boolean): Memory[] {
+    return this.match(query, limit, allow, false) as Memory[];
+  }
+
+  rank(query: string, limit: number, allow?: (memory: Memory) => boolean): RankedMemory[] {
+    return this.match(query, limit, allow, true) as RankedMemory[];
+  }
+
+  private match(query: string, limit: number, allow: ((memory: Memory) => boolean) | undefined, explain: boolean): (Memory | RankedMemory)[] {
     const terms = [...new Set(tokenize(query))];
     const N = this.docs.size;
-    if (terms.length === 0 || N === 0) return [];
-    const avgdl = this.totalLen / N || 1;
-    const idf = (t: string) =>
-      Math.log(
-        1 + (N - (this.df.get(t) ?? 0) + 0.5) / ((this.df.get(t) ?? 0) + 0.5)
-      );
     const q = query.trim().toLowerCase();
-    const out: { m: Memory; score: number }[] = [];
-    for (const doc of this.docs.values()) {
+    if (!q || N === 0) return [];
+    const exactEligible = q.length >= 2 || terms.length === 0;
+    const candidates = new Set<string>();
+    let scanAll = false;
+    for (const term of terms) {
+      if ((this.df.get(term) ?? 0) >= N / 2) { scanAll = true; break; }
+      let ids = this.termDocs.get(term);
+      if (!ids) {
+        ids = new Set();
+        for (const doc of this.docs.values()) if (doc.tf.has(term) || doc.entityTokens.has(term)) ids.add(doc.m.id);
+        if (this.termDocs.size >= 128) this.termDocs.delete(this.termDocs.keys().next().value!);
+        this.termDocs.set(term, ids);
+      }
+      for (const id of ids) candidates.add(id);
+      if (candidates.size >= N / 2) { scanAll = true; break; }
+    }
+    // 实体子串和全文精确串仍保留，倒排索引不能漏掉 ports/port 等旧行为。
+    if (!scanAll) for (const [entity, ids] of this.entityDocs) {
+      if (terms.some(t => entity.includes(t) || t.includes(entity))) for (const id of ids) candidates.add(id);
+      if (candidates.size >= N / 2) { scanAll = true; break; }
+    }
+    if (!scanAll && exactEligible) for (const doc of this.docs.values()) if (doc.textLower.includes(q)) candidates.add(doc.m.id);
+    const avgdl = this.totalLen / N || 1;
+    // IDF 对同一个查询词是常量，不能在每份文档上重复计算 log。
+    const weights = new Map(terms.map(t => [t, Math.log(1 + (N - (this.df.get(t) ?? 0) + 0.5) / ((this.df.get(t) ?? 0) + 0.5))]));
+    const idf = (t: string) => weights.get(t)!;
+    const out: { m: Memory; score: number; order: number }[] = [];
+    const documents = scanAll ? this.docs.values() : [...candidates].map(id => this.docs.get(id)!);
+    for (const doc of documents) {
+      if (allow && !allow(doc.m)) continue;
       let score = 0;
       for (const t of terms) {
         const f = doc.tf.get(t) ?? 0;
@@ -245,13 +327,13 @@ export class KeywordIndex {
           score += idf(t) * ENTITY_BOOST;
         }
       }
-      if (q.length >= 2 && doc.textLower.includes(q)) score += EXACT_BOOST;
-      if (score > 0) out.push({ m: doc.m, score });
+      if (exactEligible && doc.textLower.includes(q)) score += EXACT_BOOST;
+      if (score > 0) out.push({ m: doc.m, score, order: doc.order });
     }
     return out
-      .sort((a, b) => b.score - a.score || b.m.createdAt - a.m.createdAt)
+      .sort((a, b) => b.score - a.score || b.m.createdAt - a.m.createdAt || a.order - b.order)
       .slice(0, limit)
-      .map((x) => x.m);
+      .map((x) => explain ? { memory: x.m, score: x.score } : x.m);
   }
 }
 
@@ -262,11 +344,12 @@ export class KeywordIndex {
 export function scoreMemories(
   rows: Memory[],
   query: string,
-  limit: number
+  limit: number,
+  allow?: (memory: Memory) => boolean
 ): Memory[] {
   const index = new KeywordIndex();
   index.rebuild(rows);
-  return index.search(query, limit);
+  return index.search(query, limit, allow);
 }
 
 /**
@@ -275,14 +358,12 @@ export function scoreMemories(
  * 关键词命中的精确匹配与语义命中的近义改写都能进榜，互为补充；
  * 单路为空时自然退化为另一路的排名。
  */
-const RRF_K = 60;
-
 export function rrfFuse(rankings: Memory[][], limit: number): Memory[] {
   const scores = new Map<string, { m: Memory; s: number }>();
   for (const ranking of rankings) {
     ranking.forEach((m, i) => {
       const cur = scores.get(m.id) ?? { m, s: 0 };
-      cur.s += 1 / (RRF_K + i + 1);
+      cur.s += rrfContribution(i + 1);
       scores.set(m.id, cur);
     });
   }

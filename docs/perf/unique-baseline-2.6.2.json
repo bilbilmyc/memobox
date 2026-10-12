@@ -1,0 +1,78 @@
+{
+  "version": "2.6.2",
+  "uniqueEntities": true,
+  "bun": "1.4.2",
+  "platform": "win32",
+  "arch": "x64",
+  "data": "synthetic Chinese; 512-dimensional deterministic provider; in-memory SQLite; no network; RSS is cumulative per-process snapshot, not a per-store peak",
+  "scenarios": [
+    {
+      "size": 1000,
+      "mode": "keyword",
+      "importMs": 652.6348,
+      "coldSearchMs": 13.162700000000086,
+      "cases": [
+        {
+          "query": "独特编号999",
+          "p50Ms": 0.7880999999999858,
+          "p95Ms": 2.2185000000000628
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 0.5028999999999542,
+          "p95Ms": 1.3361999999999625
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 0.18060000000002674,
+          "p95Ms": 0.3632000000000062
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 0.8304000000000542,
+          "p95Ms": 1.5638999999999896
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 1.6071000000000595,
+          "p95Ms": 2.522199999999998
+        }
+      ],
+      "rssBytes": 113192960
+    },
+    {
+      "size": 1000,
+      "mode": "hybrid",
+      "importMs": 577.1235,
+      "coldSearchMs": 22.34620000000018,
+      "cases": [
+        {
+          "query": "独特编号999",
+          "p50Ms": 1.0980999999999312,
+          "p95Ms": 1.6208999999998923
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 0.9857999999999265,
+          "p95Ms": 1.4446000000000367
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 0.7273999999999887,
+          "p95Ms": 0.8790000000001328
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 1.1047000000000935,
+          "p95Ms": 1.4312000000002172
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 3.4068999999999505,
+          "p95Ms": 5.519700000000057
+        }
+      ],
+      "rssBytes": 160329728
+    }
+  ]
+}

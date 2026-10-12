@@ -7,5 +7,5 @@ import { join } from "node:path";
  * 客户端配置里可以用 env 块指向任意路径。
  */
 export function defaultDbPath(): string {
-  return process.env.MEMOBOX_DB_PATH ?? join(homedir(), ".memobox", "memobox.db");
+  return process.env.MEMOBOX_DB_PATH || join(homedir(), ".memobox", "memobox.db");
 }

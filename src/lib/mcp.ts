@@ -4,25 +4,52 @@
  */
 import { z } from "zod";
 import type { MemoryStore } from "./memory-store";
+import { MEMORY_KINDS } from "./memory-validation";
+import { VERSION } from "../version";
+import { redactDetails } from "./diagnostics";
 
 const PROTOCOL_VERSION = "2025-06-18";
-const SERVER_INFO = { name: "memobox", version: "2.6.1" };
+const SERVER_INFO = { name: "memobox", version: VERSION };
+const nonBlank = z.string().regex(/\S/, "Must contain non-whitespace text");
+const scopeShape = { kind: z.enum(MEMORY_KINDS).optional(), entity: nonBlank.optional(), source: nonBlank.optional(),
+  since: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).describe("Created at or after this Unix timestamp in milliseconds").optional() };
 
 const saveArgs = z.object({
-  content: z.string().min(1),
-  kind: z.enum(["fact", "preference", "event", "decision"]).optional(),
+  content: z.string().refine(s => Boolean(s.trim()), "Memory content must contain non-whitespace text"),
+  kind: z.enum(MEMORY_KINDS).optional(),
   entities: z.array(z.string()).optional(),
   source: z.string().optional(),
 });
 
 const searchArgs = z.object({
-  query: z.string().min(1),
+  query: nonBlank,
+  ...scopeShape,
   limit: z.number().int().min(1).max(50).default(5),
-});
+  explain: z.boolean().optional(),
+}).strict();
 
 const entitiesArgs = z.object({
   limit: z.number().int().min(1).max(100).default(20),
 });
+
+const idArgs = z.object({ id: nonBlank }).strict();
+const updateArgs = z.object({ id: nonBlank, content: nonBlank.optional(), kind: z.enum(MEMORY_KINDS).optional(),
+  entities: z.array(z.string()).optional(), source: nonBlank.optional() }).strict()
+  .refine(v => [v.content, v.kind, v.entities, v.source].some(value => value !== undefined), "Provide at least one field to update");
+const queryArgs = z.object({ text: nonBlank.optional(), ...scopeShape,
+  limit: z.number().int().min(1).max(1000).default(20), offset: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0) }).strict();
+const memoryOutput = z.object({ id: z.string(), content: z.string(), kind: z.string().optional(), entities: z.array(z.string()).optional(), source: z.string().optional(), createdAt: z.number() });
+const rankOutput = z.object({ rank: z.number().int().positive(), score: z.number() });
+const explanationOutput = z.object({ mode: z.enum(["keyword", "hybrid"]),
+  semantic: z.object({ status: z.enum(["disabled", "used", "unavailable", "no_matches"]), reason: z.enum(["embedding_failed", "zero_vector", "no_compatible_vectors", "below_threshold"]).optional() }),
+  hits: z.array(z.object({ id: z.string(), keyword: rankOutput.optional(), semantic: rankOutput.optional(), rrfScore: z.number().optional(), graph: z.object({ entities: z.array(z.string()) }).optional() })),
+});
+const newTools = [
+  { name: "memory_get", description: "Read one complete memory by its stable ID. Returns a memory object; missing IDs are tool errors.", args: idArgs, output: z.object({ memory: memoryOutput }), readOnly: true, destructive: false },
+  { name: "memory_update", description: "Revise a memory's content, kind, entity tags or source. Preserves its ID and creation time. Supply at least one changed field; entities=[] clears tags.", args: updateArgs, output: z.object({ memory: memoryOutput }), readOnly: false, destructive: true },
+  { name: "memory_forget", description: "Delete one memory by ID and its entity links. Missing IDs are tool errors. This permanently removes the memory.", args: idArgs, output: z.object({ id: z.string(), deleted: z.boolean() }), readOnly: false, destructive: true },
+  { name: "memory_query", description: "Query the full memory database using AND filters and stable pagination. Text is a substring, entity a full tag, kind/source exact; since is Unix milliseconds. Does not use semantic ranking.", args: queryArgs, output: z.object({ memories: z.array(memoryOutput) }), readOnly: true, destructive: false },
+] as const;
 
 export const TOOLS = [
   {
@@ -53,15 +80,9 @@ export const TOOLS = [
   },
   {
     name: "memory_search",
-    description: "Search stored memories by meaning.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: { type: "string" },
-        limit: { type: "number", default: 5 },
-      },
-      required: ["query"],
-    },
+    description: "Search stored memories with optional AND scope filters. Entity is a full project/tag name, kind/source exact, since Unix milliseconds. Scope applies before keyword/semantic ranking and graph expansion. Set explain=true for ranks, scores, graph links and safe semantic fallback reasons.",
+    inputSchema: z.toJSONSchema(searchArgs, { io: "input" }),
+    outputSchema: z.toJSONSchema(z.object({ memories: z.array(memoryOutput), explanation: explanationOutput.optional() })),
   },
   {
     name: "memory_entities",
@@ -74,6 +95,9 @@ export const TOOLS = [
       },
     },
   },
+  ...newTools.map(tool => ({ name: tool.name, description: tool.description,
+    inputSchema: z.toJSONSchema(tool.args, { io: "input" }), outputSchema: z.toJSONSchema(tool.output),
+    annotations: { readOnlyHint: tool.readOnly, destructiveHint: tool.destructive, idempotentHint: true, openWorldHint: false } })),
 ] as const;
 
 export type RpcResult = { status: number; body?: unknown };
@@ -94,6 +118,11 @@ const toolError = (id: unknown, message: string): RpcResult =>
     content: [{ type: "text", text: message }],
     isError: true,
   });
+
+/** 同时提供结构化结果和等价 JSON 文本，兼容只读取文本的客户端。 */
+const structured = (id: unknown, value: Record<string, unknown>) => ok(id, {
+  content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value,
+});
 
 /** 处理一条原始 JSON-RPC 消息体（对给定的 store） */
 export async function handleRpcBody(
@@ -142,6 +171,27 @@ export async function handleRpcBody(
       const name = params?.name;
       const rawArgs = params?.arguments ?? {};
       try {
+        if (name === "memory_get" || name === "memory_forget") {
+          const parsed = idArgs.safeParse(rawArgs);
+          if (!parsed.success) return toolError(id, parsed.error.message);
+          if (name === "memory_get") {
+            const memory = await store.get(parsed.data.id);
+            return memory ? structured(id, { memory }) : toolError(id, "memory not found: " + parsed.data.id);
+          }
+          return await store.forget(parsed.data.id) ? structured(id, { id: parsed.data.id, deleted: true }) : toolError(id, "memory not found: " + parsed.data.id);
+        }
+        if (name === "memory_update") {
+          const parsed = updateArgs.safeParse(rawArgs);
+          if (!parsed.success) return toolError(id, parsed.error.message);
+          const { id: memoryId, ...patch } = parsed.data;
+          const memory = await store.update(memoryId, patch);
+          return memory ? structured(id, { memory }) : toolError(id, "memory not found: " + memoryId);
+        }
+        if (name === "memory_query") {
+          const parsed = queryArgs.safeParse(rawArgs);
+          if (!parsed.success) return toolError(id, parsed.error.message);
+          return structured(id, { memories: await store.query(parsed.data) });
+        }
         if (name === "memory_save") {
           const parsed = saveArgs.safeParse(rawArgs);
           if (!parsed.success) return toolError(id, parsed.error.message);
@@ -162,11 +212,11 @@ export async function handleRpcBody(
         if (name === "memory_search") {
           const parsed = searchArgs.safeParse(rawArgs);
           if (!parsed.success) return toolError(id, parsed.error.message);
-          const hits = await store.search(
-            parsed.data.query,
-            parsed.data.limit
-          );
+          const { query, limit, explain, ...scope } = parsed.data;
+          if (explain) return structured(id, await store.searchDetailed(query, limit, scope));
+          const hits = await store.search(query, limit, scope);
           return ok(id, {
+            structuredContent: { memories: hits },
             content: [
               {
                 type: "text",
@@ -206,7 +256,7 @@ export async function handleRpcBody(
         // 存储后端挂了等情况：按工具错误返回，而不是 RPC 错误
         return toolError(
           id,
-          `storage unavailable: ${e instanceof Error ? e.message : String(e)}`
+          "storage unavailable: " + redactDetails(e instanceof Error ? e.message : String(e)).replaceAll("[已隐藏]", "[redacted]")
         );
       }
     }

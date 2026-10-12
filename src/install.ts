@@ -17,6 +17,7 @@ import { dirname } from "node:path";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { redactDetails } from "./lib/diagnostics";
 
 export type ClientKind = "claude" | "codex" | "pi";
 
@@ -28,9 +29,14 @@ export type ServerEntry = {
 
 /** 会被透传给被拉起进程的 env（语义检索配置，装了就带上） */
 const PASSTHROUGH_ENV = [
+  "MEMOBOX_DB_PATH",
+  "MEMOBOX_CONFIG_PATH",
   "EMBEDDING_API_BASE",
   "EMBEDDING_API_KEY",
   "EMBEDDING_MODEL",
+  "EMBEDDING_DIM",
+  "EMBEDDING_TIMEOUT_MS",
+  "HF_ENDPOINT",
 ] as const;
 
 /**
@@ -51,16 +57,16 @@ export function serverEntry(): ServerEntry {
   };
 }
 
-/** TOML 字面量字符串（单引号）：反斜杠不用转义，只需防单引号 */
-const tomlLiteral = (s: string) => `'${s.replaceAll("'", "\\'")}'`;
+/** TOML 基本字符串兼容 JSON 的字符串转义，单引号路径也可解析。 */
+const tomlString = (s: string) => JSON.stringify(s);
 
 /** 生成 codex config.toml 的追加块（纯函数，测试直接断言文本） */
 export function codexTomlBlock(entry: ServerEntry): string {
   const lines = [
     "",
     "[mcp_servers.memobox]",
-    `command = ${tomlLiteral(entry.command)}`,
-    `args = [${entry.args.map(tomlLiteral).join(", ")}]`,
+    `command = ${tomlString(entry.command)}`,
+    `args = [${entry.args.map(tomlString).join(", ")}]`,
   ];
   if (entry.env) {
     const pairs = Object.entries(entry.env)
@@ -166,23 +172,26 @@ export async function installClaude(
   entry: ServerEntry
 ): Promise<InstallResult> {
   const args = claudeAddArgs(entry);
-  const proc = Bun.spawn({
-    cmd: ["claude", ...args],
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, stderr, code] = await Promise.all([
+  const manual = () => {
+    const quote = (s: string) => process.platform === "win32" ? `'${s.replaceAll("'", "''")}'` : `'${s.replaceAll("'", "'\\''")}'`;
+    const command = redactDetails("claude " + args.map(quote).join(" "), [entry.env?.EMBEDDING_API_KEY ?? ""]);
+    return "请先安装或检查 Claude Code 命令。手动执行（敏感值已隐藏，请自行填写）：\n  " + command;
+  };
+  let proc;
+  try { proc = Bun.spawn({ cmd: ["claude", ...args], stdin: "ignore", stdout: "pipe", stderr: "pipe" }); }
+  catch { return { ok: false, message: "无法启动 Claude Code。" + manual() }; }
+  const [, , code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
   if (code === 0) {
-    return { ok: true, message: `claude mcp add 成功：${stdout.trim() || "memobox 已加入（user 级）"}` };
+    return { ok: true, message: "已接入 Claude Code（用户级配置）" };
   }
   // claude 不在 PATH 或执行失败——给等价手动命令
   return {
     ok: false,
-    message: `无法执行 claude（退出码 ${code}：${stderr.trim().split("\n")[0]}）。手动执行：\n  claude ${args.join(" ")}`,
+    message: `Claude Code 接入失败（退出码 ${code}）。${manual()}`,
   };
 }
 

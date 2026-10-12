@@ -1,0 +1,878 @@
+{
+  "date": "2026-10-12",
+  "timezone": "Asia/Shanghai",
+  "version": "2.6.1",
+  "platform": "Windows x64",
+  "runtime": "Bun 1.4.2",
+  "method": "npm installed package, isolated HOME/USERPROFILE/config/database; deterministic local HTTP embedding stub",
+  "scope": "Audit only; no production implementation changes or new publication",
+  "summary": {
+    "total": 86,
+    "passed": 65,
+    "failed": 21
+  },
+  "existing_tests": {
+    "passed": 146,
+    "failed": 0,
+    "typecheck": true
+  },
+  "cases": [
+    {
+      "name": "帮助：serve",
+      "args": [
+        "serve",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：save",
+      "args": [
+        "save",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：search",
+      "args": [
+        "search",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：list",
+      "args": [
+        "list",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：query",
+      "args": [
+        "query",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：get",
+      "args": [
+        "get",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：sql",
+      "args": [
+        "sql",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：forget",
+      "args": [
+        "forget",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：entities",
+      "args": [
+        "entities",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：stats",
+      "args": [
+        "stats",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：path",
+      "args": [
+        "path",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：doctor",
+      "args": [
+        "doctor",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：model",
+      "args": [
+        "model",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：export",
+      "args": [
+        "export",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：import",
+      "args": [
+        "import",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：import-codex",
+      "args": [
+        "import-codex",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：install",
+      "args": [
+        "install",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：version",
+      "args": [
+        "version",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "帮助：help",
+      "args": [
+        "help",
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "总帮助 --help",
+      "args": [
+        "--help"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "短帮助 -h",
+      "args": [
+        "-h"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "version 子命令",
+      "args": [
+        "version"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "短版本 -v",
+      "args": [
+        "-v"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "--version 应只打印版本且不建库",
+      "args": [
+        "--version"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "",
+      "stderr": "[memobox] stdio MCP 服务就绪，库文件：<临时审查目录>\\clean\\版本 参数不该建库.db\n"
+    },
+    {
+      "name": "未知命令中文报错",
+      "args": [
+        "不存在的命令"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "未知命令的 --help 应报错",
+      "args": [
+        "不存在的命令",
+        "--help"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "memobox 2.6.1 —— 给 AI agent 的本地长期记忆（SQLite，零服务）\n\n用法：memobox <命令> [参数]\n\n命令：\n  memobox serve\n      启动 stdio MCP 服务（无参数时等价；供 Claude Code / Codex / pi 拉起）\n  memobox save <文本> [--kind fact|preference|event|decision] [--entities a,b] [--source 名字]\n      存一条记忆\n  memobox search <查询> [--limit 5]\n      检索记忆（关键词/语义自动，支持中文整句）\n  memobox list [--limit 20]\n      按时间倒序列出记忆\n  memobox query [文本] [--kind k] [--entity e] [--source s] [--since 7d|12h|30m|ISO日期] [--limit 20] [--json]\n      结构化过滤查询（条件 AND 组合）\n  memobox get <id>\n      查看单条记忆（完整 JSON）\n  memobox sql \"SELECT ...\" [--json]\n      只读 SQL 直查 SQLite 库文件\n  memobox forget <id>\n      删除一条记忆（实体边级联清理）\n  memobox entities [--limit 20]\n      实体标签统计（记忆图谱入口）\n  memobox stats\n      库统计（记忆数 / 检索数）\n  memobox path\n      打印库文件位置\n  memobox doctor\n      自检：库文件 / 检索模式 / 三家客户端接线状态\n  memobox model <status|enable|disable|reindex> [--model bge-m3] [--lite]\n      语义检索管理：enable 用 Ollama；enable --lite 用内置小模型；reindex 按当前配置重算缺失或不兼容的向量\n  memobox export <file.json>\n      全量备份（memobox-backup v1 格式，向量不入备份可重算）\n  memobox import <file.json>\n      导入备份（幂等：相同 id 跳过）\n  memobox import-codex [--file <MEMORY.md路径>] [--dry-run]\n      迁移 Codex 原生记忆（~/.codex/memories/，任务+用户画像；重复导入幂等）\n  mem",
+      "stderr": ""
+    },
+    {
+      "name": "缺少 save 文本",
+      "args": [
+        "save"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "缺少 search 查询",
+      "args": [
+        "search"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "空库 list 提示",
+      "args": [
+        "list"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "空白内容应拒绝",
+      "args": [
+        "save",
+        "   "
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "已保存记忆 7ea66044-d2cf-43af-83ef-c95e30d70f1f\n",
+      "stderr": ""
+    },
+    {
+      "name": "已保存空白记录的备份应能回导",
+      "args": [
+        "import",
+        "<临时审查目录>\\clean\\仅空白记忆备份.json"
+      ],
+      "pass": false,
+      "code": 1,
+      "stdout": "",
+      "stderr": "导入失败：第 1 条记忆缺少 content\n"
+    },
+    {
+      "name": "中文内容、实体、来源保存",
+      "args": [
+        "save",
+        "项目甲的开发端口为 3100，中文路径和 emoji 🙂 可以保存。",
+        "--kind",
+        "decision",
+        "--entities",
+        "项目甲,开发环境",
+        "--source",
+        "中文终端"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "中文整句关键词检索",
+      "args": [
+        "search",
+        "开发端口"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "不存在的检索词",
+      "args": [
+        "search",
+        "不存在的独特检索词xyz"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "list 中文内容",
+      "args": [
+        "list",
+        "--limit",
+        "20"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "中文实体统计",
+      "args": [
+        "entities"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "stats 中文统计",
+      "args": [
+        "stats"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "path 输出自定义中文路径",
+      "args": [
+        "path"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "完整 JSON 中文不乱码",
+      "args": [
+        "get",
+        "837f5983-9a57-4e72-8d77-c19e898ca2b6"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "不存在的 get",
+      "args": [
+        "get",
+        "不存在-id"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "query 全部过滤选项",
+      "args": [
+        "query",
+        "开发端口",
+        "--kind",
+        "decision",
+        "--entity",
+        "项目甲",
+        "--source",
+        "中文终端",
+        "--since",
+        "7d",
+        "--limit",
+        "1",
+        "--json"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "query 人用表头中文",
+      "args": [
+        "query",
+        "开发端口"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "id                                    created     kind      entities  source  content\n837f5983-9a57-4e72-8d77-c19e898ca2b6  2026-10-12  decision  项目甲,开发环境  中文终端    项目甲的开发端口为 3100，中文路径和 emoji 🙂 可以保存。\n",
+      "stderr": ""
+    },
+    {
+      "name": "search 人用实体标签中文",
+      "args": [
+        "search",
+        "开发端口"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "[837f5983-9a57-4e72-8d77-c19e898ca2b6] 项目甲的开发端口为 3100，中文路径和 emoji 🙂 可以保存。 (entities: 项目甲, 开发环境)\n",
+      "stderr": ""
+    },
+    {
+      "name": "只读 SQL 中文结果",
+      "args": [
+        "sql",
+        "SELECT content FROM memories WHERE source='中文终端'",
+        "--json"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "写 SQL 被拒绝",
+      "args": [
+        "sql",
+        "DELETE FROM memories"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "SQL 语法错误有中文说明",
+      "args": [
+        "sql",
+        "SELECT FROM memories"
+      ],
+      "pass": false,
+      "code": 1,
+      "stdout": "",
+      "stderr": "near \"FROM\": syntax error\n"
+    },
+    {
+      "name": "非法日期中文报错",
+      "args": [
+        "query",
+        "--since",
+        "错日期"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "中文带空格路径导出",
+      "args": [
+        "export",
+        "<临时审查目录>\\clean\\中文 备份.json"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "中文带空格路径导入",
+      "args": [
+        "import",
+        "<临时审查目录>\\clean\\中文 备份.json"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "导入后的中文保真",
+      "args": [
+        "get",
+        "837f5983-9a57-4e72-8d77-c19e898ca2b6"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "重复导入跳过",
+      "args": [
+        "import",
+        "<临时审查目录>\\clean\\中文 备份.json"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "坏备份中文报错",
+      "args": [
+        "import",
+        "<临时审查目录>\\clean\\配置 文件.json"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "导出缺少目录中文说明",
+      "args": [
+        "export",
+        "<临时审查目录>\\clean\\不存在目录\\备份.json"
+      ],
+      "pass": false,
+      "code": 1,
+      "stdout": "",
+      "stderr": "[memobox] fatal: Error: ENOENT: no such file or directory, open '<临时审查目录>\\clean\\不存在目录\\备份.json'\n"
+    },
+    {
+      "name": "Codex 中文 dry-run",
+      "args": [
+        "import-codex",
+        "--file",
+        "<临时审查目录>\\clean\\中文 Codex\\MEMORY.md",
+        "--dry-run"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "Codex 中文迁移",
+      "args": [
+        "import-codex",
+        "--file",
+        "<临时审查目录>\\clean\\中文 Codex\\MEMORY.md"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "Codex 迁移幂等",
+      "args": [
+        "import-codex",
+        "--file",
+        "<临时审查目录>\\clean\\中文 Codex\\MEMORY.md"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "install 通用接法",
+      "args": [
+        "install"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "install 应透传自定义库、配置、维度",
+      "args": [
+        "install"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "任意 stdio MCP 客户端通用接法（command + args）：\n  command: <Bun可执行文件>\n  args:    <npm安装包目录>\\src\\cli.ts\n  env:     EMBEDDING_MODEL（值取自当前环境，一并透传）\n内置一键接入：memobox install <claude|codex|pi>\n",
+      "stderr": ""
+    },
+    {
+      "name": "doctor 中文自检",
+      "args": [
+        "doctor"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "model status 状态中文",
+      "args": [
+        "model",
+        "status"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "model disable 临时配置",
+      "args": [
+        "model",
+        "disable"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "keyword 下 reindex 明确拒绝",
+      "args": [
+        "model",
+        "reindex"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "未知 model 子命令中文说明",
+      "args": [
+        "model",
+        "不存在"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "子命令帮助应具体到 model enable",
+      "args": [
+        "model",
+        "enable",
+        "--help"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "memobox model <status|enable|disable|reindex> [--model bge-m3] [--lite]\n      语义检索管理：enable 用 Ollama；enable --lite 用内置小模型；reindex 按当前配置重算缺失或不兼容的向量\n",
+      "stderr": ""
+    },
+    {
+      "name": "缺少选项值应拒绝",
+      "args": [
+        "search",
+        "开发端口",
+        "--limit"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "[837f5983-9a57-4e72-8d77-c19e898ca2b6] 项目甲的开发端口为 3100，中文路径和 emoji 🙂 可以保存。 (entities: 项目甲, 开发环境)\n[codex-fda62b8e7574] 中文项目 — 保存中文结论\n[success]\n范围：中文迁移验收。 (entities: 中文实体, 开发环境)\n",
+      "stderr": ""
+    },
+    {
+      "name": "拼错选项应拒绝",
+      "args": [
+        "list",
+        "--limti",
+        "1"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "[codex-user-profile] 这是中文用户画像。 (entities: user-profile)\n[codex-fda62b8e7574] 中文项目 — 保存中文结论\n[success]\n范围：中文迁移验收。 (entities: 中文实体, 开发环境)\n[837f5983-9a57-4e72-8d77-c19e898ca2b6] 项目甲的开发端口为 3100，中文路径和 emoji 🙂 可以保存。 (entities: 项目甲, 开发环境)\n",
+      "stderr": ""
+    },
+    {
+      "name": "等号赋值 --limit=1",
+      "args": [
+        "query",
+        "--limit=1",
+        "--json"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "[\n  {\n    \"id\": \"codex-user-profile\",\n    \"content\": \"这是中文用户画像。\",\n    \"kind\": \"preference\",\n    \"entities\": [\n      \"user-profile\"\n    ],\n    \"source\": \"codex\",\n    \"createdAt\": 1791781471000\n  },\n  {\n    \"id\": \"codex-fda62b8e7574\",\n    \"content\": \"中文项目 — 保存中文结论\\n[success]\\n范围：中文迁移验收。\",\n    \"kind\": \"event\",\n    \"entities\": [\n      \"中文实体\",\n      \"开发环境\"\n    ],\n    \"source\": \"codex\",\n    \"createdAt\": 1791781470999\n  },\n  {\n    \"id\": \"837f5983-9a57-4e72-8d77-c19e898ca2b6\",\n    \"content\": \"项目甲的开发端口为 3100，中文路径和 emoji 🙂 可以保存。\",\n    \"kind\": \"decision\",\n    \"entities\": [\n      \"项目甲\",\n      \"开发环境\"\n    ],\n    \"source\": \"中文终端\",\n    \"createdAt\": 1791781468326\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "布尔选项不应吞掉中文查询",
+      "args": [
+        "query",
+        "--json",
+        "开发端口"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "[\n  {\n    \"id\": \"codex-user-profile\",\n    \"content\": \"这是中文用户画像。\",\n    \"kind\": \"preference\",\n    \"entities\": [\n      \"user-profile\"\n    ],\n    \"source\": \"codex\",\n    \"createdAt\": 1791781471000\n  },\n  {\n    \"id\": \"codex-fda62b8e7574\",\n    \"content\": \"中文项目 — 保存中文结论\\n[success]\\n范围：中文迁移验收。\",\n    \"kind\": \"event\",\n    \"entities\": [\n      \"中文实体\",\n      \"开发环境\"\n    ],\n    \"source\": \"codex\",\n    \"createdAt\": 1791781470999\n  },\n  {\n    \"id\": \"837f5983-9a57-4e72-8d77-c19e898ca2b6\",\n    \"content\": \"项目甲的开发端口为 3100，中文路径和 emoji 🙂 可以保存。\",\n    \"kind\": \"decision\",\n    \"entities\": [\n      \"项目甲\",\n      \"开发环境\"\n    ],\n    \"source\": \"中文终端\",\n    \"createdAt\": 1791781468326\n  }\n]\n",
+      "stderr": ""
+    },
+    {
+      "name": "负数 limit 应拒绝",
+      "args": [
+        "list",
+        "--limit",
+        "-1"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "[codex-user-profile] 这是中文用户画像。 (entities: user-profile)\n[codex-fda62b8e7574] 中文项目 — 保存中文结论\n[success]\n范围：中文迁移验收。 (entities: 中文实体, 开发环境)\n[837f5983-9a57-4e72-8d77-c19e898ca2b6] 项目甲的开发端口为 3100，中文路径和 emoji 🙂 可以保存。 (entities: 项目甲, 开发环境)\n",
+      "stderr": ""
+    },
+    {
+      "name": "非数字 limit 应拒绝",
+      "args": [
+        "search",
+        "开发端口",
+        "--limit",
+        "abc"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "[837f5983-9a57-4e72-8d77-c19e898ca2b6] 项目甲的开发端口为 3100，中文路径和 emoji 🙂 可以保存。 (entities: 项目甲, 开发环境)\n[codex-fda62b8e7574] 中文项目 — 保存中文结论\n[success]\n范围：中文迁移验收。 (entities: 中文实体, 开发环境)\n",
+      "stderr": ""
+    },
+    {
+      "name": "kind 非法取值应拒绝",
+      "args": [
+        "save",
+        "非法类型示例",
+        "--kind",
+        "乱填"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "已保存记忆 688e6cb9-ad5c-4972-8db9-6d70d875a758\n",
+      "stderr": ""
+    },
+    {
+      "name": "-- 分隔后的文本应可保存",
+      "args": [
+        "save",
+        "--",
+        "--literal"
+      ],
+      "pass": false,
+      "code": 1,
+      "stdout": "",
+      "stderr": "用法：memobox save <文本> [--kind ...] [--entities a,b]\n"
+    },
+    {
+      "name": "删除用例临时保存",
+      "args": [
+        "save",
+        "删除验收专用"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "forget 未知选项不得静默删除",
+      "args": [
+        "forget",
+        "09cc6dd8-00a3-4cb9-92b9-90e9d201538d",
+        "--dry-run"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "已遗忘记忆 09cc6dd8-00a3-4cb9-92b9-90e9d201538d\n",
+      "stderr": ""
+    },
+    {
+      "name": "正常 forget 中文提示",
+      "args": [
+        "forget",
+        "837f5983-9a57-4e72-8d77-c19e898ca2b6"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "forget 不存在 id 中文报错",
+      "args": [
+        "forget",
+        "不存在-id"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "lite 依赖缺失的中文安装指引",
+      "args": [
+        "model",
+        "enable",
+        "--lite"
+      ],
+      "pass": true,
+      "code": 1
+    },
+    {
+      "name": "2002 条备份导入",
+      "args": [
+        "import",
+        "<临时审查目录>\\clean\\超过2000条.json"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "query 应找到第2000条以前的记忆",
+      "args": [
+        "query",
+        "最早的唯一旧记忆",
+        "--json"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "[]\n",
+      "stderr": ""
+    },
+    {
+      "name": "search 能找到同一条旧记忆",
+      "args": [
+        "search",
+        "最早的唯一旧记忆"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "reindex 真进程加本地嵌入桩",
+      "args": [
+        "model",
+        "reindex"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "再次 reindex 应为零",
+      "args": [
+        "model",
+        "reindex"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "model disable 删除临时配置",
+      "args": [
+        "model",
+        "disable"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "失败补算用例保存",
+      "args": [
+        "save",
+        "失败补算验收"
+      ],
+      "pass": true,
+      "code": 0
+    },
+    {
+      "name": "补算全部失败应报告失败并非零退出",
+      "args": [
+        "model",
+        "reindex"
+      ],
+      "pass": false,
+      "code": 0,
+      "stdout": "  补算向量 0/1\n已补算 0 条记忆的向量（匹配当前模型的向量保留）\n",
+      "stderr": ""
+    },
+    {
+      "name": "仅 npm/Node 环境不能运行当前包（验证运行时要求）",
+      "args": [
+        "version"
+      ],
+      "pass": true,
+      "code": 1
+    }
+  ],
+  "presentation_probes": {
+    "table": "content  source\n甲        alpha\na        beta",
+    "columnStarts": [
+      10,
+      9
+    ],
+    "splitSurrogate": true,
+    "toml": "\n[mcp_servers.memobox]\ncommand = 'C:\\用户目录\\O\\'Brien\\bun.exe'\nargs = ['D:\\中文 项目\\src\\cli.ts']\n",
+    "toml_valid": false,
+    "toml_error": "Expected newline or end of document after a statement (at line 3, column 23)"
+  },
+  "standalone_probe": {
+    "version": "2.6.1",
+    "bytes": 86290432,
+    "path_excludes_bun": true,
+    "chinese_cli": true,
+    "two_mcp_processes": true,
+    "installer_output": "任意 stdio MCP 客户端通用接法（command + args）：\n  command: <临时审查目录>\\memobox-probe.exe\n  args:    B:\\~BUN\\root\\cli.ts\n内置一键接入：memobox install <claude|codex|pi>"
+  }
+}

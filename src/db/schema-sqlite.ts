@@ -31,6 +31,8 @@ export const memories = sqliteTable(
     source: text("source").notNull().default("mcp"),
     entities: text("entities").notNull().default("[]"),
     embedding: float32Blob("embedding"), // Float32 序列化 | null（无向量）
+    /** 模型、维度、端点与处理版本的指纹；旧库未知来源的向量为 null。 */
+    embeddingSpace: text("embedding_space"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },

@@ -60,6 +60,7 @@ export function createLocalEmbedder(
   return {
     model: LOCAL_EMBED_MODEL,
     dimensions: LOCAL_EMBED_DIM,
+    space: "transformers-feature-extraction-v1:mean:normalize:q8",
     async embed(text: string): Promise<number[]> {
       if (!extractorPromise) {
         // 失败要能重试：清掉缓存的 promise

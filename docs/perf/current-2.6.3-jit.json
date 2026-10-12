@@ -1,0 +1,67 @@
+{
+  "version": "2.6.3-dev.0",
+  "bun": "1.4.2",
+  "platform": "win32",
+  "arch": "x64",
+  "data": "synthetic Chinese; 512-dimensional deterministic provider; in-memory SQLite; no network; RSS is cumulative per-process snapshot, not a per-store peak",
+  "scenarios": [
+    {
+      "size": 10000,
+      "mode": "keyword",
+      "importMs": 3564.8825,
+      "coldSearchMs": 106.53829999999971,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 7.752100000000155,
+          "p95Ms": 11.47360000000026
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 6.763699999999517,
+          "p95Ms": 10.307699999999386
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 3.123899999999594,
+          "p95Ms": 3.8405000000002474
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 7.616700000000492,
+          "p95Ms": 9.108299999999872
+        }
+      ],
+      "rssBytes": 292474880
+    },
+    {
+      "size": 10000,
+      "mode": "hybrid",
+      "importMs": 3653.763099999999,
+      "coldSearchMs": 143.85809999999947,
+      "cases": [
+        {
+          "query": "独特编号9999",
+          "p50Ms": 12.23160000000098,
+          "p95Ms": 15.706600000001345
+        },
+        {
+          "query": "开发环境",
+          "p50Ms": 10.841099999999642,
+          "p95Ms": 12.526100000000952
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 7.702100000000428,
+          "p95Ms": 8.991299999999683
+        },
+        {
+          "query": "不存在的检索zzzz",
+          "p50Ms": 12.608900000001086,
+          "p95Ms": 15.172700000000987
+        }
+      ],
+      "rssBytes": 506683392
+    }
+  ]
+}

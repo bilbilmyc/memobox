@@ -5,10 +5,16 @@
 import { SQLiteStore } from "@/db/sqlite-store";
 import { defaultDbPath } from "@/lib/paths";
 import {
-  scoreMemories,
+  matchesSearchScope,
   type Memory,
   type MemoryStore,
+  type MemoryQuery,
+  type SearchScope,
+  type BackfillReport,
 } from "./memory";
+import { validateMemoryInput } from "./memory-validation";
+import { explainSearch, type SearchReport } from "./search-report";
+import { KeywordIndex } from "./memory";
 
 export type { Memory, MemoryStore } from "./memory";
 
@@ -25,6 +31,7 @@ export class StubStore implements MemoryStore {
     entities?: string[];
     source?: string;
   }): Promise<Memory> {
+    validateMemoryInput(input);
     const id = crypto.randomUUID().slice(0, 8);
     const row: Memory = {
       id,
@@ -38,9 +45,15 @@ export class StubStore implements MemoryStore {
     return row;
   }
 
-  async search(query: string, limit = 5): Promise<Memory[]> {
+  async search(query: string, limit = 5, scope: SearchScope = {}): Promise<Memory[]> {
+    return (await this.searchDetailed(query, limit, scope)).memories;
+  }
+
+  async searchDetailed(query: string, limit = 5, scope: SearchScope = {}): Promise<SearchReport> {
     this.searches += 1;
-    return scoreMemories([...this.rows.values()], query, limit);
+    const index = new KeywordIndex(); index.rebuild([...this.rows.values()]);
+    const ranked = index.rank(query, limit, m => matchesSearchScope(m, scope));
+    return explainSearch(ranked.map(row => row.memory), ranked, [], { status: "disabled" }, []);
   }
 
   async list(limit: number): Promise<Memory[]> {
@@ -53,10 +66,22 @@ export class StubStore implements MemoryStore {
     return this.rows.get(id) ?? null;
   }
 
+  async query(filters: MemoryQuery): Promise<Memory[]> {
+    let rows = [...this.rows.values()].filter(m =>
+      (!filters.text || m.content.toLowerCase().includes(filters.text.toLowerCase())) &&
+      (!filters.kind || (m.kind ?? "fact") === filters.kind) &&
+      (!filters.source || m.source === filters.source) &&
+      (!filters.entity || (m.entities ?? []).some(e => e.toLowerCase() === filters.entity!.toLowerCase())) &&
+      (filters.since === undefined || m.createdAt >= filters.since));
+    rows.sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
+    return rows.slice(filters.offset ?? 0, (filters.offset ?? 0) + (filters.limit ?? 20));
+  }
+
   async update(
     id: string,
-    patch: { content?: string; kind?: string; entities?: string[] }
+    patch: { content?: string; kind?: string; entities?: string[]; source?: string }
   ): Promise<Memory | null> {
+    validateMemoryInput(patch, false);
     const row = this.rows.get(id);
     if (!row) return null;
     const next: Memory = {
@@ -64,6 +89,7 @@ export class StubStore implements MemoryStore {
       ...(patch.content !== undefined ? { content: patch.content } : {}),
       ...(patch.kind !== undefined ? { kind: patch.kind } : {}),
       ...(patch.entities !== undefined ? { entities: patch.entities } : {}),
+      ...(patch.source !== undefined ? { source: patch.source } : {}),
     };
     this.rows.set(id, next);
     return next;
@@ -130,6 +156,7 @@ export class StubStore implements MemoryStore {
   async importMemories(
     items: Memory[]
   ): Promise<{ imported: number; skipped: number }> {
+    items.forEach(item => validateMemoryInput(item));
     let imported = 0;
     let skipped = 0;
     for (const item of items) {
@@ -144,8 +171,8 @@ export class StubStore implements MemoryStore {
   }
 
   /** 桩不存向量，补算恒为 0 */
-  async backfillEmbeddings(): Promise<number> {
-    return 0;
+  async backfillEmbeddings(): Promise<BackfillReport> {
+    return { inspected: 0, needed: 0, processed: 0, succeeded: 0, skipped: 0, failed: 0 };
   }
 }
 
