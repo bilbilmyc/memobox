@@ -50,6 +50,8 @@ async function loadExtractor(
       onProgress?.(`从 ${host} 加载模型（首次约 25MB，之后走本地缓存）…`);
       const pipe = await pipeline("feature-extraction", LOCAL_EMBED_MODEL, {
         dtype: "q8",
+        // 小模型使用一个推理线程，避免多个 MCP 的线程池竞争拖慢 IPC 尾延迟。
+        session_options: { intraOpNumThreads: 1 },
       });
       return pipe as unknown as Extractor;
     } catch (e) {

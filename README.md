@@ -60,7 +60,7 @@ memobox restore <returned-backup-path> --yes --json
 
 Import preserves existing IDs and commits the validated batch atomically. Maintenance suggests duplicates, possible numeric/negation conflicts and age candidates; suggestions do not establish invalid facts. Plans preview deletion, or consolidation with `--summary-file <UTF-8-file>`. The user/agent supplies summaries; memobox never silently calls an LLM. Consolidation retains the first ID/creation time, inherits omitted metadata and combines entity tags.
 
-Apply requires confirmation, backs up original content/metadata, rejects stale targets and rolls back SQL failures. Restore changes only IDs present in the backup, backs up overwritten records first, and recomputes vectors with the current model. Backups contain neither vectors nor credentials. `import-codex --dry-run` previews idempotent Codex MEMORY.md migration. Retrieval logs, relevance labels and evaluation are available through `queries`, `label`, `benchmark`, and `eval`; use command help for parameters.
+Apply requires confirmation, backs up original content/metadata, rejects stale targets and rolls back SQL failures. Restore changes only IDs present in the backup, backs up overwritten records first, and recomputes vectors with the current model. Backups contain neither vectors nor credentials. `import-codex --dry-run` previews idempotent Codex MEMORY.md migration. Development evaluation scripts generate separate quality and MCP performance reports; see the development record.
 
 ## Optional semantic retrieval
 

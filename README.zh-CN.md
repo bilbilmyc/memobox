@@ -75,7 +75,7 @@ memobox restore <返回的备份路径> --yes --json
 
 `apply` 必须明确确认；执行前备份原文/元数据，快照已被别的进程修改时拒绝，SQL 或备份失败不会留下部分修改。`restore` 仅覆盖备份涉及的编号，覆盖前再备份，其他记忆保持；向量按当前模型重算。备份不包含向量或密钥。建议把备份放在独立安全位置。
 
-`import-codex --dry-run` 可预览迁移 Codex 的 MEMORY.md；重复迁移幂等。`queries`、`label`、`benchmark`、`eval` 为检索日志、人工相关性标签和评测工具，参数见各自 `--help`。
+`import-codex --dry-run` 可预览迁移 Codex 的 MEMORY.md；重复迁移幂等。开发评测脚本分别生成质量与 MCP 性能报告，操作和结果见开发记录。
 
 ## 可选语义模型和配置
 

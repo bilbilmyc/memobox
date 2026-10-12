@@ -88,6 +88,7 @@ export const USAGE = `memobox ${VERSION} —— 给 AI agent 的本地长期记�
   "  MEMOBOX_BINARY_CACHE npm 平台程序缓存目录（默认 ~/.memobox/bin）\n" +
   "  MEMOBOX_BINARY_PATH  离线使用同版本独立程序，执行前校验 SHA256\n" +
   "  MEMOBOX_DOWNLOAD_BASE 平台包下载镜像，仍按官方发行清单校验\n" +
+  "  PI_CODING_AGENT_DIR   pi 配置与扩展目录（默认 ~/.pi/agent）\n" +
   "配置优先级：环境变量 > 配置文件 > 默认关键词检索。\nnpm 入口需要 Node ≥ 22；独立程序自带运行时，无需安装 Bun。源码开发使用 Bun ≥ 1.4。\n详细选项与中文示例：memobox help <命令>。";
 
 /** 参数类型、作用范围和帮助共用规格；所有检查先于存储和模型副作用。 */

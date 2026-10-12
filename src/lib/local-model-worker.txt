@@ -14,7 +14,8 @@ async function load() {
     try {
       env.remoteHost = host;
       process.stderr.write(JSON.stringify({ progress: "加载内置模型；首次下载后复用本地缓存…" }) + "\n");
-      extractor = await pipeline("feature-extraction", "Xenova/bge-small-zh-v1.5", { dtype: "q8" });
+      // 小模型单线程避免多个 MCP 的推理线程池竞争；不改变模型或编码策略。
+      extractor = await pipeline("feature-extraction", "Xenova/bge-small-zh-v1.5", { dtype: "q8", session_options: { intraOpNumThreads: 1 } });
       return extractor;
     } catch (error) { process.stderr.write(JSON.stringify({ progress: "模型源加载失败，尝试备用源…", diagnostic: String(error) }) + "\n"); }
   }
