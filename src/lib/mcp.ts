@@ -7,6 +7,7 @@ import type { MemoryStore } from "./memory-store";
 import { MEMORY_KINDS } from "./memory-validation";
 import { VERSION } from "../version";
 import { redactDetails } from "./diagnostics";
+import { maintenanceInputSchema, maintenancePlanSchema } from "./maintenance";
 
 const PROTOCOL_VERSION = "2025-06-18";
 const SERVER_INFO = { name: "memobox", version: VERSION };
@@ -44,6 +45,13 @@ const explanationOutput = z.object({ mode: z.enum(["keyword", "hybrid"]),
   semantic: z.object({ status: z.enum(["disabled", "used", "unavailable", "no_matches"]), reason: z.enum(["embedding_failed", "zero_vector", "no_compatible_vectors", "below_threshold"]).optional() }),
   hits: z.array(z.object({ id: z.string(), keyword: rankOutput.optional(), semantic: rankOutput.optional(), rrfScore: z.number().optional(), graph: z.object({ entities: z.array(z.string()) }).optional() })),
 });
+const maintenanceScanArgs = z.object({ ...scopeShape, before: z.number().int().nonnegative().optional() }).strict();
+const maintenanceApplyArgs = z.object({ plan: maintenancePlanSchema, confirm: z.literal(true) }).strict();
+const maintenanceTools = [
+  { name: "memory_maintenance_scan", description: "Suggest exact duplicates, possible numeric/negation conflicts and memories older than before (Unix milliseconds). Suggestions are not proof of invalid facts; nothing is modified.", args: maintenanceScanArgs, destructive: false },
+  { name: "memory_maintenance_plan", description: "Preview deletion of selected IDs, or consolidate at least two memories using an agent-supplied replacement. No LLM call. First ID and creation time are retained on consolidation. Review the plan before applying.", args: maintenanceInputSchema, destructive: false },
+  { name: "memory_maintenance_apply", description: "Apply an explicitly confirmed maintenance plan. Backs up originals before an atomic transaction. Rejects changed/missing targets; no partial memory changes. Returns backup path and retained ID.", args: maintenanceApplyArgs, destructive: true },
+] as const;
 const newTools = [
   { name: "memory_get", description: "Read one complete memory by its stable ID. Returns a memory object; missing IDs are tool errors.", args: idArgs, output: z.object({ memory: memoryOutput }), readOnly: true, destructive: false },
   { name: "memory_update", description: "Revise a memory's content, kind, entity tags or source. Preserves its ID and creation time. Supply at least one changed field; entities=[] clears tags.", args: updateArgs, output: z.object({ memory: memoryOutput }), readOnly: false, destructive: true },
@@ -98,6 +106,12 @@ export const TOOLS = [
   ...newTools.map(tool => ({ name: tool.name, description: tool.description,
     inputSchema: z.toJSONSchema(tool.args, { io: "input" }), outputSchema: z.toJSONSchema(tool.output),
     annotations: { readOnlyHint: tool.readOnly, destructiveHint: tool.destructive, idempotentHint: true, openWorldHint: false } })),
+  ...maintenanceTools.map(tool => ({ name: tool.name, description: tool.description, inputSchema: z.toJSONSchema(tool.args, { io: "input" }),
+    outputSchema: z.toJSONSchema(tool.name === "memory_maintenance_plan" ? maintenancePlanSchema : tool.name === "memory_maintenance_apply"
+      ? z.object({ deleted: z.number().int().nonnegative(), updated: z.string().optional(), backup: z.string() })
+      : z.object({ inspected: z.number().int().nonnegative(), duplicates: z.array(z.object({ ids: z.array(z.string()) })),
+        conflicts: z.array(z.object({ ids: z.array(z.string()), reason: z.literal("possible_conflict") })), older: z.array(z.string()) })),
+    annotations: { readOnlyHint: !tool.destructive, destructiveHint: tool.destructive, idempotentHint: !tool.destructive, openWorldHint: false } })),
 ] as const;
 
 export type RpcResult = { status: number; body?: unknown };
@@ -171,6 +185,18 @@ export async function handleRpcBody(
       const name = params?.name;
       const rawArgs = params?.arguments ?? {};
       try {
+        if (name === "memory_maintenance_scan") {
+          const parsed = maintenanceScanArgs.safeParse(rawArgs); if (!parsed.success) return toolError(id, parsed.error.message);
+          const { before, ...scope } = parsed.data; return structured(id, await store.scanMaintenance({ before, scope }));
+        }
+        if (name === "memory_maintenance_plan") {
+          const parsed = maintenanceInputSchema.safeParse(rawArgs); if (!parsed.success) return toolError(id, parsed.error.message);
+          return structured(id, await store.planMaintenance(parsed.data));
+        }
+        if (name === "memory_maintenance_apply") {
+          const parsed = maintenanceApplyArgs.safeParse(rawArgs); if (!parsed.success) return toolError(id, parsed.error.message);
+          return structured(id, await store.applyMaintenance(parsed.data.plan, { confirm: parsed.data.confirm }));
+        }
         if (name === "memory_get" || name === "memory_forget") {
           const parsed = idArgs.safeParse(rawArgs);
           if (!parsed.success) return toolError(id, parsed.error.message);

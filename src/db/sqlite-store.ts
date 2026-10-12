@@ -1,4 +1,5 @@
 import { mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
@@ -25,6 +26,8 @@ import * as schema from "./schema-sqlite";
 import { defaultDbPath } from "@/lib/paths";
 import { validateMemoryInput } from "@/lib/memory-validation";
 import { explainSearch, type RankedMemory, type SearchReport, type SemanticStatus } from "@/lib/search-report";
+import { maintenanceInputSchema, maintenancePlanSchema, createMaintenancePlan, suggestMaintenance, validateMaintenanceSnapshot, writeMaintenanceBackup, normalizeReplacement, validateRestoreItems,
+  type MaintenanceInput, type MaintenancePlan, type MaintenanceScan, type MaintenanceSuggestions, type MaintenanceOptions, type MaintenanceResult, type RestoreResult } from "@/lib/maintenance";
 
 type SaveInput = Parameters<MemoryStore["save"]>[0];
 type CachedVector = { vec: Float32Array; space: string; m: Memory; normSquared: number };
@@ -133,7 +136,7 @@ export class SQLiteStore implements MemoryStore {
 
   constructor(
     private readonly embedder: EmbeddingProvider | null = createEmbedder(),
-    dbPath: string = defaultDbPath()
+    private readonly dbPath: string = defaultDbPath()
   ) {
     this.retrieval = embedder ? "semantic" : "keyword";
     // 建好库文件所在目录（":memory:" 除外）
@@ -303,7 +306,8 @@ export class SQLiteStore implements MemoryStore {
   private toMemory(row: Pick<schema.SqliteMemoryRow, "id" | "content" | "kind" | "source" | "entities" | "createdAt">): Memory {
     let entities: string[] = [];
     try {
-      entities = JSON.parse(row.entities);
+      const parsed: unknown = JSON.parse(row.entities);
+      if (Array.isArray(parsed) && parsed.every(entity => typeof entity === "string")) entities = parsed;
     } catch {
       // 列内容损坏时按空实体处理
     }
@@ -404,7 +408,7 @@ export class SQLiteStore implements MemoryStore {
     let semanticStatus: SemanticStatus = { status: "disabled" };
     if (this.embedder) {
       try {
-        qv = toVector(await this.embedder.embed(query));
+        qv = toVector(await (this.embedder.embedQuery ?? this.embedder.embed).call(this.embedder, query));
         semanticStatus = { status: "no_matches", reason: "no_compatible_vectors" };
       } catch (e) {
         semanticStatus = { status: "unavailable", reason: "embedding_failed" };
@@ -435,7 +439,7 @@ export class SQLiteStore implements MemoryStore {
           if (!queryNorm || !savedNorm) continue;
           if (explain) compatible++;
           const sim = vectorDot(qv, vec) / Math.sqrt(queryNorm * savedNorm);
-          if (sim >= MIN_SEMANTIC_SIMILARITY) scored.push({ m, sim });
+          if (sim >= (this.embedder.minimumSimilarity ?? MIN_SEMANTIC_SIMILARITY)) scored.push({ m, sim });
         }
         scored.sort((a, b) => b.sim - a.sim || b.m.createdAt - a.m.createdAt);
         const selected = scored.slice(0, depth);
@@ -813,18 +817,83 @@ export class SQLiteStore implements MemoryStore {
     return rows.map((r) => this.toMemory(r));
   }
 
+  async scanMaintenance(options: MaintenanceScan = {}): Promise<MaintenanceSuggestions> {
+    return suggestMaintenance(await this.exportAll(), options);
+  }
+
+  private maintenanceRows(ids: string[]): schema.SqliteMemoryRow[] {
+    const rows = this.db.select().from(schema.memories).where(inArray(schema.memories.id, ids)).all();
+    for (const row of rows) validateMemoryInput({ content: row.content, kind: row.kind, entities: JSON.parse(row.entities) });
+    const byId = new Map(rows.map(row => [row.id, row]));
+    return ids.flatMap(id => { const row = byId.get(id); return row ? [row] : []; });
+  }
+
+  async planMaintenance(raw: MaintenanceInput): Promise<MaintenancePlan> {
+    const input = maintenanceInputSchema.parse(raw);
+    return this.client.transaction(() => createMaintenancePlan(input, this.maintenanceRows(input.ids).map(row => this.toMemory(row)))).deferred();
+  }
+
+  async applyMaintenance(raw: MaintenancePlan, options: MaintenanceOptions): Promise<MaintenanceResult> {
+    if (options.confirm !== true) throw Error("Maintenance requires explicit confirmation");
+    const plan = maintenancePlanSchema.parse(raw), ids = plan.targets.map(target => target.id);
+    let vec: Float32Array | null = null;
+    if (plan.replacement && this.embedder) { try { vec = toVector(await this.embedder.embed(plan.replacement.content)); } catch { /* 降级为空向量，不能保留旧内容的向量。 */ } }
+    const directory = options.backupDirectory ?? join(dirname(this.dbPath === ":memory:" ? defaultDbPath() : this.dbPath), "backups");
+    const result = this.writeMemory(() => {
+      const rows = this.maintenanceRows(ids), memories = rows.map(row => this.toMemory(row));
+      validateMaintenanceSnapshot(plan, memories);
+      const backup = writeMaintenanceBackup(directory, memories);
+      const replacement = plan.replacement ? normalizeReplacement(plan.replacement, memories) : undefined;
+      const kept = plan.replacement ? ids[0] : undefined, deletedIds = kept ? ids.slice(1) : ids;
+      if (kept && replacement) {
+        this.db.update(schema.memories).set({ ...replacement, entities: JSON.stringify(replacement.entities),
+          embedding: vec ? encodeEmbedding(vec) : null, embeddingSpace: vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null, updatedAt: Date.now() }).where(eq(schema.memories.id, kept)).run();
+        this.syncEdges(kept, replacement.entities ?? []);
+      }
+      this.db.delete(schema.memories).where(inArray(schema.memories.id, deletedIds)).run();
+      this.db.delete(schema.entityNodes).where(sql`${schema.entityNodes.id} NOT IN (SELECT entity_id FROM memory_entity_edges)`).run();
+      return { deleted: deletedIds.length, ...(kept ? { updated: kept } : {}), backup, keptRow: kept ? this.readRow(kept) : undefined };
+    }, value => {
+      for (const id of ids) { this.kwIndex?.remove(id); this.vecCache?.delete(id); }
+      if (value.keptRow) this.cacheRow(value.keptRow);
+    });
+    const { keptRow, ...report } = result; return report;
+  }
+
+  async restoreMemories(items: Memory[], options: MaintenanceOptions): Promise<RestoreResult> {
+    if (options.confirm !== true) throw Error("Restore requires explicit confirmation");
+    validateRestoreItems(items);
+    // 慢模型调用放在写锁之外，失败时用关键词检索，不能复用被覆盖内容的向量。
+    const vectors = new Map<string, Float32Array>();
+    if (this.embedder) for (const item of items) {
+      try { const vec = toVector(await this.embedder.embed(item.content)); if (vec) vectors.set(item.id, vec); } catch { /* 降级，稍后可 reindex。 */ }
+    }
+    const directory = options.backupDirectory ?? join(dirname(this.dbPath === ":memory:" ? defaultDbPath() : this.dbPath), "backups");
+    return this.writeMemory(() => {
+      const existing = items.flatMap(item => { const row = this.readRow(item.id); return row ? [this.toMemory(row)] : []; });
+      const backup = writeMaintenanceBackup(directory, existing);
+      for (const item of items) {
+        const vec = vectors.get(item.id), row = { id: item.id, content: item.content, kind: item.kind ?? "fact", source: item.source ?? "mcp",
+          entities: JSON.stringify(item.entities ?? []), createdAt: item.createdAt, updatedAt: Date.now(),
+          embedding: vec ? encodeEmbedding(vec) : null, embeddingSpace: vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null };
+        this.db.insert(schema.memories).values(row).onConflictDoUpdate({ target: schema.memories.id, set: row }).run();
+        this.syncEdges(item.id, item.entities ?? []);
+      }
+      this.db.delete(schema.entityNodes).where(sql`${schema.entityNodes.id} NOT IN (SELECT entity_id FROM memory_entity_edges)`).run();
+      return { imported: items.length - existing.length, replaced: existing.length, backup };
+    }, () => { this.kwIndex = null; this.vecCache = null; });
+  }
+
   async importMemories(
     items: Memory[]
   ): Promise<{ imported: number; skipped: number }> {
     // 整批先校验，不能在遇到坏条目之前写入半份备份。
-    items.forEach(item => validateMemoryInput(item));
-    let imported = 0;
-    let skipped = 0;
+    items.forEach(item => validateRestoreItems([item]));
+    const existing = new Set(this.db.select({ id: schema.memories.id }).from(schema.memories).all().map(row => row.id));
+    const prepared: { item: Memory; vec: Float32Array | null }[] = [];
     for (const item of items) {
-      if (this.readRow(item.id)) {
-        skipped++;
-        continue;
-      }
+      if (existing.has(item.id)) continue;
+      existing.add(item.id);
       let vec: Float32Array | null = null;
       if (this.embedder) {
         try {
@@ -833,27 +902,21 @@ export class SQLiteStore implements MemoryStore {
           // 与 save 同策略：embedding 失败按无向量落库
         }
       }
-      const inserted = this.writeMemory(() => {
-        // SELECT 与 INSERT 在同一写事务，防止并发导入误算计数或覆盖实体。
-        if (this.readRow(item.id)) return null;
-        const row = {
-          id: item.id,
-          content: item.content,
-          kind: item.kind ?? "fact",
-          source: item.source ?? "mcp",
-          entities: JSON.stringify(item.entities ?? []),
-          embedding: vec ? encodeEmbedding(vec) : null,
-          embeddingSpace: vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null,
-          createdAt: item.createdAt,
-          updatedAt: Date.now(),
-        };
-        this.db.insert(schema.memories).values(row).run();
-        this.syncEdges(item.id, item.entities ?? []);
-        return row;
-      }, (row) => { if (row) this.cacheRow(row); });
-      if (inserted) imported++;
-      else skipped++;
+      prepared.push({ item, vec });
     }
-    return { imported, skipped };
+    // 模型请求不持有写锁；一个事务与一个复用语句避免每条 fsync/prepare。
+    // 并发新增编号仍保留对方已提交的内容，图谱故障则回滚整份导入。
+    const insert = this.client.prepare("INSERT INTO memories (id, content, kind, source, entities, embedding, embedding_space, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING");
+    try {
+      return this.writeMemory(() => {
+        let imported = 0;
+        for (const { item, vec } of prepared) {
+          const result = insert.run(item.id, item.content, item.kind ?? "fact", item.source ?? "mcp", JSON.stringify(item.entities ?? []),
+            vec ? encodeEmbedding(vec) : null, vec && this.embedder ? embeddingSpace(this.embedder, vec.length) : null, item.createdAt, Date.now());
+          if (result.changes) { this.syncEdges(item.id, item.entities ?? []); imported++; }
+        }
+        return { imported, skipped: items.length - imported };
+      }, () => { if (prepared.length) { this.kwIndex = null; this.vecCache = null; } });
+    } finally { insert.finalize(); }
   }
 }

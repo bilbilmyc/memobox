@@ -1,0 +1,514 @@
+{
+  "version": "2.6.3-beta.1",
+  "platform": "linux",
+  "arch": "x64",
+  "runtime": "compiled CLI",
+  "sizes": [
+    100,
+    1000,
+    10000
+  ],
+  "repeats": 25,
+  "writeWarmups": 5,
+  "model": "BGE q8 real model and cached exact synthetic document vectors for local mode; endpoint mode isolates HTTP/ranking costs. No user memories.",
+  "scenarios": [
+    {
+      "size": 100,
+      "mode": "keyword",
+      "importMs": 34.30200599999999,
+      "initializeMs": 23.29275199999998,
+      "firstSearchMs": 6.106350999999989,
+      "coldWriteMs": 1.4977719999999977,
+      "coldConcurrentMs": 2.137828000000013,
+      "cases": [
+        {
+          "query": "开发环境",
+          "p50Ms": 0.720798000000002,
+          "p95Ms": 0.9439649999999915
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 0.6087490000000173,
+          "p95Ms": 1.0045069999999896
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 0.5285179999999912,
+          "p95Ms": 0.5836010000000158
+        }
+      ],
+      "concurrentReadWrite": {
+        "p50Ms": 1.6983539999999948,
+        "p95Ms": 3.149189999999976
+      },
+      "writes": {
+        "p50Ms": 0.6393560000000207,
+        "p95Ms": 0.9051770000000374
+      },
+      "coldMemory": {
+        "rssBytes": 62214144,
+        "peakBytes": 62214144,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "warmMemory": {
+        "rssBytes": 72081408,
+        "peakBytes": 72081408,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "peakMemory": {
+        "rssBytes": 84324352,
+        "peakBytes": 84324352,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      }
+    },
+    {
+      "size": 100,
+      "mode": "endpoint",
+      "importMs": 41.798173999999996,
+      "initializeMs": 22.894755000000032,
+      "firstSearchMs": 11.934100999999998,
+      "coldWriteMs": 2.0574369999999362,
+      "coldConcurrentMs": 3.4640509999999267,
+      "cases": [
+        {
+          "query": "开发环境",
+          "p50Ms": 1.3377349999999524,
+          "p95Ms": 2.1116440000000125
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 1.1715489999999136,
+          "p95Ms": 1.7235769999999775
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 1.0306110000000217,
+          "p95Ms": 1.1376980000000003
+        }
+      ],
+      "concurrentReadWrite": {
+        "p50Ms": 3.339271999999937,
+        "p95Ms": 5.580746999999974
+      },
+      "writes": {
+        "p50Ms": 1.120681999999988,
+        "p95Ms": 1.4142249999999876
+      },
+      "coldMemory": {
+        "rssBytes": 65388544,
+        "peakBytes": 65388544,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "warmMemory": {
+        "rssBytes": 78426112,
+        "peakBytes": 78426112,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "peakMemory": {
+        "rssBytes": 87588864,
+        "peakBytes": 87588864,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "endpoint": {
+        "kind": "real local HTTP with deterministic dense vectors; no real model",
+        "requests": 168,
+        "computeMsPerRequest": 0.036718017857139226
+      }
+    },
+    {
+      "size": 100,
+      "mode": "local",
+      "importMs": 38.906484,
+      "initializeMs": 23.40109499999994,
+      "firstSearchMs": 225.590098,
+      "coldWriteMs": 5.567971999999827,
+      "coldConcurrentMs": 8.745685000000094,
+      "cases": [
+        {
+          "query": "共享记忆",
+          "p50Ms": 0.9457240000001548,
+          "p95Ms": 2.3055859999999484
+        },
+        {
+          "query": "SSH authentication",
+          "p50Ms": 0.8067379999999957,
+          "p95Ms": 1.1471019999999044
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 0.6380840000001626,
+          "p95Ms": 0.7793759999999565
+        }
+      ],
+      "concurrentReadWrite": {
+        "p50Ms": 4.534877999999935,
+        "p95Ms": 6.330783999999994
+      },
+      "writes": {
+        "p50Ms": 3.0483529999999064,
+        "p95Ms": 4.324290000000019
+      },
+      "coldMemory": {
+        "rssBytes": 239710208,
+        "peakBytes": 239710208,
+        "processCount": 2,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "warmMemory": {
+        "rssBytes": 281673728,
+        "peakBytes": 285106176,
+        "processCount": 2,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "peakMemory": {
+        "rssBytes": 281600000,
+        "peakBytes": 288215040,
+        "processCount": 2,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "uncachedModelQueries": {
+        "p50Ms": 4.828915999999936,
+        "p95Ms": 7.413154000000077
+      },
+      "repeatedQueriesUseModelCache": true
+    },
+    {
+      "size": 1000,
+      "mode": "keyword",
+      "importMs": 158.242454,
+      "initializeMs": 23.172831000000087,
+      "firstSearchMs": 17.274063000000297,
+      "coldWriteMs": 1.517421000000013,
+      "coldConcurrentMs": 1.9667099999996935,
+      "cases": [
+        {
+          "query": "开发环境",
+          "p50Ms": 1.2257710000003499,
+          "p95Ms": 1.536019000000124
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 0.675850999999966,
+          "p95Ms": 0.94428599999992
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 0.5053629999997611,
+          "p95Ms": 0.6065249999996922
+        }
+      ],
+      "concurrentReadWrite": {
+        "p50Ms": 7.923044000000118,
+        "p95Ms": 9.430754999999863
+      },
+      "writes": {
+        "p50Ms": 0.7397869999999784,
+        "p95Ms": 0.9401189999998678
+      },
+      "coldMemory": {
+        "rssBytes": 74584064,
+        "peakBytes": 74584064,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "warmMemory": {
+        "rssBytes": 84410368,
+        "peakBytes": 84410368,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "peakMemory": {
+        "rssBytes": 109764608,
+        "peakBytes": 111546368,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      }
+    },
+    {
+      "size": 1000,
+      "mode": "endpoint",
+      "importMs": 248.20342499999998,
+      "initializeMs": 27.01879800000006,
+      "firstSearchMs": 29.300062999999682,
+      "coldWriteMs": 2.0583180000003267,
+      "coldConcurrentMs": 3.7624510000000555,
+      "cases": [
+        {
+          "query": "开发环境",
+          "p50Ms": 1.9613620000000083,
+          "p95Ms": 2.9853029999999308
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 1.5640019999996184,
+          "p95Ms": 1.8042850000001636
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 1.8253859999999804,
+          "p95Ms": 2.665794999999889
+        }
+      ],
+      "concurrentReadWrite": {
+        "p50Ms": 15.129515000000083,
+        "p95Ms": 18.481862999999976
+      },
+      "writes": {
+        "p50Ms": 1.3894729999997253,
+        "p95Ms": 1.614278000000013
+      },
+      "coldMemory": {
+        "rssBytes": 82935808,
+        "peakBytes": 82935808,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "warmMemory": {
+        "rssBytes": 99061760,
+        "peakBytes": 99061760,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "peakMemory": {
+        "rssBytes": 128512000,
+        "peakBytes": 130506752,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "endpoint": {
+        "kind": "real local HTTP with deterministic dense vectors; no real model",
+        "requests": 168,
+        "computeMsPerRequest": 0.03472364285713476
+      }
+    },
+    {
+      "size": 1000,
+      "mode": "local",
+      "importMs": 229.515059,
+      "initializeMs": 25.340434000000187,
+      "firstSearchMs": 243.28377,
+      "coldWriteMs": 5.347929999999906,
+      "coldConcurrentMs": 11.255079000000478,
+      "cases": [
+        {
+          "query": "共享记忆",
+          "p50Ms": 1.4379209999997329,
+          "p95Ms": 2.953961000000163
+        },
+        {
+          "query": "SSH authentication",
+          "p50Ms": 1.2253300000002127,
+          "p95Ms": 1.9178360000005341
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 1.0525690000004033,
+          "p95Ms": 1.68606600000021
+        }
+      ],
+      "concurrentReadWrite": {
+        "p50Ms": 16.046489000000292,
+        "p95Ms": 19.476008000000547
+      },
+      "writes": {
+        "p50Ms": 3.2998429999997825,
+        "p95Ms": 5.136114999999336
+      },
+      "coldMemory": {
+        "rssBytes": 262729728,
+        "peakBytes": 262729728,
+        "processCount": 2,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "warmMemory": {
+        "rssBytes": 285396992,
+        "peakBytes": 287211520,
+        "processCount": 2,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "peakMemory": {
+        "rssBytes": 306814976,
+        "peakBytes": 312504320,
+        "processCount": 2,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "uncachedModelQueries": {
+        "p50Ms": 5.812746999999945,
+        "p95Ms": 9.408766999999898
+      },
+      "repeatedQueriesUseModelCache": true
+    },
+    {
+      "size": 10000,
+      "mode": "keyword",
+      "importMs": 1136.143789,
+      "initializeMs": 26.66957000000002,
+      "firstSearchMs": 113.6244569999999,
+      "coldWriteMs": 2.8051909999994677,
+      "coldConcurrentMs": 16.949352000000545,
+      "cases": [
+        {
+          "query": "开发环境",
+          "p50Ms": 5.285390000000007,
+          "p95Ms": 10.925977999999304
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 1.1117889999995896,
+          "p95Ms": 2.1715079999994487
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 0.9281909999999698,
+          "p95Ms": 2.0221330000003945
+        }
+      ],
+      "concurrentReadWrite": {
+        "p50Ms": 85.79815599999984,
+        "p95Ms": 95.49007399999937
+      },
+      "writes": {
+        "p50Ms": 1.0132200000007288,
+        "p95Ms": 3.6307320000005348
+      },
+      "coldMemory": {
+        "rssBytes": 141242368,
+        "peakBytes": 141242368,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "warmMemory": {
+        "rssBytes": 166903808,
+        "peakBytes": 170536960,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "peakMemory": {
+        "rssBytes": 270725120,
+        "peakBytes": 271962112,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      }
+    },
+    {
+      "size": 10000,
+      "mode": "endpoint",
+      "importMs": 2357.57908,
+      "initializeMs": 39.169764000000214,
+      "firstSearchMs": 174.98731100000077,
+      "coldWriteMs": 3.2498970000015106,
+      "coldConcurrentMs": 21.608406999999715,
+      "cases": [
+        {
+          "query": "开发环境",
+          "p50Ms": 14.106388999998671,
+          "p95Ms": 16.25083799999993
+        },
+        {
+          "query": "topic17",
+          "p50Ms": 6.2763059999997495,
+          "p95Ms": 7.447099999999409
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 6.007411000000502,
+          "p95Ms": 6.933283999998821
+        }
+      ],
+      "concurrentReadWrite": {
+        "p50Ms": 140.55974699999933,
+        "p95Ms": 147.35153699999864
+      },
+      "writes": {
+        "p50Ms": 1.8920359999992797,
+        "p95Ms": 5.114137000000483
+      },
+      "coldMemory": {
+        "rssBytes": 181391360,
+        "peakBytes": 181731328,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "warmMemory": {
+        "rssBytes": 202924032,
+        "peakBytes": 208285696,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "peakMemory": {
+        "rssBytes": 333287424,
+        "peakBytes": 358617088,
+        "processCount": 1,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "endpoint": {
+        "kind": "real local HTTP with deterministic dense vectors; no real model",
+        "requests": 168,
+        "computeMsPerRequest": 0.03787621428568855
+      }
+    },
+    {
+      "size": 10000,
+      "mode": "local",
+      "importMs": 2155.142617,
+      "initializeMs": 40.138105000001815,
+      "firstSearchMs": 373.4935129999976,
+      "coldWriteMs": 6.412718999999925,
+      "coldConcurrentMs": 11.619517999999516,
+      "cases": [
+        {
+          "query": "共享记忆",
+          "p50Ms": 7.467571000001044,
+          "p95Ms": 10.05181100000118
+        },
+        {
+          "query": "SSH authentication",
+          "p50Ms": 6.15735400000267,
+          "p95Ms": 6.790449000000081
+        },
+        {
+          "query": "zzzz_unique_absent",
+          "p50Ms": 5.585801000001084,
+          "p95Ms": 6.464717000002565
+        }
+      ],
+      "concurrentReadWrite": {
+        "p50Ms": 127.9204630000022,
+        "p95Ms": 137.13259800000014
+      },
+      "writes": {
+        "p50Ms": 3.7575719999986177,
+        "p95Ms": 8.896848000000318
+      },
+      "coldMemory": {
+        "rssBytes": 340746240,
+        "peakBytes": 348413952,
+        "processCount": 2,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "warmMemory": {
+        "rssBytes": 389885952,
+        "peakBytes": 397758464,
+        "processCount": 2,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "peakMemory": {
+        "rssBytes": 477224960,
+        "peakBytes": 498057216,
+        "processCount": 2,
+        "peakKind": "sum of OS process lifetime VmHWM (parent and current descendants)"
+      },
+      "uncachedModelQueries": {
+        "p50Ms": 17.962862000000314,
+        "p95Ms": 25.124911999999313
+      },
+      "repeatedQueriesUseModelCache": true
+    }
+  ]
+}

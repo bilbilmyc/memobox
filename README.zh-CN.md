@@ -1,227 +1,128 @@
 # memobox
 
-给 AI 编程 agent 的本地长期记忆。一个命令、一个 SQLite 文件、零服务——
-agent 跨会话记住事情，记忆保存在本机。默认关键词和内置模型在本机运行；
-若配置云端嵌入端点，保存内容和查询会发送到该端点计算向量。
+给 AI 编程 agent 的本地长期记忆：CLI + stdio MCP + 一个 SQLite 文件。默认关键词检索开箱即用；可选本机中文语义模型或 OpenAI 兼容嵌入端点。没有常驻服务、端口或第二套数据库实现。
 
-memobox = stdio MCP 服务 + CLI，开箱支持 **Claude Code、Codex、pi**。
+[English](README.md) · [开发验收](docs/DEVELOPMENT-2.6.3.md) · [自动发布](docs/AUTO-RELEASE.md)
 
-```
-你：  记住这个项目 dev 用 3100 端口
-agent：（调用 memory_save）
-……下周，新会话……
-你：  dev 用哪个端口来着？
-agent：（调用 memory_search）—— 3100
-```
+## 安装和第一次使用
 
-## 安装
-
-需要 [Bun](https://bun.sh) ≥ 1.4。
+2.6.3 的 npm 发行物需要 **Node.js 22+**，无需另装 Bun：
 
 ```bash
-npm i -g memobox         # 从 npm 安装——关键词检索开箱即用
-```
-
-或从源码运行：
-
-```bash
-git clone https://github.com/bilbilmyc/memobox
-cd memobox
-bun install
-bun src/cli.ts            # 这就是全部——没有服务要启动
-```
-
-说明：2.6.2 的源码 tarball 约 52.9 kB，安装后依赖与 Bun 的体积另计，不带 ML 运行时。之后若启用内置
-小模型（`memobox model enable --lite`），它会提示再执行
-`npm i -g @huggingface/transformers`（首次使用时另下约 25MB 模型）。
-
-## 接入你的 agent
-
-一家一条命令（幂等，重复执行安全）：
-
-```bash
-memobox install claude   # 执行 claude mcp add --scope user memobox -- bun …/src/cli.ts
-memobox install codex    # 往 ~/.codex/config.toml 追加 [mcp_servers.memobox]
-memobox install pi       # 往 ~/.pi/agent/mcp.json 合并 mcpServers.memobox
-```
-
-写进三家配置的是同一个入口：`bun <路径>/src/cli.ts` 不带参数 = stdio MCP 服务。
-
-其他任何 stdio MCP 客户端（Cursor、Windsurf、opencode……）：跑 `memobox install`
-（不带参数）会打印通用接法——同一对 command + args 填进它的 MCP 配置即可。
-
-<details>
-<summary>手动片段（喜欢自己改配置的话）</summary>
-
-**Codex** —— `~/.codex/config.toml`：
-
-```toml
-[mcp_servers.memobox]
-command = 'C:\Users\you\.bun\bin\bun.exe'
-args = ['D:\path\to\memobox\src\cli.ts']
-```
-
-**pi** —— `~/.pi/agent/mcp.json`：
-
-```json
-{
-  "mcpServers": {
-    "memobox": {
-      "command": "bun",
-      "args": ["D:/path/to/memobox/src/cli.ts"]
-    }
-  }
-}
-```
-
-**Claude Code**：
-
-```bash
-claude mcp add --scope user memobox -- bun D:/path/to/memobox/src/cli.ts
-```
-
-</details>
-
-### 让 agent 真的用起来
-
-agent 不会主动调记忆工具——在你的 `AGENTS.md` / `CLAUDE.md` 里加一段激活指令：
-
-```markdown
-- 记忆：已接入 memobox MCP 服务。
-  - 当我表达偏好、决定或值得长期记住的事实时，用 memory_save 存入
-    （相关的项目名/人名放进 entities）。
-  - 反问我之前，先用 memory_search 查一下可能已经知道的事。
-```
-
-## 自己也能用
-
-CLI 的人类输出全部是中文；数据与 MCP 协议文案保持原样。每条命令都支持 `--help`：
-
-```bash
-memobox help / memobox <命令> --help
-```
-
-```bash
-memobox save "这个仓库用 tab 缩进" --entities style
-memobox search "缩进"
-memobox list / forget <id> / entities / stats / path
-memobox doctor                       # 自检：库、检索模式、客户端接线（还会探测本机 Ollama）
-
-# 语义检索一键启用（写 ~/.memobox/config.json，自动补算历史向量）
-memobox model enable --lite   # 内置小模型：约 25MB 进程内推理，零外部依赖（推荐）
-memobox model enable          # 或走本机 Ollama：bge-m3，能力更强（约 1.2GB）
-memobox model reindex         # 按当前配置补算缺失、旧模型或旧库来源未知的向量
-
-# 结构化过滤（条件 AND 组合），终端表格或 --json
-memobox query "端口" --kind preference --entity ports --since 7d
-memobox get <id>                     # 单条记忆完整 JSON
-
-# 直连 SQLite 的只读 SQL
-memobox sql "SELECT source, count(*) AS n FROM memories GROUP BY source"
-memobox sql "SELECT content FROM memories WHERE kind = 'decision' LIMIT 5" --json
-
-memobox export backup.json     # 全量备份（memobox-backup v1 格式）
-memobox import backup.json     # 幂等导入——相同 id 自动跳过
-
-# 迁移 Codex 原生记忆（~/.codex/memories/）进 memobox——
-# 让 Claude Code / pi 也能检索到同一份；幂等，--dry-run 先预览
-memobox import-codex
-```
-
-## 工作原理
-
-### 2.6.3 开发版：完整操作与性能验收
-
-以下是工作区 `2.6.3-dev.0` 已实现的能力，尚未发布到 npm；npm latest 仍为 2.6.2。
-
-```bash
-bun src/cli.ts update <id> "新端口 3200" --kind 决策 --entities 项目甲 --json
-bun src/cli.ts update <id> --clear-entities
-bun src/cli.ts search "端口" --entity 项目甲 --source cli --kind 决策 --since 7d --json
-bun src/cli.ts search "端口" --entity 项目甲 --explain --json
-bun src/cli.ts import backup.json --dry-run --json
-bun src/cli.ts config show --json
-bun src/cli.ts config set embedding.timeoutMs 5000
-bun src/cli.ts config get embedding.base
-bun src/cli.ts config reset embedding.timeoutMs
-```
-
-检索范围在关键词/语义排名和图谱扩展前生效，条件按 AND 组合；`--entity`
-使用完整标签，项目可直接标为实体。MCP 新增 `memory_get`、`memory_update`、
-`memory_forget`、`memory_query`；`memory_search` 支持相同范围及结构化结果，
-`since` 用 Unix 毫秒。修改内容会更新向量；修改元数据保留向量。
-
-`search --explain` 显示关键词/语义排名、分数、融合贡献、实体扩展和安全的降级原因。
-加 `--json` 返回含 `memories` 与 `explanation` 的对象；普通检索 JSON 仍是数组。
-MCP 使用 `explain: true`。`import --dry-run` 先校验备份，再通过只读连接预览新增、
-跳过、备份内重复编号和冲突，不建库、不加载模型。正式导入保留当前或首条同编号记忆；
-其他客户端在预览后写入时，实际计数可能变化。
-
-配置支持 `embedding.base/model/key/local/dimensions/timeoutMs`。密钥默认脱敏，
-用 `config set embedding.key --stdin` 从标准输入设置，避免进入命令参数历史。
-全量 `config reset` 先备份原文件，坏 JSON 也保留原始字节。端点超时默认 5000ms，
-可设置 100–120000ms；失败回退关键词。`dimensions`、`model` 和 `timeoutMs`
-是端点模式设置，内置 lite 模式使用固定的模型与维度；切换模式先重置另一模式的设置。
-修改模型配置后重启 MCP；向量模型/维度变化后运行 `model reindex`。
-
-功能与性能共同验收；实现和实测边界见 [开发记录](./docs/DEVELOPMENT-2.6.3.md)。
-免 Bun 分发、完整诊断、批量维护及真实模型质量验收仍在统一 2.6.3 范围中。
-
-### 2.6.2：中文 CLI 和参数校验
-
-`memobox --version`、`--help/-h`、`--limit=1` 和 `--` 文本分隔均可用。
-未知选项、缺少值、非法数字及空白记忆在写入前拒绝。退出码：0 成功，
-1 执行失败，2 参数错误。`forget` 直接删除，不支持 `--dry-run`，该选项会报错。
-
-人用表格、类型、实体及错误提示为中文；JSON/MCP 字段保持稳定英文。
-类型可用 `事实/偏好/事件/决策`，保存时映射为原英文枚举。表格按终端列宽
-对齐，截断保留完整 emoji。`--debug` 可查看脱敏技术错误。
-
-```bash
-memobox help model enable
-memobox query --json "开发端口" --kind 决策 --limit=20 --offset=0
+npm i -g memobox
+memobox --version
+memobox save "开发端口使用 3100" --kind 决策 --entities "项目甲" --source "我"
+memobox search "开发端口" --entity "项目甲"
 memobox doctor
 ```
 
-`query` 在 SQLite 全库过滤后分页，不再限制最新 2000 条。`model reindex`
-报告成功、跳过和失败数量，有失败时非零退出。`install` 透传显式库、配置、
-维度及模型源覆盖；`doctor` 显示配置来源，并提示需要人工检查的旧非法记忆。
-数据库格式兼容现有版本，无新增运行依赖；本版本仍需 Bun ≥ 1.4。
+npm 主包仅为轻量 Node 启动器，无生产 npm 依赖。安装时下载当前平台的同版本原生程序；禁用安装脚本时，第一次运行再下载。程序流式校验 SHA256 后原子缓存到 `~/.memobox/bin/<版本>/<平台>/`，后续启动复用缓存。Windows x64、Linux x64/arm64（glibc）、macOS x64/arm64 在原平台跑安装和实际 MCP 验证。Windows 原生 gzip 约 39.3 MiB，解压约 85.2 MiB；其他平台以发布清单为准。
 
-- **存储**：单 SQLite 文件 `~/.memobox/memobox.db`（`MEMOBOX_DB_PATH` 可改）。
-  无守护进程、无端口、无 Postgres。
-- **跨 agent 一致性**：保存、编辑、遗忘和逐条导入使用事务；数据库触发器维护
-  共享记忆版本，其他 MCP 进程下次检索自动刷新缓存。关键词、语义排名与实体
-  扩展读取同一快照；并发启动和写入由 SQLite 锁等待协调，无新增服务或依赖。
-- **检索（v2.6 混合式）**：BM25 关键词排名（进程内全库索引缓存、全库 IDF、
-  整句加成、实体加成）与语义余弦排名经 RRF 倒数融合——精确匹配与近义改写
-  都能上榜，互为补充；实体图谱扩展补满名额。语义模式下向量以 Float32 BLOB
-  落库（免 JSON 解析）并缓存于进程内：真实 85 条库实测热检索约 5-8ms。
-- **向量兼容与相关性**：向量记录模型、维度、端点与处理版本的空间指纹，
-  只与同一空间、相同维度的查询向量比较。语义候选默认要求余弦相似度
-  ≥ 0.35；关键词命中独立保留。修改分类或实体时保留向量，修改正文才重算。
-  `model enable` 会补算不兼容的历史向量；手动切换端点或模型后可运行
-  `memobox model reindex`，并重启已有 MCP 客户端让新模型配置生效。
-  旧数据库自动补充字段并保留记忆，来源未知的旧向量在补算前仅参与关键词检索。
-- **语义模式（可选增强）**：`memobox model enable --lite` = 内置量化小模型
-  （bge-small-zh，约 25MB）进程内推理——无服务、无端口、无 Ollama，
-  模型惰性加载（keyword 模式的进程不占任何资源）。
-  `memobox model enable` = 本机 Ollama（bge-m3，能力更强）。
-  也可手动设 `EMBEDDING_API_BASE` 与 `EMBEDDING_MODEL`
-  （OpenAI、SiliconFlow 都行；`_KEY` 可选——本地端点免鉴权）。
-- **为什么不能直接借用 agent 自带的大模型？** MCP 服务是被客户端拉起的子进程，
-  协议里没有「回调客户端帮你算向量」的通道。语义检索需要的只是文本转向量——
-  内置小模型在本进程里就能算。
+也可从 [GitHub Releases](https://github.com/bilbilmyc/memobox/releases) 下载本平台 `.gz` 并解压，直接运行 `memobox` / `memobox.exe`，核心 CLI 和 MCP 连 Node/npm 也无需安装。Alpine/musl、Windows arm64 不在本版支持清单内。
 
-## 开发
+源码开发才需要 Bun 1.4.2：`bun install --frozen-lockfile`，随后 `bun src/cli.ts --help`。
+
+## 接入客户端并共享记忆
 
 ```bash
-git switch -c codex/my-feature
-bun run prepublishOnly
-node scripts/release/package.mjs pack-and-test
+memobox install claude
+memobox install codex
+memobox install pi
 ```
 
-推送开发分支并向 `main` 创建 PR；审查后等待 Windows/Linux CI（含实际安装包、中文 CLI
-和两个 MCP 进程）全部通过再合并。主分支的新正式版本按 [自动发布规则](./docs/AUTO-RELEASE.md) 发布。
+重启客户端后，让 agent 保存一条项目偏好，再到另一个客户端检索。默认共用 `~/.memobox/memobox.db`；指定 `MEMOBOX_DB_PATH` 可切换库。安装时透传当前显式库、配置、模型环境变量。
 
-MIT 协议。
+- Claude 合并 `~/.claude.json`；Codex 合并 `~/.codex/config.toml`。
+- pi 写入 `~/.pi/agent/mcp.json` 和 `extensions/memobox.js`。pi 不原生读取 MCP 配置，生成的扩展把 `memobox_memory_*` 工具转接到同一个 stdio MCP。支持 `PI_CODING_AGENT_DIR`。
+- 原生接线为绝对程序路径 + 空 `args`。`memobox install` 输出通用 command/args，可供其他 stdio 客户端使用。
+- 已有接线默认保持；升级版本后执行 `memobox install <客户端> --force`，先备份原文件，再更新自己的条目，保留其他模型和配置。pi 扩展也会备份。
+
+`doctor --json --strict` 只读检查库完整性、向量有效性/空间/维度、配置来源及三家客户端同库接线；不会迁移旧库或加载模型。`--strict` 异常退出 1，修复提示为中文。
+
+## 完整 CLI 流程
+
+```bash
+memobox help                     # 中文命令和参数帮助
+memobox help maintain plan
+memobox query "端口" --source "我" --limit 20 --offset 0 --json
+memobox get <id>
+memobox update <id> "开发端口改为 3200" --entities "项目甲" --json
+memobox search "端口" --kind 决策 --source "我" --entity "项目甲" --explain --json
+memobox forget <id>
+memobox entities
+memobox stats
+memobox path
+```
+
+范围过滤为 AND；实体是完整标签，来源和类型精确匹配；`--since` 支持日期/毫秒时间戳。`search --json` 仍返回数组；加 `--explain` 返回记忆和实际关键词/语义排名、RRF 贡献、图谱扩展与安全降级原因。`query` 全库过滤和稳定分页，不调用语义模型。更新保留编号/创建时间；内容变化使旧向量失效，元数据更新保留向量。
+
+支持中文内容、路径、实体、类型名、emoji 和 `--选项=值`。纯空白、未知选项、非法数字会在写入前拒绝。`--` 后按正文处理；退出码 0 成功、2 参数错误、1 操作失败。单条 `forget` 直接删除；批量操作使用以下预览流程。
+
+## 备份、维护和恢复
+
+```bash
+memobox export backup.json
+memobox import backup.json --dry-run --json
+memobox import backup.json       # 已有编号跳过，整批事务导入
+memobox maintain scan --entity "项目甲" --before 90d --json
+memobox maintain plan --ids "<id1>,<id2>" --out plan.json
+memobox maintain apply plan.json --yes --json
+memobox restore <返回的备份路径> --dry-run --json
+memobox restore <返回的备份路径> --yes --json
+```
+
+`scan` 提供重复、可能的数字/否定冲突、年龄候选，建议不代表事实已失效。`plan` 默认预览删除；合并可传 `--summary-file <UTF-8文件>`，摘要由人或 agent 提供，工具不后台调用 LLM。合并保留首个编号及创建时间，未指定元数据沿用首条并合并实体。
+
+`apply` 必须明确确认；执行前备份原文/元数据，快照已被别的进程修改时拒绝，SQL 或备份失败不会留下部分修改。`restore` 仅覆盖备份涉及的编号，覆盖前再备份，其他记忆保持；向量按当前模型重算。备份不包含向量或密钥。建议把备份放在独立安全位置。
+
+`import-codex --dry-run` 可预览迁移 Codex 的 MEMORY.md；重复迁移幂等。开发评测脚本分别生成质量与 MCP 性能报告，操作和结果见开发记录。
+
+## 可选语义模型和配置
+
+```bash
+memobox model enable --lite      # 安装可选运行库，下载约 25MB 模型，补算历史向量
+memobox model status
+memobox model reindex
+memobox model disable
+memobox config show --json
+memobox config set embedding.base http://localhost:11434/v1
+memobox config set embedding.model bge-m3
+memobox config set embedding.dimensions 1024
+memobox config set embedding.key --stdin
+memobox config reset
+```
+
+内置 BGE 小模型按需安装到 `~/.memobox/runtime`，模型缓存到 `~/.memobox/models`。编译程序使用自身携带的运行时，不要求另外安装 Bun、Node 或 npm；模型助手随所属 CLI/MCP 退出。macOS Intel 使用兼容的 ONNX runtime 1.23.2。本机模式不把记忆发送给模型服务，首次下载仅获取公开模型文件；默认模型源为 hf-mirror，失败后回退 Hugging Face。
+
+BGE 使用 CLS 池化、归一化和查询指令。**从 2.6.2 升级并使用 lite 时，需要 `model reindex` 重算旧 mean 向量**；记忆内容和编号保持。模型或端点失败时检索回退关键词，`--explain` 能看到原因。近期查询向量采用有界缓存；召回结果不缓存，外部更新、删除和范围过滤实时生效。
+
+`model enable`（不带 lite）检测本机 Ollama、拉取模型、写配置并补算；端点模式需自行准备 Ollama 或兼容 API。端点模式会把保存内容/查询发给所配置端点。环境变量优先于文件，模型配置变化后重启 MCP。
+
+| 环境变量 | 用途 |
+| --- | --- |
+| `MEMOBOX_DB_PATH` / `MEMOBOX_CONFIG_PATH` | 覆盖默认库和配置文件 |
+| `EMBEDDING_API_BASE` / `EMBEDDING_API_KEY` / `EMBEDDING_MODEL` | 兼容 `/embeddings` 端点、密钥、模型 |
+| `EMBEDDING_DIM` / `EMBEDDING_TIMEOUT_MS` | 维度、请求超时（100–120000ms） |
+| `MEMOBOX_RUNTIME_PATH` / `MEMOBOX_MODELS_PATH` | 可选 ML 运行库和公开模型缓存位置 |
+| `HF_ENDPOINT` | 首选模型下载源 |
+| `MEMOBOX_BINARY_CACHE` / `MEMOBOX_DOWNLOAD_BASE` | 原生缓存位置、镜像源；仍核对发行清单 SHA256 |
+| `MEMOBOX_BINARY_PATH` | 离线原生程序路径；每次按清单核对 SHA256 |
+| `PI_CODING_AGENT_DIR` | pi 配置/扩展目录 |
+
+配置键：`embedding.base/model/key/local/dimensions/timeoutMs`。配置写入采用同目录原子替换；重置先备份；密钥和 URL 凭据默认脱敏。不要把包含密钥的配置提交到 Git。
+
+## 常见问题
+
+- **npm 安装还要 Bun？** 2.6.3 发行物无需 Bun；2.6.2 及更早源码包需要。npm 入口需要 Node 22+；独立程序的核心功能不需要 Node。
+- **GitHub 下载失败？** 检查网络或设置 `MEMOBOX_DOWNLOAD_BASE` 镜像；也可从 Releases 手动取得同版本程序，用 `MEMOBOX_BINARY_PATH` 离线运行。校验失败会拒绝执行。
+- **升级后客户端仍运行旧版？** 运行 `install <client> --force` 再重启；原生接线固化了版本对应的程序路径。
+- **两家 agent 看不到同一条记忆？** 用 `doctor --json --strict` 比较显式库/配置路径，核对客户端启动时继承的环境。
+- **语义没有结果？** 用 `search --explain --json` 和 `doctor` 检查模型空间及缺失向量，再 `model reindex`。语义相似度不代表事实正确，历史冲突应由用户/agent 审核。
+
+## 开发与发行
+
+在 `codex/*` 分支开发，补行为回归，运行 `bun run prepublishOnly` 和 `node scripts/release/package.mjs pack-and-test`。检索改动还需冻结留出集质量评测和真实 100/1000/10000 规模 MCP 性能验收。PR 的全部产品门禁通过才合并 main；只有 main 的新正式版本自动 OIDC 发布 npm。
+
+beta 候选以 Actions 的 `npm-candidate` 和五个平台制品验收；预发布版本不更新 npm latest。正式发行的同一份已测试 tarball 与 SHA256 平台清单直接进入发布，不重新打包。
+
+MIT License。

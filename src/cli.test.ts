@@ -22,6 +22,7 @@ function harness() {
 
 /** doctor / model 测试用的「没有 Ollama」假工具集（不碰真网络/进程） */
 const noOllamaTools = () => ({
+  clientHome: join(tmpdir(), "memobox-test-no-home"),
   probeOllama: async () => null,
   ollamaVersion: async () => null,
   ensureServer: async () => false,
@@ -32,11 +33,14 @@ const noOllamaTools = () => ({
 
 /** 把配置文件指向不存在的临时路径并删掉 env 干扰；返回还原函数 */
 function isolateConfig(): () => void {
+  const previousDb = process.env.MEMOBOX_DB_PATH;
+  process.env.MEMOBOX_DB_PATH = join(tmpdir(), "memobox-test-no-db-" + crypto.randomUUID(), "memory.db");
   const prevBase = process.env.EMBEDDING_API_BASE;
   const prevCfg = process.env.MEMOBOX_CONFIG_PATH;
   delete process.env.EMBEDDING_API_BASE;
   process.env.MEMOBOX_CONFIG_PATH = join(tmpdir(), "memobox-test-no-config.json");
   return () => {
+    if (previousDb === undefined) delete process.env.MEMOBOX_DB_PATH; else process.env.MEMOBOX_DB_PATH = previousDb;
     if (prevBase !== undefined) process.env.EMBEDDING_API_BASE = prevBase;
     if (prevCfg !== undefined) process.env.MEMOBOX_CONFIG_PATH = prevCfg;
     else delete process.env.MEMOBOX_CONFIG_PATH;
@@ -573,7 +577,7 @@ describe("model 子命令（v2.4，本地小模型管理）", () => {
       const h3 = harness();
       expect(await runCli(["model", "enable", "--lite"], h3.io, h3.store, missing)).toBe(1);
       expect(h3.err[0]).toContain("未安装");
-      expect(h3.err.some((l) => l.includes("npm i -g @huggingface/transformers"))).toBe(true);
+      expect(h3.err.some((l) => l.includes("MEMOBOX_RUNTIME_PATH"))).toBe(true);
       expect(existsSync(CFG)).toBe(false);
     } finally {
       restore();

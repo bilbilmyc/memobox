@@ -1,0 +1,717 @@
+{
+  "description": "Authored synthetic bilingual memories and relevance judgments; no user memories. Training topics and held-out topics differ. History and duplicates remain relevant when necessary to answer the query.",
+  "memories": [
+    {
+      "id": "t-port",
+      "content": "开发服务使用端口 3100，生产环境通过反向代理暴露 443。",
+      "kind": "decision",
+      "entities": [
+        "训练项目甲"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 100
+    },
+    {
+      "id": "t-port-old",
+      "content": "旧开发服务使用端口 3000；这项决定后来改为 3100。",
+      "kind": "event",
+      "entities": [
+        "训练项目甲"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 101
+    },
+    {
+      "id": "t-port-dup",
+      "content": "开发服务使用端口 3100，生产环境通过反向代理暴露 443。",
+      "kind": "decision",
+      "entities": [
+        "训练项目甲"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 102
+    },
+    {
+      "id": "t-tests",
+      "content": "Run the integration tests before merging changes into the main branch.",
+      "kind": "preference",
+      "entities": [
+        "Training project B"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 103
+    },
+    {
+      "id": "t-browser",
+      "content": "The browser acceptance test must click Save and reopen the stored record.",
+      "kind": "decision",
+      "entities": [
+        "Training project B"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 104
+    },
+    {
+      "id": "t-key",
+      "content": "不要把访问密钥写入 Git 仓库；密钥从本机环境变量读取。",
+      "kind": "preference",
+      "entities": [
+        "训练安全"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 105
+    },
+    {
+      "id": "t-network",
+      "content": "API 请求默认五秒超时，失败后保留数据并报告错误。",
+      "kind": "fact",
+      "entities": [
+        "训练网络"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 106
+    },
+    {
+      "id": "t-language",
+      "content": "Human terminal output should be in Chinese; protocol fields stay in English.",
+      "kind": "preference",
+      "entities": [
+        "Training CLI"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 107
+    },
+    {
+      "id": "t-index",
+      "content": "向量来自不同模型时不能直接比较相似度；切换模型需要补算。",
+      "kind": "fact",
+      "entities": [
+        "训练检索"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 108
+    },
+    {
+      "id": "t-db",
+      "content": "SQLite transactions keep related writes atomic when a statement fails.",
+      "kind": "fact",
+      "entities": [
+        "Training storage"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 109
+    },
+    {
+      "id": "t-ui",
+      "content": "表格要按中文和 emoji 的终端显示宽度对齐。",
+      "kind": "preference",
+      "entities": [
+        "训练界面"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 110
+    },
+    {
+      "id": "t-doc",
+      "content": "Keep setup examples in the README so new users can run the tool independently.",
+      "kind": "decision",
+      "entities": [
+        "Training documentation"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 111
+    },
+    {
+      "id": "h-backup",
+      "content": "批量删除前先导出 JSON 备份；恢复时保留记忆编号和原始创建时间。",
+      "kind": "decision",
+      "entities": [
+        "备份产品"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 112
+    },
+    {
+      "id": "h-storage",
+      "content": "共享记忆存放在 SQLite 数据库，多个 agent 连接同一个绝对路径。",
+      "kind": "fact",
+      "entities": [
+        "共享工具"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 113
+    },
+    {
+      "id": "h-docker",
+      "content": "Use Docker Compose to start the local service and mount a named data volume.",
+      "kind": "decision",
+      "entities": [
+        "Container project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 114
+    },
+    {
+      "id": "h-deploy",
+      "content": "The deployment must verify a real checkout and refund flow before going live.",
+      "kind": "preference",
+      "entities": [
+        "Shop project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 115
+    },
+    {
+      "id": "h-android",
+      "content": "安卓设备通过 USB 调试连接 adb，首次连接需要在手机上授权。",
+      "kind": "fact",
+      "entities": [
+        "移动设备"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 116
+    },
+    {
+      "id": "h-ssh",
+      "content": "SSH authentication uses a private key stored locally; never upload it to the repository.",
+      "kind": "decision",
+      "entities": [
+        "Remote project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 117
+    },
+    {
+      "id": "h-help",
+      "content": "命令参数非法时返回退出码 2，错误走 stderr，JSON 结果走 stdout。",
+      "kind": "fact",
+      "entities": [
+        "终端产品"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 118
+    },
+    {
+      "id": "h-npm",
+      "content": "Only a new stable version on the main branch is published to npm automatically.",
+      "kind": "decision",
+      "entities": [
+        "Release project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 119
+    },
+    {
+      "id": "h-npm-old",
+      "content": "Previously npm publishing was manual; main now uses automated stable-version releases.",
+      "kind": "event",
+      "entities": [
+        "Release project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 120
+    },
+    {
+      "id": "h-privacy",
+      "content": "真实用户的记忆内容不能打包进 npm 安装包或公开测试制品。",
+      "kind": "preference",
+      "entities": [
+        "隐私产品"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 121
+    },
+    {
+      "id": "h-timeout",
+      "content": "An embedding service that stops responding must time out and fall back to keyword search.",
+      "kind": "decision",
+      "entities": [
+        "Search project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 122
+    },
+    {
+      "id": "h-config",
+      "content": "环境变量优先于配置文件；配置文件优先于默认值。",
+      "kind": "fact",
+      "entities": [
+        "配置产品"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 123
+    },
+    {
+      "id": "h-cache",
+      "content": "The MCP process stays running and refreshes its cache when another connection writes.",
+      "kind": "fact",
+      "entities": [
+        "Cache project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 124
+    },
+    {
+      "id": "h-upgrade",
+      "content": "升级数据库只能添加兼容字段，不能删除原来的记忆和实体标签。",
+      "kind": "decision",
+      "entities": [
+        "升级产品"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 125
+    },
+    {
+      "id": "h-date",
+      "content": "原始历史决定保留创建时间，更新正文不改变记忆编号。",
+      "kind": "preference",
+      "entities": [
+        "历史产品"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 126
+    },
+    {
+      "id": "h-port-current",
+      "content": "项目丙当前调试端口为 4200，旧端口 4100 已停用。",
+      "kind": "decision",
+      "entities": [
+        "项目丙"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 127
+    },
+    {
+      "id": "h-port-old",
+      "content": "项目丙早期使用调试端口 4100；后续记录注明已停用。",
+      "kind": "event",
+      "entities": [
+        "项目丙"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 128
+    },
+    {
+      "id": "h-port-copy",
+      "content": "项目丙当前调试端口为 4200，旧端口 4100 已停用。",
+      "kind": "decision",
+      "entities": [
+        "项目丙"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 129
+    },
+    {
+      "id": "h-online",
+      "content": "Do not enable telemetry or upload local memories by default.",
+      "kind": "preference",
+      "entities": [
+        "Offline project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 130
+    },
+    {
+      "id": "h-restore",
+      "content": "A failed restore transaction must leave all existing rows untouched.",
+      "kind": "decision",
+      "entities": [
+        "Restore project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 131
+    },
+    {
+      "id": "h-model",
+      "content": "可选模型首次下载后缓存在本机，基础关键词检索无需安装模型。",
+      "kind": "fact",
+      "entities": [
+        "模型产品"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 132
+    },
+    {
+      "id": "h-tags",
+      "content": "Entity tags identify a project; source identifies the agent that wrote a memory.",
+      "kind": "fact",
+      "entities": [
+        "Tag project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 133
+    },
+    {
+      "id": "h-pagination",
+      "content": "结构化查询先在全库过滤，再按创建时间和编号分页。",
+      "kind": "fact",
+      "entities": [
+        "查询产品"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 134
+    },
+    {
+      "id": "h-empty",
+      "content": "Reject blank memory content before creating a database or calling an embedding API.",
+      "kind": "decision",
+      "entities": [
+        "Input project"
+      ],
+      "source": "synthetic-evaluation",
+      "createdAt": 135
+    }
+  ],
+  "training": [
+    {
+      "id": "t-exact",
+      "category": "exact",
+      "query": "开发端口 3100",
+      "relevant": [
+        "t-port",
+        "t-port-old",
+        "t-port-dup"
+      ]
+    },
+    {
+      "id": "t-paraphrase",
+      "category": "paraphrase",
+      "query": "服务开发时监听哪个端口？",
+      "relevant": [
+        "t-port",
+        "t-port-old",
+        "t-port-dup"
+      ]
+    },
+    {
+      "id": "t-test",
+      "category": "english",
+      "query": "What checks should pass before merging?",
+      "relevant": [
+        "t-tests"
+      ]
+    },
+    {
+      "id": "t-browser-q",
+      "category": "paraphrase",
+      "query": "How do we verify that saving in the browser really persisted?",
+      "relevant": [
+        "t-browser"
+      ]
+    },
+    {
+      "id": "t-negation",
+      "category": "negation",
+      "query": "访问密钥可以提交到仓库吗？",
+      "relevant": [
+        "t-key"
+      ]
+    },
+    {
+      "id": "t-cross-en",
+      "category": "cross_language",
+      "query": "Where should access secrets be kept?",
+      "relevant": [
+        "t-key"
+      ]
+    },
+    {
+      "id": "t-cross-zh",
+      "category": "cross_language",
+      "query": "合并代码之前要运行什么测试？",
+      "relevant": [
+        "t-tests"
+      ]
+    },
+    {
+      "id": "t-vector",
+      "category": "paraphrase",
+      "query": "换了嵌入模型后，已有向量应该怎么处理？",
+      "relevant": [
+        "t-index"
+      ]
+    },
+    {
+      "id": "t-storage-q",
+      "category": "english",
+      "query": "How are partial database writes prevented?",
+      "relevant": [
+        "t-db"
+      ]
+    },
+    {
+      "id": "t-output",
+      "category": "english",
+      "query": "What language is used for terminal messages?",
+      "relevant": [
+        "t-language"
+      ]
+    },
+    {
+      "id": "t-columns",
+      "category": "exact",
+      "query": "中文 emoji 对齐",
+      "relevant": [
+        "t-ui"
+      ]
+    },
+    {
+      "id": "t-doc-q",
+      "category": "english",
+      "query": "Where can first-time users find setup examples?",
+      "relevant": [
+        "t-doc"
+      ]
+    },
+    {
+      "id": "t-negative-1",
+      "category": "unrelated",
+      "query": "天文学中的黑洞如何形成？",
+      "relevant": []
+    },
+    {
+      "id": "t-negative-2",
+      "category": "unrelated",
+      "query": "What is the best recipe for chocolate cake?",
+      "relevant": []
+    },
+    {
+      "id": "t-negative-3",
+      "category": "unrelated",
+      "query": "How old are sea turtles?",
+      "relevant": []
+    },
+    {
+      "id": "t-negative-4",
+      "category": "unrelated",
+      "query": "杜甫出生于哪一年？",
+      "relevant": []
+    }
+  ],
+  "heldout": [
+    {
+      "id": "h-json",
+      "category": "exact",
+      "query": "批量删除 JSON 备份",
+      "relevant": [
+        "h-backup"
+      ]
+    },
+    {
+      "id": "h-backup-q",
+      "category": "paraphrase",
+      "query": "误清理记忆后如何恢复编号和时间？",
+      "relevant": [
+        "h-backup",
+        "h-restore"
+      ]
+    },
+    {
+      "id": "h-db-q",
+      "category": "paraphrase",
+      "query": "不同助手的记忆要怎样存放才能互相看到？",
+      "relevant": [
+        "h-storage",
+        "h-cache"
+      ]
+    },
+    {
+      "id": "h-cross-db",
+      "category": "cross_language",
+      "query": "Where do agents store their shared long-term memories?",
+      "relevant": [
+        "h-storage",
+        "h-cache"
+      ]
+    },
+    {
+      "id": "h-compose",
+      "category": "english",
+      "query": "How should the development container keep its data?",
+      "relevant": [
+        "h-docker"
+      ]
+    },
+    {
+      "id": "h-shop",
+      "category": "paraphrase",
+      "query": "Is a health endpoint enough to accept a shop deployment?",
+      "relevant": [
+        "h-deploy"
+      ]
+    },
+    {
+      "id": "h-adb",
+      "category": "exact",
+      "query": "adb USB 调试授权",
+      "relevant": [
+        "h-android"
+      ]
+    },
+    {
+      "id": "h-adb-cross",
+      "category": "cross_language",
+      "query": "How do I authorize the Android USB debugging connection?",
+      "relevant": [
+        "h-android"
+      ]
+    },
+    {
+      "id": "h-ssh-q",
+      "category": "negation",
+      "query": "Can an SSH private key be committed?",
+      "relevant": [
+        "h-ssh"
+      ]
+    },
+    {
+      "id": "h-exit",
+      "category": "exact",
+      "query": "参数错误 退出码 stderr",
+      "relevant": [
+        "h-help"
+      ]
+    },
+    {
+      "id": "h-publish",
+      "category": "english",
+      "query": "When does npm receive a release?",
+      "relevant": [
+        "h-npm",
+        "h-npm-old"
+      ]
+    },
+    {
+      "id": "h-private",
+      "category": "negation",
+      "query": "公开发行包能包含真实用户记忆吗？",
+      "relevant": [
+        "h-privacy"
+      ]
+    },
+    {
+      "id": "h-service",
+      "category": "paraphrase",
+      "query": "What happens when the vector API hangs?",
+      "relevant": [
+        "h-timeout"
+      ]
+    },
+    {
+      "id": "h-priority",
+      "category": "exact",
+      "query": "环境变量 配置文件 默认值",
+      "relevant": [
+        "h-config"
+      ]
+    },
+    {
+      "id": "h-cache-q",
+      "category": "english",
+      "query": "Will a running client see another agent edit a memory?",
+      "relevant": [
+        "h-cache",
+        "h-storage"
+      ]
+    },
+    {
+      "id": "h-upgrade-q",
+      "category": "paraphrase",
+      "query": "更新库结构时原记忆和标签怎么办？",
+      "relevant": [
+        "h-upgrade"
+      ]
+    },
+    {
+      "id": "h-time-q",
+      "category": "paraphrase",
+      "query": "编辑正文是否改变记录标识和创建日期？",
+      "relevant": [
+        "h-date"
+      ]
+    },
+    {
+      "id": "h-history",
+      "category": "conflict_history",
+      "query": "项目丙的调试端口改过吗？",
+      "relevant": [
+        "h-port-current",
+        "h-port-old",
+        "h-port-copy"
+      ]
+    },
+    {
+      "id": "h-upload",
+      "category": "negation",
+      "query": "Should local memory be sent to telemetry automatically?",
+      "relevant": [
+        "h-online",
+        "h-privacy"
+      ]
+    },
+    {
+      "id": "h-restore-q",
+      "category": "english",
+      "query": "What happens to existing rows after restore fails?",
+      "relevant": [
+        "h-restore"
+      ]
+    },
+    {
+      "id": "h-lite",
+      "category": "paraphrase",
+      "query": "不用模型也能搜吗？模型会重复下载吗？",
+      "relevant": [
+        "h-model"
+      ]
+    },
+    {
+      "id": "h-tags-q",
+      "category": "english",
+      "query": "How is a project tag different from the writing agent?",
+      "relevant": [
+        "h-tags"
+      ]
+    },
+    {
+      "id": "h-filter",
+      "category": "exact",
+      "query": "全库过滤 分页",
+      "relevant": [
+        "h-pagination"
+      ]
+    },
+    {
+      "id": "h-whitespace",
+      "category": "english",
+      "query": "Can a blank note create a database or make a model request?",
+      "relevant": [
+        "h-empty"
+      ]
+    },
+    {
+      "id": "h-unrelated-1",
+      "category": "unrelated",
+      "query": "意大利面通常煮几分钟？",
+      "relevant": []
+    },
+    {
+      "id": "h-unrelated-2",
+      "category": "unrelated",
+      "query": "What are Saturn rings made of?",
+      "relevant": []
+    },
+    {
+      "id": "h-unrelated-3",
+      "category": "unrelated",
+      "query": "鲸鱼每年如何迁徙？",
+      "relevant": []
+    },
+    {
+      "id": "h-unrelated-4",
+      "category": "unrelated",
+      "query": "How do I tune a classical violin?",
+      "relevant": []
+    }
+  ]
+}

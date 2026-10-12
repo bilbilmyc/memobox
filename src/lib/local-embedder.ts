@@ -1,16 +1,18 @@
 /**
- * 进程内嵌入模型（v2.5 轻量语义方案）：
+ * 本机嵌入模型：源码进程内加载，编译版按需启动同一程序的模型助手。
  * transformers.js + 量化 ONNX 小模型（默认 bge-small-zh-v1.5，约 25MB，
- * 512 维，中英都好使），CPU/WASM 推理——无服务、无端口、无 Ollama。
+ * 512 维），CPU 推理，无端口或共享模型服务。
  *
  * 重量控制：transformers.js 只在第一次真正 embed 时才动态 import，
  * keyword 模式的进程（绝大多数 MCP 拉起）完全不加载它。
  * 模型缓存在 ~/.memobox/models；国内默认走 hf-mirror.com，
  * 可用 HF_ENDPOINT 换源（如 https://huggingface.co）。
  */
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { EmbeddingProvider } from "./embeddings";
+import { pathToFileURL } from "node:url";
+import { IS_COMPILED } from "../runtime";
+import { localRuntimeEntry, modelCachePath } from "./optional-runtime";
+import { createLocalModelProcess } from "./local-model-process";
 
 export const LOCAL_EMBED_MODEL = "Xenova/bge-small-zh-v1.5";
 export const LOCAL_EMBED_DIM = 512;
@@ -20,17 +22,22 @@ const HF_HOSTS = ["https://hf-mirror.com", "https://huggingface.co"];
 
 type Extractor = (
   text: string,
-  opts: { pooling: "mean"; normalize: boolean }
+  opts: { pooling: "cls"; normalize: boolean }
 ) => Promise<{ data: Float32Array }>;
 
 /** 模块级单例：同一进程里 probe/补算/store 共用一个加载好的模型 */
 let extractorPromise: Promise<Extractor> | null = null;
+let modelProcess: ReturnType<typeof createLocalModelProcess> | null = null;
+const queryCache = new Map<string, Promise<number[]>>();
 
 async function loadExtractor(
   onProgress?: (msg: string) => void
 ): Promise<Extractor> {
-  const { pipeline, env } = await import("@huggingface/transformers");
-  env.cacheDir = join(homedir(), ".memobox", "models");
+  const external = IS_COMPILED || Boolean(process.env.MEMOBOX_RUNTIME_PATH);
+  const entry = external ? localRuntimeEntry() : null;
+  if (external && !entry) throw Error("Cannot find package '@huggingface/transformers'");
+  const { pipeline, env } = external ? await import(pathToFileURL(entry!).href) as typeof import("@huggingface/transformers") : await import("@huggingface/transformers");
+  env.cacheDir = modelCachePath();
   // 显式 HF_ENDPOINT 最优先（海外用户指回官方源）
   const first = process.env.HF_ENDPOINT;
   const hosts = first
@@ -43,6 +50,8 @@ async function loadExtractor(
       onProgress?.(`从 ${host} 加载模型（首次约 25MB，之后走本地缓存）…`);
       const pipe = await pipeline("feature-extraction", LOCAL_EMBED_MODEL, {
         dtype: "q8",
+        // 小模型使用一个推理线程，避免多个 MCP 的线程池竞争拖慢 IPC 尾延迟。
+        session_options: { intraOpNumThreads: 1 },
       });
       return pipe as unknown as Extractor;
     } catch (e) {
@@ -57,11 +66,12 @@ async function loadExtractor(
 export function createLocalEmbedder(
   onProgress?: (msg: string) => void
 ): EmbeddingProvider {
-  return {
-    model: LOCAL_EMBED_MODEL,
-    dimensions: LOCAL_EMBED_DIM,
-    space: "transformers-feature-extraction-v1:mean:normalize:q8",
-    async embed(text: string): Promise<number[]> {
+  async function embed(text: string): Promise<number[]> {
+      if (IS_COMPILED) {
+        if (!localRuntimeEntry()) throw Error("Cannot find package '@huggingface/transformers'");
+        modelProcess ??= createLocalModelProcess(onProgress);
+        return modelProcess.embed(text);
+      }
       if (!extractorPromise) {
         // 失败要能重试：清掉缓存的 promise
         extractorPromise = loadExtractor(onProgress).catch((e) => {
@@ -70,15 +80,37 @@ export function createLocalEmbedder(
         });
       }
       const extract = await extractorPromise;
-      const out = await extract(text, { pooling: "mean", normalize: true });
+      const out = await extract(text, { pooling: "cls", normalize: true });
       return Array.from(out.data);
-    },
+  }
+  async function embedQuery(text: string): Promise<number[]> {
+    const input = "为这个句子生成表示以用于检索相关文章：" + text;
+    if (text.length > 4096) return embed(input);
+    let result = queryCache.get(text);
+    if (result) { queryCache.delete(text); queryCache.set(text, result); }
+    else {
+      result = embed(input).catch(error => { if (queryCache.get(text) === result) queryCache.delete(text); throw error; });
+      queryCache.set(text, result);
+      if (queryCache.size > 128) queryCache.delete(queryCache.keys().next().value!);
+    }
+    // 缓存的是固定模型的查询向量，不缓存召回结果；范围和外部写入仍实时生效。
+    return [...await result];
+  }
+  return {
+    model: LOCAL_EMBED_MODEL, dimensions: LOCAL_EMBED_DIM,
+    space: "transformers-feature-extraction-v2:cls:query-instruction:normalize:q8",
+    // 在训练集上固定；不把内置模型的分布阈值套给其他端点模型。
+    minimumSimilarity: 0.45,
+    embed,
+    embedQuery,
   };
 }
 
 /** 仅测试用：清掉模型单例，让下一个用例可以注入假的 transformers */
 export function resetLocalExtractor(): void {
   extractorPromise = null;
+  queryCache.clear();
+  modelProcess?.stop(); modelProcess = null;
 }
 
 /**

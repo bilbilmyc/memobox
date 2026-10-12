@@ -10,7 +10,10 @@ export interface EmbeddingProvider {
   readonly dimensions: number;
   /** 同模型名下区分端点和预处理版本；不包含 API 密钥。 */
   readonly space?: string;
+  /** 本机模型可区分文档/查询编码；端点与自定义 provider 默认沿用 embed。 */
+  readonly minimumSimilarity?: number;
   embed(text: string): Promise<number[]>;
+  embedQuery?(text: string): Promise<number[]>;
 }
 
 import { createHash } from "node:crypto";

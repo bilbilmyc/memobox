@@ -8,6 +8,10 @@ function fakeStore(): MemoryStore {
   return {
     backend: "fake",
     retrieval: "keyword" as const,
+    async scanMaintenance() { return { inspected: 0, duplicates: [], conflicts: [], older: [] }; },
+    async planMaintenance() { throw Error("Unsupported in protocol fake"); },
+    async applyMaintenance() { throw Error("Unsupported in protocol fake"); },
+    async restoreMemories() { throw Error("Unsupported in protocol fake"); },
     async save(input) {
       const row: Memory = { id: `t${rows.size + 1}`, createdAt: 1, ...input };
       rows.set(row.id, row);
@@ -123,6 +127,7 @@ describe("handleRpcBody", () => {
       "memory_search",
       "memory_entities",
       "memory_get", "memory_update", "memory_forget", "memory_query",
+      "memory_maintenance_scan", "memory_maintenance_plan", "memory_maintenance_apply",
     ]);
   });
 

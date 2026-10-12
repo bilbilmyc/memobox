@@ -1,0 +1,67 @@
+// memobox 管理的 pi 扩展；只适配工具与 stdio，不维护另一套数据库。
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
+import { readFileSync } from "node:fs";
+const configPath = __MEMOBOX_CONFIG__;
+const tools = __MEMOBOX_TOOLS__;
+export default function (pi) {
+  let child, ready, sequence = 0;
+  const pending = new Map();
+  const fail = error => { for (const item of pending.values()) { clearTimeout(item.timer); item.reject(error); } pending.clear(); };
+  const stop = () => { const current = child; child = undefined; ready = undefined; fail(Error("memobox connection closed")); current?.stdin.end(); current?.kill(); };
+  process.once("exit", stop);
+  function rpc(method, params) {
+    const id = ++sequence;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { stop(); reject(Error("memobox request timed out")); }, 180000);
+      pending.set(id, { resolve, reject, timer });
+      child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+    });
+  }
+  function connect() {
+    if (ready) return ready;
+    let attempt;
+    attempt = (async () => {
+      const entry = JSON.parse(readFileSync(configPath, "utf8")).mcpServers?.memobox;
+      if (!entry || typeof entry.command !== "string" || !Array.isArray(entry.args)) throw Error("memobox configuration invalid; run memobox install pi --force");
+      const current = spawn(entry.command, entry.args, { env: { ...process.env, ...entry.env }, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+      child = current;
+      const disconnect = () => { if (child === current) stop(); };
+      current.stderr.resume(); current.stdin.on("error", disconnect);
+      const lines = createInterface({ input: current.stdout });
+      lines.on("line", line => {
+        try {
+          const response = JSON.parse(line), item = pending.get(response.id); if (!item) return;
+          clearTimeout(item.timer); pending.delete(response.id);
+          if (response.error) item.reject(Error("memobox protocol request failed")); else item.resolve(response.result);
+        } catch { disconnect(); }
+      });
+      current.once("error", disconnect); current.once("exit", () => { disconnect(); lines.close(); });
+      await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "memobox-pi", version: "1" } });
+      current.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
+    })().catch(error => { if (ready === attempt) stop(); throw error; });
+    ready = attempt;
+    return ready;
+  }
+  pi.on("session_shutdown", async () => {
+    const current = child; if (!current) return;
+    const closed = new Promise(resolve => current.once("close", resolve));
+    current.stdin.end();
+    let timer;
+    try { await Promise.race([closed, new Promise(resolve => { timer = setTimeout(() => { current.kill(); resolve(); }, 2000); })]); }
+    finally { clearTimeout(timer); stop(); }
+  });
+  for (const tool of tools) pi.registerTool({
+    name: "memobox_" + tool.name, label: tool.name, description: tool.description, parameters: tool.inputSchema,
+    async execute(_id, parameters, signal) {
+      if (signal?.aborted) throw Error("memobox request cancelled");
+      const abort = () => stop(); signal?.addEventListener("abort", abort, { once: true });
+      try {
+        await connect(); if (signal?.aborted) throw Error("memobox request cancelled");
+        const result = await rpc("tools/call", { name: tool.name, arguments: parameters });
+        if (result.isError) throw Error(result.content?.filter(item => item.type === "text").map(item => item.text).join("\n") || "memobox tool failed");
+        return { content: result.content, details: result.structuredContent };
+      } finally { signal?.removeEventListener("abort", abort); }
+    },
+  });
+}

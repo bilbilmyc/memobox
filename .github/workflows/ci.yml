@@ -2,6 +2,7 @@
 name: CI
 
 on:
+  workflow_call:
   push:
     branches: [main, 'codex/**']
   pull_request:
@@ -11,10 +12,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event_name }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
+  accepted:
+    name: Product acceptance
+    if: always()
+    needs: [distribution, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: 所有原生平台、实际安装、质量与性能门禁必须通过
+        env:
+          DISTRIBUTION: ${{ needs.distribution.result }}
+          REGRESSION: ${{ needs.test.result }}
+        run: test "$DISTRIBUTION" = success && test "$REGRESSION" = success
+  distribution:
+    uses: ./.github/workflows/native.yml
   test:
     strategy:
       fail-fast: false
