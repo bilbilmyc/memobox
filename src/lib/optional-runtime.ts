@@ -14,7 +14,8 @@ export function localRuntimeEntry(): string | null {
   try {
     if (IS_COMPILED || process.env.MEMOBOX_RUNTIME_PATH) {
       const entry = join(optionalRuntimePath(), "node_modules", "@huggingface", "transformers", "dist", "transformers.node.cjs");
-      return existsSync(entry) ? entry : null;
+      const binding = join(optionalRuntimePath(), "node_modules", "onnxruntime-node", "bin", "napi-v6", process.platform, process.arch, "onnxruntime_binding.node");
+      return existsSync(entry) && existsSync(binding) ? entry : null;
     }
     const base = IS_COMPILED || process.env.MEMOBOX_RUNTIME_PATH ? join(optionalRuntimePath(), "package.json") : import.meta.url;
     return createRequire(base).resolve("@huggingface/transformers");
@@ -39,7 +40,13 @@ export async function installLocalRuntime(onProgress?: (message: string) => void
   writeFileSync(lock, JSON.stringify({ pid: process.pid }));
   try {
   const packageFile = join(directory, "package.json");
-  if (!existsSync(packageFile)) writeFileSync(packageFile, JSON.stringify({ name: "memobox-optional-runtime", private: true }, null, 2), { flag: "wx", mode: 0o600 });
+  const overrides = process.platform === "darwin" && process.arch === "x64" ? { "onnxruntime-node": "1.23.2" } : {};
+  if (!existsSync(packageFile)) writeFileSync(packageFile, JSON.stringify({ name: "memobox-optional-runtime", private: true, overrides }, null, 2), { flag: "wx", mode: 0o600 });
+  else if (Object.keys(overrides).length) {
+    const existing = JSON.parse(readFileSync(packageFile, "utf8"));
+    if (existing.name !== "memobox-optional-runtime") throw Error("macOS Intel 需要兼容的 ONNX 运行时；请将 MEMOBOX_RUNTIME_PATH 指向独立的 memobox 模型依赖目录");
+    writeFileSync(packageFile, JSON.stringify({ ...existing, overrides: { ...existing.overrides, ...overrides } }, null, 2), { mode: 0o600 });
+  }
   onProgress?.("按需安装内置模型依赖到 " + directory + "（不包含在基础发行包中）");
   const child = spawn(process.execPath, ["add", "--cwd", directory, "--exact", "--ignore-scripts", `@huggingface/transformers@${OPTIONAL_TRANSFORMERS_VERSION}`],
     { env: { ...process.env, ...(IS_COMPILED ? { BUN_BE_BUN: "1" } : {}) }, windowsHide: true, shell: false, stdio: ["ignore", "pipe", "pipe"] });
