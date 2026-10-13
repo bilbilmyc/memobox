@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
-import { releaseCommit } from "./github.mjs";
+import { prepareRelease } from "./github.mjs";
 assert.equal(process.env.GITHUB_REPOSITORY, "bilbilmyc/memobox");
 assert.equal(process.env.GITHUB_REF, "refs/heads/main");
 assert.equal(process.env.GITHUB_EVENT_NAME, "push");
@@ -97,37 +97,12 @@ for (const name of ["SHA256SUMS", "manifest.json"])
     name,
     hash: hash("release/" + name),
   });
-let release = api("releases/tags/" + tag, true);
-const existingCommit = releaseCommit(api, tag);
-if (existingCommit)
-  assert.equal(
-    existingCommit.sha,
-    process.env.GITHUB_SHA,
-    "Existing release tag targets another commit",
-  );
-if (!release) {
-  gh([
-    "release",
-    "create",
-    tag,
-    "--target",
-    process.env.GITHUB_SHA,
-    "--draft",
-    "--title",
-    "memobox " + pkg.version,
-    "--notes-file",
-    "docs/RELEASE-2.6.3.md",
-  ]);
-  release = api("releases/tags/" + tag);
-}
-if (release.draft)
-  assert.equal(
-    release.target_commitish,
-    process.env.GITHUB_SHA,
-    "Draft release targets another commit",
-  );
-if (!release.draft)
-  assert.equal(api("commits/" + tag).sha, process.env.GITHUB_SHA);
+const release = prepareRelease(api, gh, {
+  tag,
+  revision: process.env.GITHUB_SHA,
+  title: "memobox " + pkg.version,
+  notesFile: "docs/RELEASE-2.6.3.md",
+});
 const verify = resolve("artifacts/release-verification");
 mkdirSync(verify, { recursive: true });
 for (const asset of assets) {

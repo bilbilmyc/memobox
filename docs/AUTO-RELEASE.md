@@ -24,6 +24,7 @@
 - 新正式版本必须大于 npm latest；已有版本跳过，registry 查询故障明确失败，不伪装成未发布。
 - Linux/Windows 源码回归与五个平台原机验收全部通过。覆盖中文操作、真实模型与端点、配置/Pi 扩展、维护恢复、双 MCP、退出信号和无 Bun 的同一 npm tarball。Linux 另执行冻结留出集质量及 100/1000/10000 条磁盘 MCP 新旧对比，任何失败阻止发布。
 - 发布阶段下载 npm-candidate 和五个平台资产，核对版本、commit SHA、tarball SHA-512、原生/压缩 SHA256 及各平台真实模型/端点/Pi 验收 receipt；不重新编译或打包。GitHub Release 先以 draft 上传，只补缺失资产，下载核对字节后公开；标签必须指向当前提交，已有冲突资产不能覆盖。
+- 草稿通过带权限的 Release 列表查找（公开标签接口对草稿返回 404）。失败重跑复用同提交草稿；修复 PR 合并后，仅无标签且无附件的空草稿可更新到新提交，并重新读取确认。已有标签或附件的其他提交草稿继续拒绝，不自动覆盖。
 - 发布串行执行，正式标签为 `latest`；发布前再核对版本，防止重复发布或把 latest 回退。registry 入库延迟只重试查询，不重试 publish。公开重装运行正常 postinstall，并核对官方 tarball 完整性和实际 CLI/MCP 产品流程。
 - GitHub `npm` 环境只允许 `main` 类型为 branch 的规则；该环境不设置人工审批，因此合法新版本可以全自动发布。
 - 只在发布 job 授予 `id-token: write`，使用短期 OIDC 身份，不设置 NPM_TOKEN。依赖安装及检查 job 没有发布身份权限。
@@ -79,5 +80,9 @@ GitHub 实际验证：[CI](https://github.com/bilbilmyc/memobox/actions/runs/382
 npm 账号绑定已完成，正式 latest 仍为 2.6.2，本次没有发布新版本。第一个新正式版本的 OIDC 发布及 Linux/Windows 发行物矩阵将在版本号更新后的 main 推送中执行；现有绑定成功和跳过测试不代表该发布路径已实际运行。
 
 ## 2.6.3 完整门禁
+
+2026-10-13 排查：10 月 12 日的两次 main 发布在 GitHub 资产阶段失败，尚未执行 npm OIDC 发布。[第一次](https://github.com/bilbilmyc/memobox/actions/runs/38268088759) 在新标签不存在时查询提交收到 422（已由 PR #3 修复）；[第二次](https://github.com/bilbilmyc/memobox/actions/runs/38270889197) 创建草稿后查询公开标签接口收到 404，留下无标签、无附件的草稿。本次补齐草稿查询与空草稿恢复行为回归。排查时 npm latest 为 2.6.2；本机 npm 登录过期不代表 CI 的 OIDC 绑定失效，实际联动仍需由新 main 发布工作流验证。
+
+修复本地验证：222 项测试、1093 次断言和 TypeScript 检查通过；`pack-and-test` 的隔离安装、无外部 Bun 的 Node CLI、双 MCP 通过。本次只修改发行编排，不改检索/存储热点；完整质量和性能门禁由 PR/main CI 再执行。
 
 开发版完整 CI [38265380668](https://github.com/bilbilmyc/memobox/actions/runs/38265380668) 的 15 项检查通过，包括五个平台真实可选模型、Node 安装及质量/性能。正式版本在最新 PR 和 main 发布工作流再次执行相同门禁。Trusted Publisher 保持原 publish.yml / npm 环境绑定，不需要长期 token。发行验收与原始数据见 [开发记录](./DEVELOPMENT-2.6.3.md)。
