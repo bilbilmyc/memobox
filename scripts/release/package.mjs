@@ -6,6 +6,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import assert from "node:assert/strict";
 import { validateTarball } from "../native/test-package.mjs";
 import { planRelease, readRegistry } from "./plan.mjs";
+import { verifyPublishedRelease } from "./verify.mjs";
 
 const root = process.cwd(), pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
 const npmCli = [join(dirname(process.execPath), "node_modules/npm/bin/npm-cli.js"), resolve(dirname(process.execPath), "../lib/node_modules/npm/bin/npm-cli.js")].find(existsSync);
@@ -60,19 +61,9 @@ async function publish() {
   const artifactPkg = JSON.parse(execute("tar", ["-xOf", tarball, "package/package.json"]));
   assert.equal(artifactPkg.name, pkg.name); assert.equal(artifactPkg.version, pkg.version);
   console.log(npm(["publish", tarball, "--ignore-scripts", "--access", "public", "--tag", "latest", "--provenance"]));
-  // registry 可能异步入库；核对版本和完整性，不因索引延迟再次 publish。
-  for (let attempt = 0; attempt < 30; attempt++) {
-    const response = await fetch(`https://registry.npmjs.org/memobox/${pkg.version}`, { signal: AbortSignal.timeout(10000) });
-    if (response.ok) {
-      const released = await response.json(); assert.equal(released.dist.integrity, receipt.integrity);
-      assert(released.dist.attestations?.url, "npm provenance attestation missing");
-      const current = await readRegistry(); assert.equal(current.latest, pkg.version);
-      console.log("已发布并核对 npm latest/integrity：" + pkg.version); return;
-    }
-    if (response.status !== 404 && response.status !== 429 && response.status < 500) throw Error("发布后查询失败：HTTP " + response.status);
-    await new Promise(done => setTimeout(done, 2000));
-  }
-  throw Error("npm publish 已成功，但 registry 验证超时；请查询版本，勿重复发布同版本");
+  // registry 的版本、证明与 latest 可能分别延迟；只重试查询，绝不再次 publish。
+  await verifyPublishedRelease(receipt);
+  console.log("已发布并核对 npm latest/integrity：" + pkg.version);
 }
 
 if (process.argv[2] === "pack-and-test") await packAndTest();
