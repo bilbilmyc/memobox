@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { mcpClient, runProcess } from "./process.mjs";
 
 /** 原生/安装包确实经过 HTTP、超时、向量落库和两个常驻进程，不替换生产 provider。 */
-export async function validateEndpoint(command, prefix, root, inherited) {
+export async function validateEndpoint(command, prefix, root, inherited, { responseDelayMs = 0 } = {}) {
   let hung = false,
     requests = 0;
   const server = createServer(async (request, response) => {
@@ -15,6 +15,7 @@ export async function validateEndpoint(command, prefix, root, inherited) {
     assert.equal(body.model, "acceptance-endpoint");
     assert.equal(typeof body.input, "string");
     if (hung) return;
+    if (responseDelayMs) await new Promise(done => setTimeout(done, responseDelayMs));
     response.setHeader("content-type", "application/json");
     response.end(
       JSON.stringify({ data: [{ embedding: [1, 0, 0, 0], index: 0 }] }),
@@ -30,10 +31,12 @@ export async function validateEndpoint(command, prefix, root, inherited) {
     EMBEDDING_API_BASE: `http://127.0.0.1:${server.address().port}/v1`,
     EMBEDDING_MODEL: "acceptance-endpoint",
     EMBEDDING_DIM: "4",
-    EMBEDDING_TIMEOUT_MS: "100",
+    // 正常 HTTP 链路用生产默认预算；短超时只属于下方故障注入客户端。
+    EMBEDDING_TIMEOUT_MS: "5000",
   };
   const a = mcpClient(command, prefix, env),
     b = mcpClient(command, prefix, env);
+  let timeoutClient;
   try {
     for (const client of [a, b])
       await client.call("initialize", {
@@ -62,8 +65,10 @@ export async function validateEndpoint(command, prefix, root, inherited) {
       assert.equal(result.structuredContent.memories.length, 2);
     }
     hung = true;
+    timeoutClient = mcpClient(command, prefix, { ...env, EMBEDDING_TIMEOUT_MS: "100" });
+    await timeoutClient.call("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "endpoint-timeout", version: "1" } });
     const start = performance.now();
-    const fallback = await a.tool("memory_search", {
+    const fallback = await timeoutClient.tool("memory_search", {
       query: "endpoint_shared",
       explain: true,
     });
@@ -84,6 +89,7 @@ export async function validateEndpoint(command, prefix, root, inherited) {
     assert.equal(doctor.model.mode, "endpoint");
     assert(requests >= 5);
   } finally {
+    if (timeoutClient) await timeoutClient.close();
     await a.close();
     await b.close();
     server.closeAllConnections();
