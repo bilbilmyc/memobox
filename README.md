@@ -62,9 +62,11 @@ Import preserves existing IDs and commits the validated batch atomically. Mainte
 
 Apply requires confirmation, backs up original content/metadata, rejects stale targets and rolls back SQL failures. Restore changes only IDs present in the backup, backs up overwritten records first, and recomputes vectors with the current model. Backups contain neither vectors nor credentials. `import-codex --dry-run` previews idempotent Codex MEMORY.md migration. Development evaluation scripts generate separate quality and MCP performance reports; see the development record.
 
-## Local retrieval feedback (2.6.4-dev.1 development build)
+## Retrieval improvements and feedback (2.6.4-dev.2 development build)
 
 These commands are available in the source development build; npm latest remains 2.6.3.
+
+Keyword retrieval recognizes the components of `cache_invalidation`, `requestTimeout`, `HTTPServer`, and dotted/hyphenated names while retaining their full forms. Natural queries such as `request timeout` can find those records. Latin substring collisions such as `go` inside `Django` no longer create keyword hits. Semantic and graph retrieval can still return unrelated results; see the [evaluation and limitations](docs/RETRIEVAL-IDENTIFIERS-2.6.4.md).
 
 ```bash
 memobox search "project port" --explain --json  # returns queryId

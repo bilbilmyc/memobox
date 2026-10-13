@@ -58,9 +58,11 @@ memobox path
 
 支持中文内容、路径、实体、类型名、emoji 和 `--选项=值`。纯空白、未知选项、非法数字会在写入前拒绝。`--` 后按正文处理；退出码 0 成功、2 参数错误、1 操作失败。单条 `forget` 直接删除；批量操作使用以下预览流程。
 
-## 检索反馈（2.6.4-dev.1 开发版）
+## 检索改进与反馈（2.6.4-dev.2 开发版）
 
 以下功能在源码开发版中；npm latest 仍是 2.6.3。
+
+关键词检索保留 `cache_invalidation`、`requestTimeout`、`HTTPServer` 及点号/连字符名称的原串，并支持组成词查询，例如 `request timeout`。`go` 不再因位于 `Django` 内部而触发关键词命中。语义检索与图谱仍可能返回无关结果，详见[评测及限制](docs/RETRIEVAL-IDENTIFIERS-2.6.4.md)。
 
 ```bash
 memobox search "项目端口" --explain --json   # 获取 queryId

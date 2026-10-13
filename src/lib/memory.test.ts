@@ -20,6 +20,8 @@ describe("tokenize（v2.1 CJK 切词）", () => {
       "port",
       "3100",
       "dev-server",
+      "dev",
+      "server",
     ]);
   });
 

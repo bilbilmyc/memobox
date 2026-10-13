@@ -73,6 +73,17 @@ export async function validateProduct(command, prefix, { root = mkdtempSync(join
       assert(tools.tools.filter(tool => tool.name.startsWith("memory_maintenance")).every(tool => tool.outputSchema));
       await client.tool("memory_search", { query: "shared_release_marker" });
     }
+    // 实际安装后的 CLI 与三个常驻客户端共享新词法规则和缓存失效。
+    await cli(["save", "requestTimeout = 5000", "--entities", "cache_invalidation", "--source", "synthetic-identifiers"]);
+    const identifierRows = JSON.parse(await cli(["search", "request timeout", "--source", "synthetic-identifiers", "--json"]));
+    assert.equal(identifierRows.length, 1);
+    const identifierId = identifierRows[0].id;
+    assert.equal((await b.tool("memory_search", { query: "cache invalidation", source: "synthetic-identifiers" })).structuredContent.memories[0].id, identifierId);
+    await a.tool("memory_update", { id: identifierId, content: "Django dashboard", entities: ["Django"] });
+    for (const query of ["go", "request timeout", "cache invalidation"]) {
+      assert.equal((await c.tool("memory_search", { query, source: "synthetic-identifiers" })).structuredContent.memories.length, 0);
+    }
+    await b.tool("memory_forget", { id: identifierId });
     const created = await Promise.all([a.tool("memory_save", { content: "shared_release_marker 共享记忆甲" }), b.tool("memory_save", { content: "shared_release_marker 共享记忆乙" })]);
     const ids = created.map(item => item.content[0].text.match(/saved memory ([\w-]+)/)[1]);
     const feedbackQuery = (await a.tool("memory_search", { query: "shared_release_marker", explain: true })).structuredContent.queryId;

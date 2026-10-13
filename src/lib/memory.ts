@@ -152,11 +152,8 @@ export function cosineSim(a: ArrayLike<number>, b: ArrayLike<number>): number {
 }
 
 /**
- * 查询切词（v2.1）：拉丁部分按空白切、CJK 部分成对切 bigram。
- * 旧实现整句按空白切——中文查询整句成一个 term，子串匹配必落空
- * （「端口有什么偏好」永远匹配不到「…用 3100 端口」）。bigram 后
- * 「端口」「偏好」都是独立 term，`includes` 子串语义直接命中。
- * 单个 CJK 字符的片段原样保留（单字即 term）。
+ * CJK 连续段切 bigram；技术标识符同时保留原串与组成词。
+ * 驼峰/缩写边界必须在小写化之前识别，同一标识符的重复组成词只计一次。
  */
 const CJK_RUN = /[㐀-䶿一-鿿]+/g;
 
@@ -170,12 +167,43 @@ export function tokenize(query: string): string[] {
     }
     for (let i = 0; i < run.length - 1; i++) terms.push(run.slice(i, i + 2));
   }
-  const stripped = query.toLowerCase().replace(CJK_RUN, " ");
+  const stripped = query.replace(CJK_RUN, " ");
   for (const t of stripped.split(/[^\p{L}\p{N}_.-]+/u)) {
-    if (t) terms.push(t);
+    if (!t) continue;
+    // 普通单词不创建组成词数组/Set；全库重建时这是主要路径。
+    if (!/[_.-]|[a-z\d][A-Z]|[A-Z][A-Z][a-z]/.test(t)) { terms.push(t.toLowerCase()); continue; }
+    const parts = t.replace(/([a-z\d])([A-Z])/g, "$1 $2").replace(/([A-Z])([A-Z][a-z])/g, "$1 $2").toLowerCase().split(/[_.\s-]+/);
+    terms.push(...new Set([t.toLowerCase(), ...parts.filter(Boolean)]));
   }
   return terms;
 }
+
+// 中文旁的英文词仍可命中；拉丁/数字词内部的子串不能获得精确串加分。
+const NON_CJK_WORD = /[\p{L}\p{N}\p{M}_]/u;
+const CJK_CHAR = /[㐀-䶿一-鿿]/;
+const CJK_TERM = /^[㐀-䶿一-鿿]+$/;
+function isWordChar(char: string): boolean { return NON_CJK_WORD.test(char) && !CJK_CHAR.test(char); }
+function charBefore(text: string, offset: number): string {
+  const last = text.charCodeAt(offset - 1);
+  return text.slice(offset - (last >= 0xdc00 && last <= 0xdfff ? 2 : 1), offset);
+}
+function matchesCjkEntity(entity: string, term: string): boolean {
+  return entity.includes(term) || (entity.length <= term.length && CJK_TERM.test(entity) && term.includes(entity));
+}
+function containsPhrase(text: string, query: string): boolean {
+  let offset = text.indexOf(query);
+  if (offset < 0) return false;
+  const left = isWordChar(String.fromCodePoint(query.codePointAt(0)!)), right = isWordChar(charBefore(query, query.length));
+  while (offset >= 0) {
+    const end = offset + query.length;
+    if ((!left || offset === 0 || !isWordChar(charBefore(text, offset))) && (!right || end === text.length || !isWordChar(String.fromCodePoint(text.codePointAt(end)!)))) return true;
+    offset = text.indexOf(query, offset + 1);
+  }
+  return false;
+}
+
+// 仅实体保留既有 port/ports 兼容，不对任意词干做模糊前后缀匹配。
+function entityTerm(term: string): string { return /^[a-z]{3,}s$/.test(term) ? term.slice(0, -1) : term; }
 
 /**
  * BM25 关键词打分（v2.5 引入，v2.6 重构为索引）：
@@ -204,6 +232,7 @@ type KeywordDoc = {
   dl: number;
   /** 小写实体原串（子串匹配用） */
   entityRaw: string[];
+  entityTerms: ReadonlySet<string>[];
   /** 小写全文（整句子串加成用） */
   textLower: string;
 };
@@ -218,6 +247,8 @@ export class KeywordIndex {
   private docs = new Map<string, KeywordDoc>();
   private df = new Map<string, number>();
   private entityDocs = new Map<string, Set<string>>();
+  private entityTermDocs = new Map<string, Set<string>>();
+  private entityTokenCache = new Map<string, ReadonlySet<string>>();
   private termDocs = new Map<string, Set<string>>();
   private totalLen = 0;
   private nextOrder = 0;
@@ -226,6 +257,8 @@ export class KeywordIndex {
     this.docs.clear();
     this.df.clear();
     this.entityDocs.clear();
+    this.entityTermDocs.clear();
+    this.entityTokenCache.clear();
     this.termDocs.clear();
     this.totalLen = 0;
     this.nextOrder = 0;
@@ -243,6 +276,8 @@ export class KeywordIndex {
       tf,
       dl: tokens.length,
       entityRaw: (m.entities ?? []).map((e) => e.toLowerCase()),
+      // 中文走原串子串索引，无需为每份文档复制一套中文 bigram 实体索引。
+      entityTerms: (m.entities ?? []).map(e => this.tokensForEntity(e)),
       textLower: m.content.toLowerCase(),
     };
     this.docs.set(m.id, doc);
@@ -251,6 +286,10 @@ export class KeywordIndex {
     for (const entity of new Set(doc.entityRaw)) {
       const ids = this.entityDocs.get(entity) ?? new Set<string>();
       ids.add(m.id); this.entityDocs.set(entity, ids);
+    }
+    for (const tokens of doc.entityTerms) for (const term of tokens) {
+      const ids = this.entityTermDocs.get(term) ?? new Set<string>();
+      ids.add(m.id); this.entityTermDocs.set(term, ids);
     }
     for (const t of tf.keys()) this.df.set(t, (this.df.get(t) ?? 0) + 1);
     this.totalLen += doc.dl;
@@ -270,7 +309,21 @@ export class KeywordIndex {
       const ids = this.entityDocs.get(entity)!;
       ids.delete(id); if (!ids.size) this.entityDocs.delete(entity);
     }
+    for (const tokens of doc.entityTerms) for (const term of tokens) {
+      const ids = this.entityTermDocs.get(term);
+      ids?.delete(id); if (ids && !ids.size) this.entityTermDocs.delete(term);
+    }
     this.docs.delete(id);
+  }
+
+  private tokensForEntity(entity: string): ReadonlySet<string> {
+    let tokens = this.entityTokenCache.get(entity);
+    if (!tokens) {
+      tokens = new Set(tokenize(entity.replace(CJK_RUN, " ")).map(entityTerm));
+      if (this.entityTokenCache.size >= 128) this.entityTokenCache.delete(this.entityTokenCache.keys().next().value!);
+      this.entityTokenCache.set(entity, tokens);
+    }
+    return tokens;
   }
 
   /** 精确实体倒排索引；图谱扩展无需每次读出全库并解析 JSON。 */
@@ -296,6 +349,10 @@ export class KeywordIndex {
     const q = query.trim().toLowerCase();
     if (!q || N === 0) return [];
     const exactEligible = q.length >= 2 || terms.length === 0;
+    const weights = terms.map(term => {
+      const df = this.df.get(term) ?? 0;
+      return { term, entityTerm: entityTerm(term), cjk: CJK_TERM.test(term), idf: Math.log(1 + (N - df + 0.5) / (df + 0.5)) };
+    });
     const candidates = new Set<string>();
     let scanAll = false;
     for (const term of terms) {
@@ -310,15 +367,17 @@ export class KeywordIndex {
       for (const id of ids) candidates.add(id);
       if (candidates.size >= N / 2) { scanAll = true; break; }
     }
-    // 实体子串和全文精确串仍保留，倒排索引不能漏掉 ports/port 等旧行为。
-    if (!scanAll) for (const [entity, ids] of this.entityDocs) {
-      if (terms.some(t => entity.includes(t) || t.includes(entity))) for (const id of ids) candidates.add(id);
+    // 实体组成词用倒排表；中文保留子串入口（包括单字）。
+    if (!scanAll) for (const weight of weights) {
+      for (const id of this.entityTermDocs.get(weight.entityTerm) ?? []) candidates.add(id);
+      if (weight.cjk) for (const [entity, ids] of this.entityDocs) {
+        if (matchesCjkEntity(entity, weight.term)) for (const id of ids) candidates.add(id);
+      }
       if (candidates.size >= N / 2) { scanAll = true; break; }
     }
-    if (!scanAll && exactEligible) for (const doc of this.docs.values()) if (doc.textLower.includes(q)) candidates.add(doc.m.id);
+    if (!scanAll && exactEligible) for (const doc of this.docs.values()) if (containsPhrase(doc.textLower, q)) candidates.add(doc.m.id);
     const avgdl = this.totalLen / N || 1;
     // IDF 对同一个查询词是常量，不能在每份文档上重复计算 log。
-    const weights = terms.map(term => { const df = this.df.get(term) ?? 0; return { term, idf: Math.log(1 + (N - df + 0.5) / (df + 0.5)) }; });
     const out: { m: Memory; score: number; order: number }[] = [];
     const documents = scanAll ? this.docs.values() : [...candidates].map(id => this.docs.get(id)!);
     for (const doc of documents) {
@@ -333,11 +392,9 @@ export class KeywordIndex {
             (weight.idf * (f * (BM25_K1 + 1))) /
             (f + lengthNorm);
         }
-        // 实体命中：精确 token 或子串（查询 port 命中实体 ports）
-        // 实体 token 总是原串的子串，无需每条记忆重复切词/建 Set。
-        for (const entity of doc.entityRaw) if (entity.includes(t) || t.includes(entity)) { score += weight.idf * ENTITY_BOOST; break; }
+        if (doc.entityTerms.some(tokens => tokens.has(weight.entityTerm)) || (weight.cjk && doc.entityRaw.some(entity => matchesCjkEntity(entity, t)))) score += weight.idf * ENTITY_BOOST;
       }
-      if (exactEligible && doc.textLower.includes(q)) score += EXACT_BOOST;
+      if (exactEligible && containsPhrase(doc.textLower, q)) score += EXACT_BOOST;
       if (score > 0) out.push({ m: doc.m, score, order: doc.order });
     }
     return out

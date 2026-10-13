@@ -7,16 +7,16 @@ import type { SQLiteStore } from "../src/db/sqlite-store";
 import type { KeywordIndex, Memory } from "../src/lib/memory";
 import type { EmbeddingProvider } from "../src/lib/embeddings";
 
-const args = parseArgs({ options: { split: { type: "string", default: "training" }, vectors: { type: "string", default: "artifacts/quality/real-vectors.json" }, package: { type: "string" }, out: { type: "string" } } }).values;
+const args = parseArgs({ options: { split: { type: "string", default: "training" }, fixture: { type: "string" }, vectors: { type: "string", default: "artifacts/quality/real-vectors.json" }, package: { type: "string" }, out: { type: "string" } } }).values;
 if (!["training", "heldout"].includes(args.split!)) throw Error("Unknown evaluation split");
 const packageRoot = args.package ? resolve(args.package) : resolve(import.meta.dir, "..");
 if (!process.env.MEMOBOX_QUALITY_CHILD) {
-  const forwarded = ["--split", args.split!, "--vectors", resolve(args.vectors!), ...(args.package ? ["--package", packageRoot] : []), ...(args.out ? ["--out", resolve(args.out)] : [])];
+  const forwarded = ["--split", args.split!, "--vectors", resolve(args.vectors!), ...(args.fixture ? ["--fixture", resolve(args.fixture)] : []), ...(args.package ? ["--package", packageRoot] : []), ...(args.out ? ["--out", resolve(args.out)] : [])];
   const child = Bun.spawn([process.execPath, import.meta.path, ...forwarded], { cwd: packageRoot, env: { ...process.env, MEMOBOX_QUALITY_CHILD: "1" }, stdout: "inherit", stderr: "inherit" });
   process.exit(await child.exited);
 }
 type EvaluationQuery = { id: string; category: string; query: string; relevant: string[] };
-const bytes = readFileSync(join(import.meta.dir, "fixtures/retrieval-bilingual.json"), "utf8").replace(/\r\n/g, "\n"), fixture = JSON.parse(bytes) as { description: string; memories: Memory[]; training: EvaluationQuery[]; heldout: EvaluationQuery[] };
+const bytes = readFileSync(args.fixture ?? join(import.meta.dir, "fixtures/retrieval-bilingual.json"), "utf8").replace(/\r\n/g, "\n"), fixture = JSON.parse(bytes) as { description: string; memories: Memory[]; training: EvaluationQuery[]; heldout: EvaluationQuery[] };
 const queries = args.split === "training" ? fixture.training : fixture.heldout, rows = fixture.memories.filter(row => row.id.startsWith(args.split === "training" ? "t-" : "h-"));
 const cache = JSON.parse(readFileSync(args.vectors!, "utf8")) as { model: string; dimensions: number; space?: string; minimumSimilarity?: number; fixtureSha256: string; vectors: Record<string, number[]>; queryVectors?: Record<string, number[]>; timings: { ms: number; split: string }[] };
 const fixtureSha256 = createHash("sha256").update(bytes).digest("hex"); if (cache.fixtureSha256 !== fixtureSha256) throw Error("Evaluation vectors do not match immutable fixture");
