@@ -26,6 +26,12 @@ export async function validateProduct(command, prefix, { root = mkdtempSync(join
   const saved = JSON.parse(await cli(["query", "--source", "release", "--json"])); assert.equal(saved.length, 1);
   const explained = JSON.parse(await cli(["search", "中文目录", "--entity", "发布项目", "--explain", "--json"]));
   assert.equal(explained.memories.length, 1); assert.equal(explained.explanation.hits[0].keyword.rank, 1);
+  assert.equal(typeof explained.queryId, "string");
+  await cli(["eval", "label", explained.queryId, saved[0].id, "相关", "--json"]);
+  assert.equal(JSON.parse(await cli(["eval", "show", explained.queryId, "--json"])).labels[0].relevant, true);
+  assert.equal(JSON.parse(await cli(["eval", "report", "--json"])).benchmark.recall, 1);
+  await cli(["eval", "unlabel", explained.queryId, saved[0].id]);
+  assert.equal(JSON.parse(await cli(["eval", "report", "--json"])).benchmark.recall, null);
   await cli(["update", saved[0].id, "发行物验证：中文目录已修订", "--json"]);
   assert.equal(JSON.parse(await cli(["get", saved[0].id])).createdAt, saved[0].createdAt);
   const backup = join(root, "备份.json"); await cli(["export", backup]);
@@ -48,20 +54,32 @@ export async function validateProduct(command, prefix, { root = mkdtempSync(join
   const piTools = [], piHandlers = new Map();
   const piAdapter = (await import(pathToFileURL(join(root, ".pi", "agent", "extensions", "memobox.js")).href)).default;
   piAdapter({ registerTool: tool => piTools.push(tool), on: (name, handler) => piHandlers.set(name, handler) });
-  assert.equal(piTools.length, 10);
-  try { assert.equal((await piTools.find(tool => tool.name === "memobox_memory_get").execute("test", { id: saved[0].id })).details.memory.content, "发行物验证：中文目录已修订"); }
+  assert.equal(piTools.length, 11);
+  assert(piTools.some(tool => tool.name === "memobox_memory_feedback"));
+  try {
+    assert.equal((await piTools.find(tool => tool.name === "memobox_memory_get").execute("test", { id: saved[0].id })).details.memory.content, "发行物验证：中文目录已修订");
+    const query = JSON.parse(await cli(["search", "中文目录", "--explain", "--json"]));
+    const feedback = piTools.find(tool => tool.name === "memobox_memory_feedback");
+    for (const relevant of [true, null]) assert.equal((await feedback.execute("feedback", { queryId: query.queryId, memoryId: saved[0].id, relevant })).details.relevant, relevant);
+  }
   finally { await piHandlers.get("session_shutdown")(); }
   const a = mcpClient(codexEntry.command, codexEntry.args, { ...env, ...codexEntry.env }), b = mcpClient(pi.command, pi.args, { ...env, ...pi.env });
   const c = mcpClient(claudeEntry.command, claudeEntry.args, { ...env, ...claudeEntry.env });
   try {
     for (const client of [a, b, c]) {
       assert.equal((await client.call("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "native-product", version: "1" } })).serverInfo.version, version);
-      const tools = await client.call("tools/list", {}); assert.equal(tools.tools.length, 10);
+      const tools = await client.call("tools/list", {}); assert.equal(tools.tools.length, 11);
+      assert(tools.tools.some(tool => tool.name === "memory_feedback"));
       assert(tools.tools.filter(tool => tool.name.startsWith("memory_maintenance")).every(tool => tool.outputSchema));
       await client.tool("memory_search", { query: "shared_release_marker" });
     }
     const created = await Promise.all([a.tool("memory_save", { content: "shared_release_marker 共享记忆甲" }), b.tool("memory_save", { content: "shared_release_marker 共享记忆乙" })]);
     const ids = created.map(item => item.content[0].text.match(/saved memory ([\w-]+)/)[1]);
+    const feedbackQuery = (await a.tool("memory_search", { query: "shared_release_marker", explain: true })).structuredContent.queryId;
+    await b.tool("memory_feedback", { queryId: feedbackQuery, memoryId: ids[0], relevant: false });
+    assert.equal(JSON.parse(await cli(["eval", "show", feedbackQuery, "--json"])).labels[0].relevant, false);
+    await c.tool("memory_feedback", { queryId: feedbackQuery, memoryId: ids[0], relevant: null });
+    assert.deepEqual(JSON.parse(await cli(["eval", "show", feedbackQuery, "--json"])).labels, []);
     for (const client of [a, b, c]) assert.equal((await client.tool("memory_search", { query: "shared_release_marker" })).structuredContent.memories.length, 2);
     const preview = (await a.tool("memory_maintenance_plan", { ids })).structuredContent;
     await b.tool("memory_update", { id: ids[0], content: "shared_release_marker 外部修订", entities: ["项目乙"] });

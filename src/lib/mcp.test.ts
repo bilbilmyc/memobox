@@ -126,6 +126,7 @@ describe("handleRpcBody", () => {
       "memory_save",
       "memory_search",
       "memory_entities",
+      "memory_feedback",
       "memory_get", "memory_update", "memory_forget", "memory_query",
       "memory_maintenance_scan", "memory_maintenance_plan", "memory_maintenance_apply",
     ]);

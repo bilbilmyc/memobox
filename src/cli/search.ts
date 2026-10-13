@@ -16,6 +16,7 @@ export async function runSearchCommand(query: string, flags: Map<string, string>
   if (flags.has("json")) { io.out(JSON.stringify(report, null, 2)); return 0; }
   const reasons = { embedding_failed: "模型请求失败", zero_vector: "查询向量为零", no_compatible_vectors: "范围内没有兼容向量", below_threshold: "相似度未达到门槛" };
   const { semantic } = report.explanation;
+  if (report.queryId) io.out("查询编号：" + report.queryId + "（用 eval show 查看或 eval label 标注）");
   io.out("检索方式：" + (report.explanation.mode === "hybrid" ? "关键词与语义混合" : "关键词"));
   io.out("语义状态：" + (semantic.status === "used" ? "参与排名" : semantic.status === "disabled" ? "未启用" : reasons[semantic.reason!]));
   if (!report.memories.length) io.out("没有匹配的记忆");

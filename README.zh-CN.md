@@ -58,6 +58,24 @@ memobox path
 
 支持中文内容、路径、实体、类型名、emoji 和 `--选项=值`。纯空白、未知选项、非法数字会在写入前拒绝。`--` 后按正文处理；退出码 0 成功、2 参数错误、1 操作失败。单条 `forget` 直接删除；批量操作使用以下预览流程。
 
+## 检索反馈（2.6.4-dev.1 开发版）
+
+以下功能在源码开发版中；npm latest 仍是 2.6.3。
+
+```bash
+memobox search "项目端口" --explain --json   # 获取 queryId
+memobox eval recent --unlabeled --limit 20 --json
+memobox eval show <查询编号> --json
+memobox eval label <查询编号> <记忆编号> 相关
+memobox eval label <查询编号> <记忆编号> 不相关
+memobox eval unlabel <查询编号> <记忆编号>
+memobox eval report --json
+```
+
+相关标注可以补充漏掉的现存记忆；不相关标注必须是当时返回的记忆。标注保存在本地 SQLite，不上传、不调用模型、不自动改变排序。MCP 使用 `memory_search` 的 `explain=true` 取得 `queryId`，再调用 `memory_feedback({queryId, memoryId, relevant: true/false/null})`；null 撤销标注。
+
+报告的召回率只以已标相关记忆为分母，精确率只以已标注召回项为分母；未标注不是不相关，也不能把它当作完整 Recall@5/Precision@5。日志保留当时召回编号，详情正文是当前内容；删除记忆会移除对应标注。读取日志和报告不会新增检索。
+
 ## 备份、维护和恢复
 
 ```bash

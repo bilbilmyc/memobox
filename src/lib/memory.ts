@@ -36,6 +36,14 @@ export type EvalStats = {
 };
 
 export type Label = { memoryId: string; relevant: boolean };
+export type QueryReview = {
+  entry: QueryLogEntry;
+  /** 当时返回的完整编号及顺序；包括后来被遗忘的记忆。 */
+  recalledIds: string[];
+  /** 当前仍存在的记忆正文，不是历史正文快照。 */
+  recalled: Memory[];
+  labels: Label[];
+};
 
 export type MemoryQuery = {
   text?: string; kind?: string; entity?: string; source?: string;
@@ -96,10 +104,10 @@ export interface MemoryStore {
   label(queryLogId: string, memoryId: string, relevant: boolean): Promise<void>;
   /** 撤销一条标注 */
   unlabel(queryLogId: string, memoryId: string): Promise<void>;
-  /** 取一条检索日志 + 它召回的记忆（按当时顺序）+ 现有标注，供标注页渲染 */
+  /** 取检索日志、当时召回编号、当前仍存在的记忆与现有标注，供反馈查看。 */
   getQuery(
     id: string
-  ): Promise<{ entry: QueryLogEntry; recalled: Memory[]; labels: Label[] } | null>;
+  ): Promise<QueryReview | null>;
   /** 还没有任何标注的检索日志（标注队列） */
   unlabeledQueries(limit?: number): Promise<QueryLogEntry[]>;
   /** recall@k / precision 均值（仅统计有标注的查询） */
