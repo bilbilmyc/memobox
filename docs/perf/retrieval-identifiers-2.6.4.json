@@ -1,0 +1,639 @@
+{
+  "candidate": "2.6.4-dev.2",
+  "date": "2026-10-13",
+  "platform": "win32-x64",
+  "qualityBaseline": {
+    "version": "2.6.4-dev.1",
+    "commit": "5a518422bba36a4c920e57a3dc7f56f02cc3b6f0"
+  },
+  "fixtureSha256": "c51eec64cf2bc334129931d5cabd80a135d88836fe87f46f51ad9ca04c302475",
+  "model": "Xenova/bge-small-zh-v1.5",
+  "dimensions": 512,
+  "limitations": "Small independently authored synthetic diagnostic set: 12 memories, 12 single-relevant positives and 4 negatives in each split. Fixed Precision@5 denominator. Identical real q8 vectors across versions. Not a representative user distribution. Existing performance gate compares published 2.6.2.",
+  "heldout": [
+    {
+      "mode": "bm25",
+      "threshold": null,
+      "baseline": {
+        "recallAt5": 0.6666666666666666,
+        "precisionAt5": 0.13333333333333333,
+        "mrrAt5": 0.6666666666666666,
+        "unrelatedRecallRate": 0.75,
+        "p50Ms": 0.03810000000000002,
+        "p95Ms": 0.5168000000000035
+      },
+      "candidate": {
+        "recallAt5": 1,
+        "precisionAt5": 0.19999999999999998,
+        "mrrAt5": 1,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.04639999999999134,
+        "p95Ms": 0.6379000000000019
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": [
+        "h-snake-spaces",
+        "h-camel-spaces",
+        "h-acronym-spaces",
+        "h-env-spaces",
+        "h-boundary-rust",
+        "h-boundary-car",
+        "h-boundary-win"
+      ]
+    },
+    {
+      "mode": "semantic",
+      "threshold": 0.45,
+      "baseline": {
+        "recallAt5": 0.5833333333333334,
+        "precisionAt5": 0.11666666666666665,
+        "mrrAt5": 0.5833333333333334,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.024599999999992406,
+        "p95Ms": 0.052099999999995816
+      },
+      "candidate": {
+        "recallAt5": 0.5833333333333334,
+        "precisionAt5": 0.11666666666666665,
+        "mrrAt5": 0.5833333333333334,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.030300000000011096,
+        "p95Ms": 0.06669999999999732
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": []
+    },
+    {
+      "mode": "rrf",
+      "threshold": 0.45,
+      "baseline": {
+        "recallAt5": 0.75,
+        "precisionAt5": 0.15,
+        "mrrAt5": 0.75,
+        "unrelatedRecallRate": 0.75,
+        "p50Ms": 0.02929999999999211,
+        "p95Ms": 0.15789999999999793
+      },
+      "candidate": {
+        "recallAt5": 1,
+        "precisionAt5": 0.19999999999999998,
+        "mrrAt5": 1,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.030300000000011096,
+        "p95Ms": 0.1565999999999974
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": [
+        "h-camel-spaces",
+        "h-acronym-spaces",
+        "h-env-spaces",
+        "h-boundary-rust",
+        "h-boundary-car",
+        "h-boundary-win"
+      ]
+    },
+    {
+      "mode": "hybrid+graph",
+      "threshold": null,
+      "baseline": {
+        "recallAt5": 0.75,
+        "precisionAt5": 0.15,
+        "mrrAt5": 0.75,
+        "unrelatedRecallRate": 0.75,
+        "p50Ms": 0.20220000000000482,
+        "p95Ms": 2.646000000000001
+      },
+      "candidate": {
+        "recallAt5": 1,
+        "precisionAt5": 0.19999999999999998,
+        "mrrAt5": 1,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.19880000000000564,
+        "p95Ms": 2.334600000000009
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": [
+        "h-camel-spaces",
+        "h-acronym-spaces",
+        "h-env-spaces",
+        "h-boundary-rust",
+        "h-boundary-car",
+        "h-boundary-win"
+      ]
+    }
+  ],
+  "training": [
+    {
+      "mode": "bm25",
+      "threshold": null,
+      "baseline": {
+        "recallAt5": 0.6666666666666666,
+        "precisionAt5": 0.13333333333333333,
+        "mrrAt5": 0.6666666666666666,
+        "unrelatedRecallRate": 0.75,
+        "p50Ms": 0.055900000000008276,
+        "p95Ms": 0.8432999999999993
+      },
+      "candidate": {
+        "recallAt5": 1,
+        "precisionAt5": 0.19999999999999998,
+        "mrrAt5": 1,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.059800000000009845,
+        "p95Ms": 0.6953000000000031
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": [
+        "t-snake-spaces",
+        "t-camel-spaces",
+        "t-acronym-spaces",
+        "t-env-spaces",
+        "t-boundary-go",
+        "t-boundary-cat",
+        "t-boundary-api"
+      ]
+    },
+    {
+      "mode": "semantic",
+      "threshold": 0.45,
+      "baseline": {
+        "recallAt5": 0.5833333333333334,
+        "precisionAt5": 0.11666666666666665,
+        "mrrAt5": 0.5833333333333334,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.025400000000004752,
+        "p95Ms": 0.03660000000000707
+      },
+      "candidate": {
+        "recallAt5": 0.5833333333333334,
+        "precisionAt5": 0.11666666666666665,
+        "mrrAt5": 0.5833333333333334,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.030400000000000205,
+        "p95Ms": 0.039500000000003865
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": []
+    },
+    {
+      "mode": "rrf",
+      "threshold": 0.45,
+      "baseline": {
+        "recallAt5": 0.75,
+        "precisionAt5": 0.15,
+        "mrrAt5": 0.75,
+        "unrelatedRecallRate": 0.75,
+        "p50Ms": 0.01640000000000441,
+        "p95Ms": 0.03290000000001214
+      },
+      "candidate": {
+        "recallAt5": 1,
+        "precisionAt5": 0.19999999999999998,
+        "mrrAt5": 1,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.022900000000007026,
+        "p95Ms": 0.03990000000000293
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": [
+        "t-camel-spaces",
+        "t-acronym-spaces",
+        "t-env-spaces",
+        "t-boundary-go",
+        "t-boundary-cat",
+        "t-boundary-api"
+      ]
+    },
+    {
+      "mode": "hybrid+graph",
+      "threshold": null,
+      "baseline": {
+        "recallAt5": 0.75,
+        "precisionAt5": 0.15,
+        "mrrAt5": 0.75,
+        "unrelatedRecallRate": 0.75,
+        "p50Ms": 0.16890000000000782,
+        "p95Ms": 3.3637999999999977
+      },
+      "candidate": {
+        "recallAt5": 1,
+        "precisionAt5": 0.19999999999999998,
+        "mrrAt5": 1,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.1728999999999985,
+        "p95Ms": 2.7039000000000044
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": [
+        "t-camel-spaces",
+        "t-acronym-spaces",
+        "t-env-spaces",
+        "t-boundary-go",
+        "t-boundary-cat",
+        "t-boundary-api"
+      ]
+    }
+  ],
+  "originalRegression": [
+    {
+      "mode": "bm25",
+      "threshold": null,
+      "baseline": {
+        "recallAt5": 0.8541666666666666,
+        "precisionAt5": 0.2166666666666667,
+        "mrrAt5": 0.8833333333333333,
+        "unrelatedRecallRate": 0.25,
+        "p50Ms": 0.1130279999999999,
+        "p95Ms": 0.3775420000000054
+      },
+      "candidate": {
+        "recallAt5": 0.8541666666666666,
+        "precisionAt5": 0.2166666666666667,
+        "mrrAt5": 0.8958333333333334,
+        "unrelatedRecallRate": 0,
+        "p50Ms": 0.06969999999999743,
+        "p95Ms": 0.35429999999999495
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": [
+        "h-cross-db",
+        "h-adb-cross",
+        "h-private",
+        "h-service",
+        "h-cache-q",
+        "h-upload",
+        "h-unrelated-4"
+      ]
+    },
+    {
+      "mode": "semantic",
+      "threshold": 0.45,
+      "baseline": {
+        "recallAt5": 0.8125,
+        "precisionAt5": 0.2083333333333334,
+        "mrrAt5": 0.888888888888889,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.05228799999999012,
+        "p95Ms": 0.13979799999999898
+      },
+      "candidate": {
+        "recallAt5": 0.8125,
+        "precisionAt5": 0.2083333333333334,
+        "mrrAt5": 0.888888888888889,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.04779999999999518,
+        "p95Ms": 0.09560000000000457
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": []
+    },
+    {
+      "mode": "rrf",
+      "threshold": 0.45,
+      "baseline": {
+        "recallAt5": 0.8333333333333334,
+        "precisionAt5": 0.2166666666666667,
+        "mrrAt5": 0.8833333333333333,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.07049499999999398,
+        "p95Ms": 0.12000900000001025
+      },
+      "candidate": {
+        "recallAt5": 0.875,
+        "precisionAt5": 0.22500000000000006,
+        "mrrAt5": 0.8993055555555555,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.05119999999999436,
+        "p95Ms": 0.1308000000000078
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": [
+        "h-cross-db",
+        "h-adb-cross",
+        "h-service",
+        "h-cache-q",
+        "h-upload",
+        "h-unrelated-4"
+      ]
+    },
+    {
+      "mode": "hybrid+graph",
+      "threshold": null,
+      "baseline": {
+        "recallAt5": 0.8333333333333334,
+        "precisionAt5": 0.2166666666666667,
+        "mrrAt5": 0.8833333333333333,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.26700700000000666,
+        "p95Ms": 0.3714530000000025
+      },
+      "candidate": {
+        "recallAt5": 0.875,
+        "precisionAt5": 0.22500000000000006,
+        "mrrAt5": 0.8993055555555555,
+        "unrelatedRecallRate": 0.5,
+        "p50Ms": 0.22580000000000666,
+        "p95Ms": 0.4192999999999927
+      },
+      "recallRegressions": [],
+      "mrrRegressions": [],
+      "changedResults": [
+        "h-cross-db",
+        "h-adb-cross",
+        "h-service",
+        "h-cache-q",
+        "h-upload",
+        "h-unrelated-4"
+      ]
+    }
+  ],
+  "heldoutHybridCases": [
+    {
+      "id": "h-snake-spaces",
+      "relevant": [
+        "h-cache-expiry"
+      ],
+      "before": [
+        "h-cache-expiry"
+      ],
+      "after": [
+        "h-cache-expiry"
+      ]
+    },
+    {
+      "id": "h-snake-mixed",
+      "relevant": [
+        "h-cache-expiry"
+      ],
+      "before": [
+        "h-cache-expiry",
+        "h-invoice-batch"
+      ],
+      "after": [
+        "h-cache-expiry",
+        "h-invoice-batch"
+      ]
+    },
+    {
+      "id": "h-camel-spaces",
+      "relevant": [
+        "h-invoice-batch"
+      ],
+      "before": [],
+      "after": [
+        "h-invoice-batch"
+      ]
+    },
+    {
+      "id": "h-acronym-spaces",
+      "relevant": [
+        "h-xml-report"
+      ],
+      "before": [],
+      "after": [
+        "h-xml-report"
+      ]
+    },
+    {
+      "id": "h-env-spaces",
+      "relevant": [
+        "h-queue-depth"
+      ],
+      "before": [],
+      "after": [
+        "h-queue-depth"
+      ]
+    },
+    {
+      "id": "h-snake-exact",
+      "relevant": [
+        "h-cache-expiry"
+      ],
+      "before": [
+        "h-cache-expiry"
+      ],
+      "after": [
+        "h-cache-expiry"
+      ]
+    },
+    {
+      "id": "h-camel-exact",
+      "relevant": [
+        "h-invoice-batch"
+      ],
+      "before": [
+        "h-invoice-batch"
+      ],
+      "after": [
+        "h-invoice-batch"
+      ]
+    },
+    {
+      "id": "h-flag-exact",
+      "relevant": [
+        "h-dry-run"
+      ],
+      "before": [
+        "h-dry-run"
+      ],
+      "after": [
+        "h-dry-run"
+      ]
+    },
+    {
+      "id": "h-language-exact",
+      "relevant": [
+        "h-csharp"
+      ],
+      "before": [
+        "h-csharp"
+      ],
+      "after": [
+        "h-csharp"
+      ]
+    },
+    {
+      "id": "h-package-exact",
+      "relevant": [
+        "h-package"
+      ],
+      "before": [
+        "h-package"
+      ],
+      "after": [
+        "h-package"
+      ]
+    },
+    {
+      "id": "h-cjk-display",
+      "relevant": [
+        "h-display"
+      ],
+      "before": [
+        "h-display"
+      ],
+      "after": [
+        "h-display"
+      ]
+    },
+    {
+      "id": "h-cjk-stock",
+      "relevant": [
+        "h-stock"
+      ],
+      "before": [
+        "h-stock",
+        "h-cache-expiry"
+      ],
+      "after": [
+        "h-stock",
+        "h-cache-expiry"
+      ]
+    },
+    {
+      "id": "h-boundary-rust",
+      "relevant": [],
+      "before": [
+        "h-trust"
+      ],
+      "after": []
+    },
+    {
+      "id": "h-boundary-car",
+      "relevant": [],
+      "before": [
+        "h-discard"
+      ],
+      "after": []
+    },
+    {
+      "id": "h-boundary-win",
+      "relevant": [],
+      "before": [
+        "h-darwin"
+      ],
+      "after": []
+    },
+    {
+      "id": "h-absent-topic",
+      "relevant": [],
+      "before": [],
+      "after": []
+    }
+  ],
+  "performance": {
+    "baseline": {
+      "version": "2.6.2",
+      "integrity": "sha512-UFkPUeBq1VPYfeibQezZbsAy0tq9ZEq/ZBkLYel3U4tPzOxVmHYBfw725byTyABN4rwJN7XLMxPVGIrwi7vk3Q=="
+    },
+    "gate": {
+      "scenarios": 9,
+      "warmP95LimitMs": 50,
+      "coldAdditionalBudgetMs": 200,
+      "modelRuntimeAdditionalBudgetMiB": 96
+    },
+    "scenarios": [
+      {
+        "size": 100,
+        "mode": "keyword",
+        "baselineWarmMaxP95Ms": 4.161499999999933,
+        "warmMaxP95Ms": 4.038700000000063,
+        "baselineWriteP95Ms": 3.0819000000001324,
+        "writeP95Ms": 4.060999999999922,
+        "concurrentP95Ms": 13.241999999999962,
+        "peakBytes": 81080320
+      },
+      {
+        "size": 100,
+        "mode": "endpoint",
+        "baselineWarmMaxP95Ms": 5.6228000000000975,
+        "warmMaxP95Ms": 4.42220000000043,
+        "baselineWriteP95Ms": 4.058100000000195,
+        "writeP95Ms": 4.775899999999638,
+        "concurrentP95Ms": 16.026600000000144,
+        "peakBytes": 87519232
+      },
+      {
+        "size": 100,
+        "mode": "local",
+        "baselineWarmMaxP95Ms": 6.969999999999345,
+        "warmMaxP95Ms": 3.1999000000005253,
+        "baselineWriteP95Ms": 6.067199999999502,
+        "writeP95Ms": 6.955400000000736,
+        "concurrentP95Ms": 24.865099999999984,
+        "peakBytes": 262873088
+      },
+      {
+        "size": 1000,
+        "mode": "keyword",
+        "baselineWarmMaxP95Ms": 5.14390000000094,
+        "warmMaxP95Ms": 5.001800000000003,
+        "baselineWriteP95Ms": 3.975800000000163,
+        "writeP95Ms": 4.714100000001054,
+        "concurrentP95Ms": 14.997199999999793,
+        "peakBytes": 128987136
+      },
+      {
+        "size": 1000,
+        "mode": "endpoint",
+        "baselineWarmMaxP95Ms": 12.950300000000425,
+        "warmMaxP95Ms": 6.115600000000995,
+        "baselineWriteP95Ms": 5.066899999997986,
+        "writeP95Ms": 4.973500000000058,
+        "concurrentP95Ms": 24.036799999999857,
+        "peakBytes": 130617344
+      },
+      {
+        "size": 1000,
+        "mode": "local",
+        "baselineWarmMaxP95Ms": 9.129700000001321,
+        "warmMaxP95Ms": 4.9232000000010885,
+        "baselineWriteP95Ms": 11.950399999997899,
+        "writeP95Ms": 7.049800000000687,
+        "concurrentP95Ms": 26.089199999998527,
+        "peakBytes": 307290112
+      },
+      {
+        "size": 10000,
+        "mode": "keyword",
+        "baselineWarmMaxP95Ms": 22.1050000000032,
+        "warmMaxP95Ms": 18.783199999998033,
+        "baselineWriteP95Ms": 56.3894999999975,
+        "writeP95Ms": 9.009900000000926,
+        "concurrentP95Ms": 103.88810000000012,
+        "peakBytes": 403341312
+      },
+      {
+        "size": 10000,
+        "mode": "endpoint",
+        "baselineWarmMaxP95Ms": 17.207200000004377,
+        "warmMaxP95Ms": 18.98449999999866,
+        "baselineWriteP95Ms": 38.89070000000356,
+        "writeP95Ms": 28.798200000004726,
+        "concurrentP95Ms": 178.01740000000427,
+        "peakBytes": 452927488
+      },
+      {
+        "size": 10000,
+        "mode": "local",
+        "baselineWarmMaxP95Ms": 20.06239999999525,
+        "warmMaxP95Ms": 13.952799999999115,
+        "baselineWriteP95Ms": 36.838099999993574,
+        "writeP95Ms": 40.90469999999914,
+        "concurrentP95Ms": 174.05679999999847,
+        "peakBytes": 629604352
+      }
+    ]
+  }
+}
