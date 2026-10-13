@@ -8,6 +8,7 @@ import { MEMORY_KINDS } from "./memory-validation";
 import { VERSION } from "../version";
 import { redactDetails } from "./diagnostics";
 import { maintenanceInputSchema, maintenancePlanSchema } from "./maintenance";
+import { applyFeedback, feedbackArgs, FeedbackError } from "./feedback";
 
 const PROTOCOL_VERSION = "2025-06-18";
 const SERVER_INFO = { name: "memobox", version: VERSION };
@@ -53,6 +54,7 @@ const maintenanceTools = [
   { name: "memory_maintenance_apply", description: "Apply an explicitly confirmed maintenance plan. Backs up originals before an atomic transaction. Rejects changed/missing targets; no partial memory changes. Returns backup path and retained ID.", args: maintenanceApplyArgs, destructive: true },
 ] as const;
 const newTools = [
+  { name: "memory_feedback", description: "Label a logged search result using queryId from memory_search with explain=true. relevant=true can include a missed existing memory; false must refer to a returned memory; null removes a label. Stores local evaluation feedback only; does not change memories or ranking. Use full IDs from the same database.", args: feedbackArgs, output: feedbackArgs, readOnly: false, destructive: false },
   { name: "memory_get", description: "Read one complete memory by its stable ID. Returns a memory object; missing IDs are tool errors.", args: idArgs, output: z.object({ memory: memoryOutput }), readOnly: true, destructive: false },
   { name: "memory_update", description: "Revise a memory's content, kind, entity tags or source. Preserves its ID and creation time. Supply at least one changed field; entities=[] clears tags.", args: updateArgs, output: z.object({ memory: memoryOutput }), readOnly: false, destructive: true },
   { name: "memory_forget", description: "Delete one memory by ID and its entity links. Missing IDs are tool errors. This permanently removes the memory.", args: idArgs, output: z.object({ id: z.string(), deleted: z.boolean() }), readOnly: false, destructive: true },
@@ -88,9 +90,9 @@ export const TOOLS = [
   },
   {
     name: "memory_search",
-    description: "Search stored memories with optional AND scope filters. Entity is a full project/tag name, kind/source exact, since Unix milliseconds. Scope applies before keyword/semantic ranking and graph expansion. Set explain=true for ranks, scores, graph links and safe semantic fallback reasons.",
+    description: "Search stored memories with optional AND scope filters. Entity is a full project/tag name, kind/source exact, since Unix milliseconds. Scope applies before keyword/semantic ranking and graph expansion. Set explain=true for ranks, scores, graph links, safe semantic fallback reasons and a queryId for memory_feedback.",
     inputSchema: z.toJSONSchema(searchArgs, { io: "input" }),
-    outputSchema: z.toJSONSchema(z.object({ memories: z.array(memoryOutput), explanation: explanationOutput.optional() })),
+    outputSchema: z.toJSONSchema(z.object({ memories: z.array(memoryOutput), explanation: explanationOutput.optional(), queryId: z.string().optional() })),
   },
   {
     name: "memory_entities",
@@ -185,6 +187,10 @@ export async function handleRpcBody(
       const name = params?.name;
       const rawArgs = params?.arguments ?? {};
       try {
+        if (name === "memory_feedback") {
+          const parsed = feedbackArgs.safeParse(rawArgs); if (!parsed.success) return toolError(id, parsed.error.message);
+          return structured(id, await applyFeedback(store, parsed.data));
+        }
         if (name === "memory_maintenance_scan") {
           const parsed = maintenanceScanArgs.safeParse(rawArgs); if (!parsed.success) return toolError(id, parsed.error.message);
           const { before, ...scope } = parsed.data; return structured(id, await store.scanMaintenance({ before, scope }));
@@ -279,6 +285,7 @@ export async function handleRpcBody(
         }
         return toolError(id, `unknown tool: ${String(name)}`);
       } catch (e) {
+        if (e instanceof FeedbackError) return toolError(id, e.message);
         // 存储后端挂了等情况：按工具错误返回，而不是 RPC 错误
         return toolError(
           id,

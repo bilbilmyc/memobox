@@ -62,6 +62,24 @@ Import preserves existing IDs and commits the validated batch atomically. Mainte
 
 Apply requires confirmation, backs up original content/metadata, rejects stale targets and rolls back SQL failures. Restore changes only IDs present in the backup, backs up overwritten records first, and recomputes vectors with the current model. Backups contain neither vectors nor credentials. `import-codex --dry-run` previews idempotent Codex MEMORY.md migration. Development evaluation scripts generate separate quality and MCP performance reports; see the development record.
 
+## Local retrieval feedback (2.6.4-dev.1 development build)
+
+These commands are available in the source development build; npm latest remains 2.6.3.
+
+```bash
+memobox search "project port" --explain --json  # returns queryId
+memobox eval recent --unlabeled --limit 20 --json
+memobox eval show <query-id> --json
+memobox eval label <query-id> <memory-id> relevant
+memobox eval label <query-id> <memory-id> irrelevant
+memobox eval unlabel <query-id> <memory-id>
+memobox eval report --json
+```
+
+A relevant label can add a missed existing memory; an irrelevant label must refer to an originally returned memory. MCP clients use `memory_search` with `explain=true`, then `memory_feedback({queryId, memoryId, relevant: true/false/null})`; null removes a label. Feedback stays in local SQLite and does not train a model, change ranking, or upload data.
+
+Reported recall uses only labeled relevant memories; precision uses only labeled returned items. Unjudged items are unknown, not negative, and these figures are not complete Recall@5/Precision@5. Logs retain original IDs/order; displayed memory text is current, and forgetting a memory removes its labels. Reading history/reports creates no searches.
+
 ## Optional semantic retrieval
 
 ```sh

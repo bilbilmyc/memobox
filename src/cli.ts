@@ -47,6 +47,7 @@ import { MemoryValidationError } from "./lib/memory-validation";
 import { runConfigCommand } from "./cli/config";
 import { runDoctorCommand } from "./cli/doctor";
 import { runMaintenanceCommand } from "./cli/maintenance";
+import { runEvalCommand } from "./cli/eval";
 
 /** 注入点：输出流与 store 工厂都可替换（单测用 StubStore + 收集器） */
 export type CliIo = {
@@ -84,11 +85,13 @@ async function executeCli(
 
   // 参数解析已拒绝未知命令；帮助在模型和存储操作前返回。
   if (flags.has("help")) {
-    io.out(pos.length > 0 ? (cmdHelp(["model", "config", "maintain"].includes(cmd) ? pos.join(" ") : cmd) ?? USAGE) : USAGE);
+    io.out(pos.length > 0 ? (cmdHelp(["model", "config", "maintain", "eval"].includes(cmd) ? pos.join(" ") : cmd) ?? USAGE) : USAGE);
     return 0;
   }
 
   switch (cmd) {
+    case "eval":
+      return runEvalCommand(pos, flags, io, makeStore);
     case "config":
       return runConfigCommand(pos, flags, io);
     case "maintain":

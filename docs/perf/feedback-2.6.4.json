@@ -1,0 +1,202 @@
+{
+  "candidate": "2.6.4-dev.1",
+  "date": "2026-10-13",
+  "platform": "win32",
+  "arch": "x64",
+  "baseline": {
+    "version": "2.6.2",
+    "integrity": "sha512-UFkPUeBq1VPYfeibQezZbsAy0tq9ZEq/ZBkLYel3U4tPzOxVmHYBfw725byTyABN4rwJN7XLMxPVGIrwi7vk3Q=="
+  },
+  "limitations": "Synthetic temporary data. Existing performance gate compares 2.6.2, not a same-machine 2.6.3 performance baseline. No ranking changes; 2.6.3 equality is a quality comparison. No user memories.",
+  "quality": {
+    "fixtureSha256": "6de0a85f286314ba8e1f366136edd59e2aec0b9cdc97ba1562ecbe87e28f9892",
+    "baseline": {
+      "recallAt5": 0.8125,
+      "precisionAt5": 0.2083333333333334,
+      "mrrAt5": 0.8472222222222223,
+      "unrelatedRecallRate": 0.5,
+      "p50Ms": 0.2091999999999956,
+      "p95Ms": 0.5367000000000104
+    },
+    "current": {
+      "recallAt5": 0.8333333333333334,
+      "precisionAt5": 0.2166666666666667,
+      "mrrAt5": 0.8833333333333333,
+      "unrelatedRecallRate": 0.5,
+      "p50Ms": 0.21920000000000073,
+      "p95Ms": 0.3429000000000002
+    },
+    "rankingsComparedTo263": 112,
+    "rankingsChanged": 0
+  },
+  "performance": {
+    "scenarios": 9,
+    "warmP95LimitMs": 50,
+    "coldAdditionalBudgetMs": 200,
+    "modelRuntimeAdditionalBudgetMiB": 96
+  },
+  "scenarios": [
+    {
+      "size": 100,
+      "mode": "keyword",
+      "baseline": {
+        "coldMs": 167.9069,
+        "warmMaxP95Ms": 4.067099999999982,
+        "writeP95Ms": 3.5525000000002365,
+        "concurrentP95Ms": 14.186400000000049,
+        "peakMiB": 84.6640625
+      },
+      "candidate": {
+        "coldMs": 96.61690000000004,
+        "warmMaxP95Ms": 3.976099999999974,
+        "writeP95Ms": 4.1322999999999865,
+        "concurrentP95Ms": 15.00260000000003,
+        "peakMiB": 77.68359375
+      }
+    },
+    {
+      "size": 100,
+      "mode": "endpoint",
+      "baseline": {
+        "coldMs": 176.30090000000018,
+        "warmMaxP95Ms": 5.064300000000003,
+        "writeP95Ms": 4.103799999999865,
+        "concurrentP95Ms": 17.924299999999675,
+        "peakMiB": 89.4296875
+      },
+      "candidate": {
+        "coldMs": 97.48360000000002,
+        "warmMaxP95Ms": 4.125799999999799,
+        "writeP95Ms": 4.050600000000486,
+        "concurrentP95Ms": 16.112100000000282,
+        "peakMiB": 80.5859375
+      }
+    },
+    {
+      "size": 100,
+      "mode": "local",
+      "baseline": {
+        "coldMs": 455.27820000000065,
+        "warmMaxP95Ms": 6.770800000000236,
+        "writeP95Ms": 6.134700000000521,
+        "concurrentP95Ms": 23.959899999999834,
+        "peakMiB": 190.86328125
+      },
+      "candidate": {
+        "coldMs": 529.3490000000002,
+        "warmMaxP95Ms": 3.979099999999562,
+        "writeP95Ms": 6.97440000000006,
+        "concurrentP95Ms": 24.082900000001246,
+        "peakMiB": 249.63671875
+      }
+    },
+    {
+      "size": 1000,
+      "mode": "keyword",
+      "baseline": {
+        "coldMs": 180.85150000000067,
+        "warmMaxP95Ms": 6.004100000000108,
+        "writeP95Ms": 3.082300000000032,
+        "concurrentP95Ms": 16.090399999999136,
+        "peakMiB": 137.21484375
+      },
+      "candidate": {
+        "coldMs": 108.57720000000154,
+        "warmMaxP95Ms": 5.034299999999348,
+        "writeP95Ms": 3.631199999999808,
+        "concurrentP95Ms": 13.076500000001033,
+        "peakMiB": 123.8359375
+      }
+    },
+    {
+      "size": 1000,
+      "mode": "endpoint",
+      "baseline": {
+        "coldMs": 377.91909999999916,
+        "warmMaxP95Ms": 14.002300000000105,
+        "writeP95Ms": 6.971199999999953,
+        "concurrentP95Ms": 31.041399999998248,
+        "peakMiB": 155.2265625
+      },
+      "candidate": {
+        "coldMs": 130.57580000000053,
+        "warmMaxP95Ms": 5.102699999999459,
+        "writeP95Ms": 5.1370999999999185,
+        "concurrentP95Ms": 21.983000000000175,
+        "peakMiB": 128.13671875
+      }
+    },
+    {
+      "size": 1000,
+      "mode": "local",
+      "baseline": {
+        "coldMs": 489.90309999999954,
+        "warmMaxP95Ms": 9.797099999999773,
+        "writeP95Ms": 11.94340000000011,
+        "concurrentP95Ms": 38.10900000000038,
+        "peakMiB": 250.859375
+      },
+      "candidate": {
+        "coldMs": 551.0925999999981,
+        "warmMaxP95Ms": 4.906800000000658,
+        "writeP95Ms": 7.990699999998469,
+        "concurrentP95Ms": 22.079799999999523,
+        "peakMiB": 289.90234375
+      }
+    },
+    {
+      "size": 10000,
+      "mode": "keyword",
+      "baseline": {
+        "coldMs": 276.87950000000274,
+        "warmMaxP95Ms": 20.125299999999697,
+        "writeP95Ms": 26.974199999996927,
+        "concurrentP95Ms": 101.07090000000608,
+        "peakMiB": 552.234375
+      },
+      "candidate": {
+        "coldMs": 210.6913999999997,
+        "warmMaxP95Ms": 10.846800000002986,
+        "writeP95Ms": 9.290299999996932,
+        "concurrentP95Ms": 95.14489999999932,
+        "peakMiB": 362.0703125
+      }
+    },
+    {
+      "size": 10000,
+      "mode": "endpoint",
+      "baseline": {
+        "coldMs": 502.95670000000973,
+        "warmMaxP95Ms": 24.76929999999993,
+        "writeP95Ms": 37.891600000002654,
+        "concurrentP95Ms": 270.9689999999973,
+        "peakMiB": 541.859375
+      },
+      "candidate": {
+        "coldMs": 337.6237000000001,
+        "warmMaxP95Ms": 19.08100000000195,
+        "writeP95Ms": 21.99760000000242,
+        "concurrentP95Ms": 155.98950000000332,
+        "peakMiB": 350.46484375
+      }
+    },
+    {
+      "size": 10000,
+      "mode": "local",
+      "baseline": {
+        "coldMs": 737.262299999973,
+        "warmMaxP95Ms": 20.836599999980535,
+        "writeP95Ms": 40.03519999998389,
+        "concurrentP95Ms": 245.02030000000377,
+        "peakMiB": 554.30859375
+      },
+      "candidate": {
+        "coldMs": 716.6028000000006,
+        "warmMaxP95Ms": 12.265700000003562,
+        "writeP95Ms": 31.021200000002864,
+        "concurrentP95Ms": 172.16279999999824,
+        "peakMiB": 531.19921875
+      }
+    }
+  ]
+}

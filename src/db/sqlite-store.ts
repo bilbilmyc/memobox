@@ -21,10 +21,12 @@ import {
   type SearchScope,
   type BackfillReport,
   type QueryLogEntry,
+  type QueryReview,
 } from "@/lib/memory";
 import * as schema from "./schema-sqlite";
 import { defaultDbPath } from "@/lib/paths";
 import { validateMemoryInput } from "@/lib/memory-validation";
+import { FeedbackError } from "@/lib/feedback";
 import { explainSearch, type RankedMemory, type SearchReport, type SemanticStatus } from "@/lib/search-report";
 import { maintenanceInputSchema, maintenancePlanSchema, createMaintenancePlan, suggestMaintenance, validateMaintenanceSnapshot, writeMaintenanceBackup, normalizeReplacement, validateRestoreItems,
   type MaintenanceInput, type MaintenancePlan, type MaintenanceScan, type MaintenanceSuggestions, type MaintenanceOptions, type MaintenanceResult, type RestoreResult } from "@/lib/maintenance";
@@ -464,17 +466,19 @@ export class SQLiteStore implements MemoryStore {
       return explain ? explainSearch(matches, keywordScores, semanticScores, semanticStatus, anchors) : matches;
     }).deferred();
     const hits = Array.isArray(report) ? report : report.memories;
+    const queryId = crypto.randomUUID();
     // 日志写入放在读事务外，避免 WAL 读快照升级为写事务时冲突。
     this.db
       .insert(schema.queryLog)
       .values({
-        id: crypto.randomUUID(),
+        id: queryId,
         query,
         recalledIds: JSON.stringify(hits.map((h) => h.id)),
         latencyMs: Date.now() - started,
         createdAt: Date.now(),
       })
       .run();
+    if (!Array.isArray(report)) report.queryId = queryId;
     return report;
   }
 
@@ -559,19 +563,17 @@ export class SQLiteStore implements MemoryStore {
   }
 
   async recentQueries(limit = 10): Promise<QueryLogEntry[]> {
+    const rows = this.db.select().from(schema.queryLog)
+      .orderBy(desc(schema.queryLog.createdAt), desc(schema.queryLog.id)).limit(limit).all();
+    if (!rows.length) return [];
     const relevantByQuery = new Map<string, string[]>();
-    for (const l of this.db.select().from(schema.evalLabels).all()) {
+    for (const l of this.db.select().from(schema.evalLabels)
+      .where(inArray(schema.evalLabels.queryLogId, rows.map(row => row.id))).all()) {
       if (!l.relevant) continue;
       const list = relevantByQuery.get(l.queryLogId) ?? [];
       list.push(l.memoryId);
       relevantByQuery.set(l.queryLogId, list);
     }
-    const rows = this.db
-      .select()
-      .from(schema.queryLog)
-      .orderBy(desc(schema.queryLog.createdAt))
-      .limit(limit)
-      .all();
     return rows.map((r) => ({
       id: r.id,
       query: r.query,
@@ -641,95 +643,97 @@ export class SQLiteStore implements MemoryStore {
     memoryId: string,
     relevant: boolean
   ): Promise<void> {
-    this.db
-      .insert(schema.evalLabels)
-      .values({
-        id: crypto.randomUUID(),
-        queryLogId,
-        memoryId,
-        relevant: relevant ? 1 : 0,
-        createdAt: Date.now(),
-      })
-      .onConflictDoUpdate({
-        target: [schema.evalLabels.queryLogId, schema.evalLabels.memoryId],
-        set: { relevant: relevant ? 1 : 0 },
-      })
-      .run();
+    this.client.transaction(() => {
+      const query = this.db.select().from(schema.queryLog).where(eq(schema.queryLog.id, queryLogId)).get();
+      if (!query) throw new FeedbackError("query_missing");
+      if (!this.readRow(memoryId)) throw new FeedbackError("memory_missing");
+      if (!relevant && !(JSON.parse(query.recalledIds) as string[]).includes(memoryId)) throw new FeedbackError("not_recalled");
+      this.db
+        .insert(schema.evalLabels)
+        .values({
+          id: crypto.randomUUID(),
+          queryLogId,
+          memoryId,
+          relevant: relevant ? 1 : 0,
+          createdAt: Date.now(),
+        })
+        .onConflictDoUpdate({
+          target: [schema.evalLabels.queryLogId, schema.evalLabels.memoryId],
+          set: { relevant: relevant ? 1 : 0 },
+        })
+        .run();
+    }).immediate();
   }
 
   async unlabel(queryLogId: string, memoryId: string): Promise<void> {
-    this.db
-      .delete(schema.evalLabels)
-      .where(
-        and(
-          eq(schema.evalLabels.queryLogId, queryLogId),
-          eq(schema.evalLabels.memoryId, memoryId)
+    this.client.transaction(() => {
+      if (!this.db.select({ id: schema.queryLog.id }).from(schema.queryLog).where(eq(schema.queryLog.id, queryLogId)).get())
+        throw new FeedbackError("query_missing");
+      this.db
+        .delete(schema.evalLabels)
+        .where(
+          and(
+            eq(schema.evalLabels.queryLogId, queryLogId),
+            eq(schema.evalLabels.memoryId, memoryId)
+          )
         )
-      )
-      .run();
+        .run();
+    }).immediate();
   }
 
-  async getQuery(id: string): Promise<{
-    entry: QueryLogEntry;
-    recalled: Memory[];
-    labels: Label[];
-  } | null> {
-    const rows = this.db
-      .select()
-      .from(schema.queryLog)
-      .where(eq(schema.queryLog.id, id))
-      .limit(1)
-      .all();
-    if (rows.length === 0) return null;
-    const r = rows[0];
-    const recalledIds: string[] = JSON.parse(r.recalledIds);
-    const byId = new Map(
-      this.db
+  async getQuery(id: string): Promise<QueryReview | null> {
+    return this.client.transaction(() => {
+      const rows = this.db
         .select()
-        .from(schema.memories)
-        .all()
-        .map((m) => [m.id, this.toMemory(m)])
-    );
-    const labels = this.db
-      .select()
-      .from(schema.evalLabels)
-      .where(eq(schema.evalLabels.queryLogId, id))
-      .all();
-    return {
-      entry: {
-        id: r.id,
-        query: r.query,
-        recalled: recalledIds.length,
-        latencyMs: r.latencyMs,
-        createdAt: r.createdAt,
-      },
-      // 按当时的召回顺序展示（被遗忘的记忆自然消失）
-      recalled: recalledIds
-        .map((mid) => byId.get(mid))
-        .filter((m): m is Memory => Boolean(m)),
-      labels: labels.map((l) => ({
-        memoryId: l.memoryId,
-        relevant: Boolean(l.relevant),
-      })),
-    };
+        .from(schema.queryLog)
+        .where(eq(schema.queryLog.id, id))
+        .limit(1)
+        .all();
+      if (rows.length === 0) return null;
+      const r = rows[0];
+      const recalledIds: string[] = JSON.parse(r.recalledIds);
+      const byId = new Map(
+        (recalledIds.length ? this.db
+          .select()
+          .from(schema.memories)
+          .where(inArray(schema.memories.id, recalledIds)).all() : [])
+          .map((m) => [m.id, this.toMemory(m)])
+      );
+      const labels = this.db
+        .select()
+        .from(schema.evalLabels)
+        .where(eq(schema.evalLabels.queryLogId, id))
+        .all();
+      return {
+        recalledIds,
+        entry: {
+          id: r.id,
+          query: r.query,
+          recalled: recalledIds.length,
+          latencyMs: r.latencyMs,
+          createdAt: r.createdAt,
+        },
+        // 按当时的召回顺序展示（被遗忘的记忆自然消失）
+        recalled: recalledIds
+          .map((mid) => byId.get(mid))
+          .filter((m): m is Memory => Boolean(m)),
+        labels: labels.map((l) => ({
+          memoryId: l.memoryId,
+          relevant: Boolean(l.relevant),
+        })),
+      };
+    }).deferred();
   }
 
   async unlabeledQueries(limit = 20): Promise<QueryLogEntry[]> {
-    const labeled = new Set(
-      this.db
-        .select({ queryLogId: schema.evalLabels.queryLogId })
-        .from(schema.evalLabels)
-        .all()
-        .map((l) => l.queryLogId)
-    );
     const rows = this.db
       .select()
       .from(schema.queryLog)
-      .orderBy(desc(schema.queryLog.createdAt))
+      .where(sql`NOT EXISTS (SELECT 1 FROM ${schema.evalLabels} WHERE ${schema.evalLabels.queryLogId} = ${schema.queryLog.id})`)
+      .orderBy(desc(schema.queryLog.createdAt), desc(schema.queryLog.id))
+      .limit(limit)
       .all();
     return rows
-      .filter((r) => !labeled.has(r.id))
-      .slice(0, limit)
       .map((r) => ({
         id: r.id,
         query: r.query,

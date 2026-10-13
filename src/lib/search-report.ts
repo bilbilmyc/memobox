@@ -16,7 +16,7 @@ export type SearchExplanation = {
     graph?: { entities: string[] };
   }[];
 };
-export type SearchReport = { memories: Memory[]; explanation: SearchExplanation };
+export type SearchReport = { memories: Memory[]; explanation: SearchExplanation; queryId?: string };
 /** RRF 在检索融合与结果解释中共用；排名从 1 开始。 */
 export const rrfContribution = (rank: number): number => 1 / (60 + rank);
 

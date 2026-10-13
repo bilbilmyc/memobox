@@ -11,6 +11,13 @@ const kind = str("类型：事实/fact、偏好/preference、事件/event、决�
 const scopeOptions = { kind, entity: str("按完整实体名称过滤，可用项目标签，不区分大小写", "实体"),
   source: str("按来源精确过滤", "名称"), since: str("创建时间下限：7d/12h/30m 或 ISO 日期", "时间") };
 const globals = { help: flag("显示帮助（-h）"), version: flag("显示版本（-v）"), debug: flag("展开已脱敏的技术错误") };
+const evalActions: Command[] = [
+  { name: "eval recent", desc: "查看本地检索日志，不执行新检索", max: 0, options: { limit: limit(20), unlabeled: flag("仅显示没有任何标注的查询"), json: flag("输出 JSON") } },
+  { name: "eval show", args: "<查询编号>", desc: "查看当时召回编号、当前内容与标注", min: 1, max: 1, options: { json: flag("输出 JSON") } },
+  { name: "eval label", args: "<查询编号> <记忆编号> <相关|不相关>", desc: "标注或改标；相关可补标漏召回，英文用 relevant/irrelevant", min: 3, max: 3, options: { json: flag("输出 JSON") } },
+  { name: "eval unlabel", args: "<查询编号> <记忆编号>", desc: "撤销标注，重复执行安全，不删除记忆", min: 2, max: 2, options: { json: flag("输出 JSON") } },
+  { name: "eval report", desc: "汇总检索耗时、零召回和人工标注质量，不自动调参", max: 0, options: { json: flag("输出 JSON") } },
+];
 const modelActions: Command[] = [
   { name: "model status", desc: "查看本机模型及检索配置来源", max: 0 },
   { name: "model enable", desc: "启用语义检索，写配置并补算历史向量；重启 MCP 生效", max: 0,
@@ -31,6 +38,7 @@ const maintenanceActions: Command[] = [
   { name: "maintain apply", args: "<计划.json>", desc: "先自动备份，再原子执行；数据改变后旧计划拒绝执行", min: 1, max: 1, options: { yes: flag("必填：审核计划后明确确认执行"), json: flag("输出结果与备份路径 JSON") } },
 ];
 export const COMMANDS: Command[] = [
+  { name: "eval", args: "[recent|show|label|unlabel|report]", desc: "查看检索日志、标注误召回/漏召回和质量报告；用 help eval <子命令> 查看用法", max: 0 },
   { name: "serve", desc: "启动 stdio MCP 服务（无参数时等价；供 agent 拉起）", max: 0 },
   { name: "save", args: "<文本>", desc: "保存记忆；纯空白内容会被拒绝", min: 1, options: { kind, entities: str("实体标签，用英文逗号分隔", "标签,标签"), source: str("记忆来源名称", "名称") }, example: 'memobox save "开发端口是 3100" --kind 决策 --entities 项目甲' },
   { name: "update", args: "<id> [文本]", desc: "编辑内容或元数据；编号和创建时间保持不变", min: 1, options: {
@@ -65,7 +73,7 @@ export class CliArgumentError extends Error {}
 const kinds: Record<string, string> = { 事实: "fact", 偏好: "preference", 事件: "event", 决策: "decision", fact: "fact", preference: "preference", event: "event", decision: "decision" };
 function usage(c: Command): string { return `memobox ${c.name}${c.args ? " " + c.args : ""}`; }
 export function cmdHelp(name: string): string | null {
-  const c = [...COMMANDS, ...modelActions, ...configActions, ...maintenanceActions].find(c => c.name === name);
+  const c = [...COMMANDS, ...modelActions, ...configActions, ...maintenanceActions, ...evalActions].find(c => c.name === name);
   if (!c) return null;
   const opts = Object.entries({ ...c.options, ...globals }).map(([name, o]) =>
     `  --${name}${o.value ? " <" + o.value + ">" : ""}  ${o.desc}${o.default !== undefined ? "（默认 " + o.default + "）" : ""}`);
@@ -94,7 +102,7 @@ export const USAGE = `memobox ${VERSION} —— 给 AI agent 的本地长期记�
 /** 参数类型、作用范围和帮助共用规格；所有检查先于存储和模型副作用。 */
 export function parseArgs(argv: string[]): { pos: string[]; flags: Map<string, string> } {
   const options: Record<string, { type: "string" | "boolean"; short?: string }> = {};
-  for (const c of [...COMMANDS, ...modelActions, ...configActions, ...maintenanceActions]) for (const [name, o] of Object.entries(c.options ?? {})) options[name] = { type: o.type };
+  for (const c of [...COMMANDS, ...modelActions, ...configActions, ...maintenanceActions, ...evalActions]) for (const [name, o] of Object.entries(c.options ?? {})) options[name] = { type: o.type };
   for (const [name, o] of Object.entries(globals)) options[name] = { type: o.type, ...(name === "help" ? { short: "h" } : name === "version" ? { short: "v" } : {}) };
   let parsed: ReturnType<typeof parseNodeArgs>;
   try { parsed = parseNodeArgs({ args: argv, options, allowPositionals: true, strict: true }); }
@@ -108,8 +116,9 @@ export function parseArgs(argv: string[]): { pos: string[]; flags: Map<string, s
   const command = pos[0] ?? "serve";
   const c = COMMANDS.find(c => c.name === command);
   if (!c) throw new CliArgumentError(`未知命令：${command}\n${USAGE}`);
-  const groups: Record<string, Command[]> = { model: modelActions, config: configActions, maintain: maintenanceActions };
+  const groups: Record<string, Command[]> = { model: modelActions, config: configActions, maintain: maintenanceActions, eval: evalActions };
   const sub = groups[command] && pos[1] ? groups[command].find(c => c.name === `${command} ${pos[1]}`) : undefined;
+  if (command === "eval" && pos[1] && !sub) throw new CliArgumentError("未知评测命令；用法：memobox eval <recent|show|label|unlabel|report>");
   if (command === "model" && pos[1] && !sub) throw new CliArgumentError(`未知模型命令：${pos[1]}；用法：memobox model <status|enable|disable|reindex>`);
   if (command === "config" && pos[1] && !sub) throw new CliArgumentError("未知配置命令；用法：memobox config <show|get|set|reset>");
   if (command === "maintain" && pos[1] && !sub) throw new CliArgumentError("未知维护命令；用法：memobox maintain <scan|plan|apply>");
@@ -154,6 +163,14 @@ export function parseArgs(argv: string[]): { pos: string[]; flags: Map<string, s
     if (flags.has("before") && !Number.isFinite(parseSince(flags.get("before")!))) throw new CliArgumentError("--before 格式不对：用 7d 或 ISO 日期");
   }
   if (command === "save" && !pos.slice(1).join(" ").trim()) throw new CliArgumentError("记忆内容不能是纯空白文本");
+  if (command === "eval") {
+    if (pos.slice(2).some(value => !value.trim())) throw new CliArgumentError("查询编号、记忆编号和标注不能为空");
+    if (pos[1] === "label") {
+      const verdicts: Record<string, string> = { 相关: "relevant", 不相关: "irrelevant", relevant: "relevant", irrelevant: "irrelevant" };
+      if (!Object.hasOwn(verdicts, pos[4])) throw new CliArgumentError("标注必须为相关/relevant 或不相关/irrelevant");
+      pos[4] = verdicts[pos[4]];
+    }
+  }
   if (command === "restore" && !flags.has("dry-run") && !flags.has("yes")) throw new CliArgumentError("先用 restore <备份.json> --dry-run 预览；确认后加 --yes 执行");
   if (command === "update") {
     if (!pos[1]?.trim()) throw new CliArgumentError("记忆编号不能为空");
